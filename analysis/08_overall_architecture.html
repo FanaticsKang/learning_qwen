@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qwen-Drive-1.0 整体框架图</title>
+<style>
+:root { color-scheme: light dark; }
+body { margin: 0; padding: 24px; background: var(--background, #fff); color: var(--foreground, #111);
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --background: light-dark(#ffffff, #16181d); --foreground: light-dark(#1a1c20, #e8eaed);
+  --card: light-dark(#ffffff, #1e2128); --muted: light-dark(#f2f3f5, #262a32);
+  --muted-foreground: light-dark(#5c6470, #9aa3af); --border: light-dark(#e3e5e8, #333945);
+  --blue: light-dark(#2563eb, #60a5fa); --purple: light-dark(#7c3aed, #a78bfa);
+  --green: light-dark(#059669, #34d399); --orange: light-dark(#d97706, #fbbf24); }
+#wrap { max-width: 1180px; margin: 0 auto; }
+</style></head>
+<body><div id="wrap">
+<div id="qwen-drive-arch">
+<h3>Qwen-Drive-1.0 整体框架:从图像到 BEV、Qwen 模型到最终输出<span class="text-muted" style="font-weight:400">(按论文 2609.00111 图 2 展开,已对照 Qwen-Drive-1.0 源码逐模块校验)</span></h3>
+<svg viewBox="0 0 1160 1190" width="100%" style="height:auto;display:block" role="img" aria-label="Qwen-Drive-1.0 architecture diagram">
+<title>Qwen-Drive-1.0 整体架构:观测图像与通用图像经 Vision Encoder 与 Qwen3.5-4B 语言模型,外挂 BEV 感知头(3D 检测、占用、地图分割)与规划专家(流匹配生成轨迹)</title>
+<defs>
+<marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted-foreground)"/></marker>
+</defs>
+<style>
+#qwen-drive-arch text{font-family:inherit;fill:var(--foreground)}
+#qwen-drive-arch .blk-title{font-size:14px;font-weight:500}
+#qwen-drive-arch .blk-title-s{font-size:13px;font-weight:500}
+#qwen-drive-arch .body{font-size:12.5px}
+#qwen-drive-arch .small{font-size:12px}
+#qwen-drive-arch .tiny{font-size:11.5px}
+#qwen-drive-arch .muted{fill:var(--muted-foreground)}
+#qwen-drive-arch .edge{stroke:var(--muted-foreground);stroke-width:1.6;fill:none}
+#qwen-drive-arch .elabel{font-size:12px;stroke:var(--background);stroke-width:3.5;paint-order:stroke;stroke-linejoin:round}
+#qwen-drive-arch .panel{fill:var(--card);fill-opacity:.55;stroke:var(--border);rx:10}
+#qwen-drive-arch .box{rx:8}
+#qwen-drive-arch .hit{cursor:pointer}
+</style>
+
+<!-- ============ ① 输入 ============ -->
+<text x="42" y="24" class="blk-title-s muted">① 观测输入(Observed Images / Supported Inputs)</text>
+<g class="hit" data-tooltip="代码: src/qwen_drive/scene.py · benchmarks.py(场景文件)">
+<rect x="40" y="32" width="132" height="76" class="box" fill="var(--muted)" stroke="var(--border)"/>
+<text x="106" y="56" text-anchor="middle" class="blk-title-s">通用图像</text>
+<text x="106" y="74" text-anchor="middle" class="tiny muted">General Images</text>
+<text x="106" y="92" text-anchor="middle" class="tiny muted">单张任意图像</text>
+</g>
+<g class="hit" data-tooltip="代码: src/qwen_drive/scene.py(DrivingScene·CameraFrame)">
+<rect x="182" y="32" width="132" height="76" class="box" fill="var(--muted)" stroke="var(--border)"/>
+<text x="248" y="56" text-anchor="middle" class="blk-title-s">单视角驾驶</text>
+<text x="248" y="74" text-anchor="middle" class="tiny muted">单路视频多帧</text>
+<text x="248" y="92" text-anchor="middle" class="tiny muted">行车记录仪类</text>
+</g>
+<g class="hit" data-tooltip="代码: scene.py CAMERA_VIEWS=前/左前/右前;感知头训练:nuScenes 6 路·OpenScene 8 路">
+<rect x="324" y="32" width="132" height="76" class="box" fill="var(--muted)" stroke="var(--border)"/>
+<text x="390" y="56" text-anchor="middle" class="blk-title-s">多视角环视</text>
+<text x="390" y="74" text-anchor="middle" class="tiny muted">前·左前·右前 ×多帧</text>
+<text x="390" y="92" text-anchor="middle" class="tiny muted">感知路径 6/8 路</text>
+</g>
+<g class="hit" data-tooltip="代码: docs/data.md · images.py(ImageArchive 帧打包)">
+<rect x="466" y="32" width="132" height="76" class="box" fill="var(--muted)" stroke="var(--border)"/>
+<text x="532" y="56" text-anchor="middle" class="blk-title-s">驾驶视频</text>
+<text x="532" y="74" text-anchor="middle" class="tiny muted">时序多帧</text>
+<text x="532" y="92" text-anchor="middle" class="tiny muted">VQA / 场景理解</text>
+</g>
+<text x="344" y="122" class="tiny muted">视角标签 &lt;FRONT VIEW&gt;… ×8 种 · 帧标签 frame:k</text>
+<text x="344" y="140" class="tiny muted">VQA 按帧排序 · 规划按视角排序(仓内 3 路)</text>
+<path d="M320,112 L320,176" class="edge" marker-end="url(#arw)"/>
+<text x="330" y="160" class="elabel">观测图像</text>
+
+<!-- ============ ② Vision Encoder ============ -->
+<g class="hit" data-tooltip="代码: src/qwen_drive/scene.py(QwenDriveProcessor._patchify)· configuration_qwen_drive.py(像素预算/patch 16/merge 2×2)">
+<rect x="60" y="180" width="500" height="130" class="box" fill="var(--blue)" fill-opacity=".08" stroke="var(--blue)" stroke-opacity=".55"/>
+<text x="76" y="206" class="blk-title" fill="var(--blue)">② Vision Encoder · Qwen3.5 ViT(与 VLM 共享·结构不变)</text>
+<text x="76" y="228" class="body">Patch 16×16(时间×2)→ ViT → <tspan font-weight="500">Fᵥ 预合并 patch 特征·1024 维</tspan>(merger hook 截取)</text>
+<text x="76" y="248" class="body">Patch merge 2×2 → <tspan font-weight="500">图像 token·2560 维</tspan> → 语言模型</text>
+<text x="76" y="268" class="body">像素预算:历史帧 ~320p·174,080px | 当前帧 ~720p·921,600px</text>
+<text x="76" y="288" class="body">感知路径固定 896×512/相机:nuScenes 6 路 · OpenScene 8 路(标定 lidar2img)</text>
+</g>
+<path d="M310,314 L310,346" class="edge" marker-end="url(#arw)"/>
+<text x="322" y="336" class="elabel">图像 token · 2560 维(merge 2×2)</text>
+
+<!-- ============ ③ Qwen3.5-4B VLM ============ -->
+<g class="hit" data-tooltip="代码: src/qwen_drive/modeling_qwen_drive.py(_prefill·_scene_cache·generate_text)· InferenceMode: vqa/direct_planning/reasoning_planning">
+<rect x="60" y="350" width="500" height="290" class="box" fill="var(--purple)" fill-opacity=".09" stroke="var(--purple)" stroke-opacity=".6"/>
+<text x="76" y="376" class="blk-title" fill="var(--purple)">③ Qwen3.5-4B 语言模型 · 共享 VLM(预训练结构保持不变)</text>
+<text x="76" y="398" class="body">(1×GQA 全注意力 + 3×GDN 线性注意力)×8 组 · 隐层 2560</text>
+<text x="76" y="418" class="body">输入:图像 token + 文本 prompt · mRoPE(t/h/w)三轴位置</text>
+<text x="76" y="444" class="body">📝 输出① <tspan font-weight="500">Response 文本</tspan> — 通用 VQA · 驾驶 VQA(原 LLM 解码器)</text>
+<text x="76" y="464" class="small muted">VQA 解码:temp 0.01 · top_k 1 · top_p 0.001 · ≤32768 新 token</text>
+<text x="76" y="502" class="body">输出② <tspan font-weight="500">末层图像 token 隐状态 F_m</tspan>(final norm 后)→ BEV 语义流</text>
+<text x="76" y="562" class="body">输出③ <tspan font-weight="500">8 个 full-attn 层 post-RoPE K/V 缓存</tspan>(每 4 层 1 份)→ 规划专家</text>
+<text x="76" y="600" class="body">推理规划模式:先生成 ≤256 token 规划理由,连同回合结尾</text>
+<text x="76" y="620" class="body">扩展进缓存;专家读取该缓存 → 轨迹以模型自身推理为条件</text>
+</g>
+
+<!-- ============ 规划侧条件输入 ============ -->
+<g class="hit" data-tooltip="代码: scene.py(DrivingScene.ego_status)· configuration_qwen_drive.py(nav_command_classes=3·ego_status_dim=8·noise_seed)">
+<rect x="40" y="740" width="520" height="110" class="box" fill="var(--muted)" stroke="var(--border)"/>
+<text x="56" y="764" class="blk-title-s muted">规划侧条件输入(不经过语言模型,直达专家)</text>
+<text x="56" y="786" class="body">导航指令 one-hot(3 类)· ego 状态 8 维(速度/加速度/指令)</text>
+<text x="56" y="806" class="body">ego 历史 16 位姿(x,y,heading,10Hz,末位=当前位姿)</text>
+<text x="56" y="826" class="body">流时间 t · 高斯噪声(种子 noise_seed+k,逐样本可复现)</text>
+</g>
+<path d="M564,795 L668,795" class="edge" marker-end="url(#arw)"/>
+
+<!-- ============ BEV 感知头面板 ============ -->
+<g class="hit" data-tooltip="代码: src/qwen_drive_perception/(modeling_perception.py 入口)· 权重 0.5GB 独立发布">
+<rect x="660" y="30" width="460" height="490" class="panel" fill="var(--green)" fill-opacity=".04" stroke="var(--green)" stroke-opacity=".45"/>
+<text x="676" y="56" class="blk-title" fill="var(--green)">④ BEV 感知头(外挂 · 0.5GB · 3D 探针)</text>
+<text x="676" y="76" class="small muted">L_perc = L_det + L_occ + L_map · 联合训练时梯度经 F_m 回传 ViT</text>
+</g>
+<!-- 双流 -->
+<g class="hit" data-tooltip="代码: qwen_drive_perception/view_transform.py(DepthNet·Uni3DVoxelPoolDepth)· ops/voxel_pool_depth CUDA 核">
+<rect x="676" y="90" width="220" height="124" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="686" y="110" class="blk-title-s">几何流 · 深度视图变换(UVTR)</text>
+<text x="686" y="129" class="small">DepthNet:残差块 + ASPP</text>
+<text x="686" y="146" class="small">逐像素深度 118bin(≤60m)</text>
+<text x="686" y="163" class="small">无深度监督 · softmax</text>
+<text x="686" y="180" class="small">视锥体素池化(lidar2img)</text>
+<text x="686" y="197" class="small">→ V:256×16×200×200</text>
+<text x="686" y="207" class="tiny muted">+ 3×Conv3d 编码</text>
+</g>
+<g class="hit" data-tooltip="代码: qwen_drive_perception/fpn.py(SimpleFPN,scale 4/2/1/0.5)· modeling_perception.py(图像 token 选取)">
+<rect x="908" y="90" width="196" height="124" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="918" y="110" class="blk-title-s">语义流 · 特征金字塔</text>
+<text x="918" y="129" class="small">SimpleFPN 适配器</text>
+<text x="918" y="146" class="small">2560 → 256 · 4 尺度</text>
+<text x="918" y="163" class="small">(4× / 2× / 1× / 0.5×)</text>
+<text x="918" y="180" class="small">承载 VLM 高层语义</text>
+<text x="918" y="197" class="small">供 BEV 交叉注意力查询</text>
+</g>
+<path d="M782,214 L782,246" class="edge" marker-end="url(#arw)"/>
+<path d="M970,214 L970,246" class="edge" marker-end="url(#arw)"/>
+<!-- BEV Transformer -->
+<g class="hit" data-tooltip="代码: perception_transformer.py(PerceptionTransformer)· bev_encoder.py(BEVFormerEncoder·TemporalSelfAttention·SpatialCrossAttention)· heads.py(bev_embedding+uvtr_query_proj)">
+<rect x="676" y="250" width="428" height="96" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="690" y="272" class="blk-title-s">BEV Transformer · 6 层编码器(可变形注意力)</text>
+<text x="690" y="292" class="small">query = 可学习 BEV 嵌入 + V 高度压缩先验(几何⊕语义)</text>
+<text x="690" y="310" class="small">每层:BEV 自注意力 → 空间交叉注意力(查 4 尺度特征)→ FFN</text>
+<text x="690" y="328" class="small">输出 B:ego 系 200×200×256 · 检测域 ±51.2m · 0.512m/格</text>
+</g>
+<path d="M890,346 L890,362" class="edge" marker-end="url(#arw)"/>
+<!-- 三个头 -->
+<g class="hit" data-tooltip="代码: bev_encoder.py(DetectionTransformerDecoder)· heads.py(NMSFreeCoder·cls/reg_branches);7类=vehicle/czone_sign/bicycle/generic_object/pedestrian/traffic_cone/barrier;框9维[x,y,z,w,l,h,yaw,vx,vy]">
+<rect x="676" y="364" width="136" height="108" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="744" y="384" text-anchor="middle" class="blk-title-s">3D 检测(DETR 式)</text>
+<text x="686" y="403" class="small">900 query × 6 层</text>
+<text x="686" y="420" class="small">可变形注意力读 B</text>
+<text x="686" y="437" class="small">匈牙利匹配</text>
+<text x="686" y="454" class="small">焦点 + ℓ1 · 逐层监督</text>
+<text x="686" y="465" class="tiny muted">NMS-free top-300</text>
+</g>
+<g class="hit" data-tooltip="代码: occ_refiner.py(OccVoxelUNetRefiner 3D U-Net)· perception_transformer.py(occ 分支:B 升 16 柱体 + V 融合,裁剪至 nuScenes ±40m / nuPlan ±50m);10 类=7 检测类+driveable+background+empty">
+<rect x="822" y="364" width="136" height="108" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="890" y="384" text-anchor="middle" class="blk-title-s">占据(FlashOcc 式)</text>
+<text x="832" y="403" class="small">B 升 3D(16 柱体)</text>
+<text x="832" y="420" class="small">+ V 融合 · 3D U-Net</text>
+<text x="832" y="437" class="small">(仅 XY 下采样)</text>
+<text x="832" y="454" class="small">按数据集范围裁剪</text>
+<text x="832" y="465" class="tiny muted">±40m / ±50m 裁剪</text>
+</g>
+<g class="hit" data-tooltip="代码: map_seg.py(MapSegEncode U-Net)· heads.py(BevFeatureSlicer:检测 BEV grid_sample 裁剪到 ±30×±15m @0.15m);6类=background/driveable_surface/road_line/road_edge/crosswalk/walkway">
+<rect x="968" y="364" width="136" height="108" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="1036" y="384" text-anchor="middle" class="blk-title-s">地图分割(BEV U-Net)</text>
+<text x="978" y="403" class="small">检测 BEV 裁剪</text>
+<text x="978" y="420" class="small">±30×±15m @0.15m</text>
+<text x="978" y="437" class="small">400×200 平面</text>
+<text x="978" y="454" class="small">逐像素分类</text>
+<text x="978" y="465" class="tiny muted">在线栅格化统一 6 类</text>
+</g>
+<path d="M890,472 L890,484" class="edge" marker-end="url(#arw)"/>
+<g class="hit" data-tooltip="输出接口: heads.py get_bboxes/get_occ/get_map_seg · scripts/run_perception.py">
+<rect x="676" y="486" width="428" height="28" class="box" fill="var(--green)" fill-opacity=".22" stroke="var(--green)" stroke-opacity=".6"/>
+<text x="890" y="504" text-anchor="middle" class="small" font-weight="500">输出:7 类 3D 框(9 维)· 10 类语义占据 · 6 类 BEV 地图</text>
+</g>
+
+<!-- Fv / Fm / KV 三条特征边 -->
+<path d="M560,226 L622,226 L622,150 L670,150" class="edge" marker-end="url(#arw)"/>
+<text x="630" y="170" class="tiny muted" font-weight="500">Fᵥ</text>
+<path d="M560,500 L646,500 L646,240 L1004,240 L1004,218" class="edge" marker-end="url(#arw)"/>
+<text x="566" y="494" class="tiny muted" font-weight="500">F_m</text>
+<path d="M560,560 L610,560 L610,780 L670,780" class="edge" marker-end="url(#arw)"/>
+<text x="566" y="554" class="tiny muted" font-weight="500">K/V</text>
+
+<!-- ============ Planning Expert 面板 ============ -->
+<g class="hit" data-tooltip="代码: src/qwen_drive/planning_expert.py · 权重 planner-sft / planner-rl(各2.1GB)独立发布">
+<rect x="660" y="560" width="460" height="480" class="panel" fill="var(--orange)" fill-opacity=".04" stroke="var(--orange)" stroke-opacity=".45"/>
+<text x="676" y="586" class="blk-title" fill="var(--orange)">⑤ Planning Expert(外挂 · ~1.1B · 流匹配扩散 Transformer)</text>
+</g>
+<g class="hit" data-tooltip="代码: planning_expert.py(FourierFeatureEncoder·SinusoidalTimeEmbedding·encode_history·query_fusion 7路融合)">
+<rect x="676" y="600" width="428" height="112" class="box" fill="var(--orange)" fill-opacity=".10" stroke="var(--orange)" stroke-opacity=".5"/>
+<text x="690" y="620" class="blk-title-s">Waypoint token × 50 — 1 token = 1 个未来路点 · 5s @ 10Hz</text>
+<text x="690" y="640" class="small">7 路信号拼接 → MLP 融合(7×1024 → 1024):</text>
+<text x="690" y="658" class="small">噪声路点(3)· 傅里叶特征(16 频 sin/cos)· 流时间 t(128 维)</text>
+<text x="690" y="676" class="small">路点序号嵌入 · ego 历史位姿 15×3(重参考,丢原点)</text>
+<text x="690" y="694" class="small">历史速度 16×2 · 历史加速度 16×2</text>
+</g>
+<path d="M890,712 L890,726" class="edge" marker-end="url(#arw)"/>
+<g class="hit" data-tooltip="代码: planning_expert.py(PlanningExpertLayer:融合QKV+逐头sigmoid输出门·QK RMSNorm·部分RoPE 25%·theta 1e7·mrope_section[11,11,10]·AdaLN 6组调制·SwiGLU 3584);layers_per_kv=4,layer i 用缓存 i//4">
+<rect x="676" y="730" width="428" height="120" class="box" fill="var(--orange)" fill-opacity=".10" stroke="var(--orange)" stroke-opacity=".5"/>
+<text x="690" y="750" class="blk-title-s">32 × 扩散 Transformer 层(隐层 1024 · FFN 3584)</text>
+<text x="690" y="770" class="small">融合 QKV + 逐头输出门:16 Q 头 / 4 KV 头 · 头维 256 · QK RMSNorm</text>
+<text x="690" y="788" class="small">联合注意力 attn(Q_w, [K_scene ; K_w])非因果 · GQA</text>
+<text x="690" y="806" class="small">mRoPE 位置接续 VLM 前缀 · 部分旋转 25% · θ=1e7 · 节[11,11,10]</text>
+<text x="690" y="824" class="small">AdaLN:t + 导航指令 + ego 状态 → 6 组 Shift/Scale/Gate</text>
+<text x="690" y="842" class="small">SwiGLU FFN · 末层 RMSNorm → 线性投影回 (x, y, heading)</text>
+</g>
+<path d="M890,850 L890,864" class="edge" marker-end="url(#arw)"/>
+<g class="hit" data-tooltip="代码: planning_expert.py(sample:x₁端点参数化,v=(x̂₁−x_t)/max(1−t,0.1)·min_one_minus_t=0.1·10步Euler);训练:docs/model.md·论文式(7)(8):t~Beta(1.5,1)截断t≤0.9,L_fm+2e-5(L_Δ1+L_Δ2)">
+<rect x="676" y="868" width="428" height="76" class="box" fill="var(--orange)" fill-opacity=".10" stroke="var(--orange)" stroke-opacity=".5"/>
+<text x="690" y="888" class="blk-title-s">流匹配采样(Flow Matching)</text>
+<text x="690" y="907" class="small">训练:x₁ 参数化直接预测干净轨迹 · t~Beta(1.5,1) 截断 t≤0.9</text>
+<text x="690" y="924" class="small">L_fm + 2×10⁻⁵(L_Δ1+L_Δ2)· 推理:高斯噪声 → 10 步 Euler</text>
+<text x="690" y="938" class="small">v = (x̂₁−x_t) / max(1−t, 0.1) · 归一化尺度 x/165·y/25·hdg/(π/2)</text>
+</g>
+<path d="M890,944 L890,956" class="edge" marker-end="url(#arw)"/>
+<g class="hit" data-tooltip="输出接口: QwenDriveOutput.trajectories (num_samples,50,3);best-of-6: scripts/run_planning.py --num-samples 6;README: NAVSIM PDMS 90.7(RL)· WOD-E2E RFS 7.91">
+<rect x="676" y="960" width="428" height="62" class="box" fill="var(--orange)" fill-opacity=".22" stroke="var(--orange)" stroke-opacity=".6"/>
+<text x="890" y="980" text-anchor="middle" class="small" font-weight="500">输出:干净轨迹 (6, 50, 3) — 50 路点 (x,y,heading) · 5s @ 10Hz · ego 系</text>
+<text x="890" y="1000" text-anchor="middle" class="small">种子可复现 · best-of-6 可选 · planner-sft / planner-rl 两版专家</text>
+</g>
+
+<!-- ============ 底部:图例 + 训练四阶段 ============ -->
+<rect x="40" y="1072" width="1080" height="106" fill="var(--muted)" fill-opacity=".4" class="box" stroke="var(--border)"/>
+<text x="58" y="1096" class="small muted">图例:<tspan fill="var(--blue)" font-weight="500">■ 蓝 = 共享视觉-语言通路</tspan>　<tspan fill="var(--green)" font-weight="500">■ 绿 = BEV 感知头</tspan>　<tspan fill="var(--orange)" font-weight="500">■ 橙 = 规划专家</tspan>　▶ 数据流 · 悬停模块查看对应代码文件</text>
+<text x="58" y="1120" class="small"><tspan font-weight="500">训练四阶段(论文图4):</tspan>① BEV 感知头单独训练(冻结 VLM)→ ② 感知 + VQA 联合训练(L_perc + L_nmp,解冻 ViT 与 VLM,感知头学习率 20×)</text>
+<text x="58" y="1140" class="small">③ 规划专家流匹配模仿学习(planner-sft,VLM 冻结)→ ④ GRPO 式强化学习(组相对优势·PDMS/RFS 奖励 → planner-rl)</text>
+<text x="58" y="1164" class="tiny muted">校验基准:Qwen-Drive-1.0 源码(src/qwen_drive/modeling_qwen_drive.py · planning_expert.py · src/qwen_drive_perception/*)与论文 arXiv:2609.00111 图 2 / 图 3 / §2</text>
+</svg>
+</div>
+
+</div></body></html>

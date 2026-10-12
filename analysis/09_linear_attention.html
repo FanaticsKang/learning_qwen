@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>线性注意力机制详解 —— 从 Softmax Attention 到 GDN(Qwen3.5 的 3×GDN 层)</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #7c3aed 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 26px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 12px; }
+  h2 {
+    font-size: 21px; margin: 42px 0 6px; padding-left: 12px;
+    border-left: 5px solid var(--accent);
+  }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  .pill {
+    display: inline-block; border-radius: 999px; padding: 1px 12px; font-size: 12.5px;
+    font-weight: 600; margin: 0 4px;
+  }
+  .pill.blue { background: var(--accent-soft); color: var(--accent); }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+  .pill.orange { background: var(--orange-soft); color: var(--orange); }
+  .pill.purple { background: var(--purple-soft); color: var(--purple); }
+  .pill.red { background: var(--red-soft); color: var(--red); }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .bad {
+    border-left: 4px solid var(--red); background: var(--red-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .formula {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 14px 18px; text-align: center; font-size: 17px; margin: 14px auto;
+    font-family: Consolas, "Cambria Math", serif; max-width: 680px;
+    overflow-x: auto;
+  }
+  .formula .hl { color: #fbbf24; }
+  .formula .hl2 { color: #6ee7b7; }
+  .formula .hl3 { color: #93c5fd; }
+  .formula small { color: #94a3b8; font-size: 13px; }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  ol.toc-list { margin: 6px 0; padding-left: 22px; }
+  .demo {
+    background: linear-gradient(180deg,#fbfdff,#f4f8ff);
+    border: 1.5px solid var(--accent-soft); border-radius: 12px;
+    padding: 18px 22px; margin: 16px 0;
+  }
+  .demo h4 { margin: 0 0 10px; font-size: 15.5px; color: var(--accent); }
+  .demo .ctrl { margin: 8px 0 12px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .demo button {
+    font-size: 14px; padding: 5px 16px; border-radius: 8px; border: 1px solid var(--accent);
+    background: #fff; color: var(--accent); cursor: pointer;
+  }
+  .demo button:hover { background: var(--accent-soft); }
+  .demo button.active { background: var(--accent); color: #fff; }
+  .demo input[type=range] { vertical-align: middle; }
+  .demo .readout { font-size: 13.5px; color: var(--muted); }
+  .demo canvas { max-width: 100%; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
+  .mat { border-collapse: collapse; display: inline-table; margin: 6px 10px; vertical-align: middle; width: auto; table-layout: auto; }
+  .mat td {
+    border: 1px solid #cbd5e1; min-width: 44px; padding: 4px 8px; text-align: center;
+    font-family: Consolas, monospace; font-size: 13px; background: #fff;
+  }
+  .mat td.hot { background: var(--accent-soft); font-weight: 600; }
+  .mat td.hot2 { background: var(--green-soft); font-weight: 600; }
+  .stepbox { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 0; }
+  .arrow-big { font-size: 20px; color: var(--muted); }
+  .stepdesc { font-size: 14px; background: var(--accent-soft); border-radius: 8px; padding: 8px 14px; margin: 8px 0; }
+  footer { margin-top: 46px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 14px; }
+  .kbd { border: 1px solid var(--border); border-bottom-width: 2.5px; border-radius: 5px; padding: 0 6px; font-size: 12.5px; background: #fff; }
+  sup, sub { line-height: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>线性注意力机制详解 —— 从 O(N²) Softmax 到 O(N) 递归</h1>
+  <p>标准(Softmax)注意力 vs 线性注意力:核心思想、计算等价变换、RNN 视角、主要变体、能力差异</p>
+  <p>以及 Qwen3.5 里 <span class="pill purple" style="background:rgba(255,255,255,.18);color:#fff">1×GQA + 3×GDN</span> 中 GDN(Gated DeltaNet)到底是什么、为什么要这样混合</p>
+  <p class="sub">Qwen-Drive 结构剖析笔记 09 · 关联:[08 整体框架图](08_overall_architecture.html) · [03b M-RoPE](03b_mrope.html) · 论文 arXiv:2609.00111 图 3(b)</p>
+</header>
+
+<div class="card toc">
+  <strong>目录</strong>
+  <ol class="toc-list">
+    <li><a href="#s1">回顾:标准 Softmax 注意力在做什么,贵在哪里</a></li>
+    <li><a href="#s2">线性注意力的核心思想:利用结合律,先"求和"再"查询"</a></li>
+    <li><a href="#s3">RNN 视角:线性注意力 = 固定大小状态的有穷自动机</a></li>
+    <li><a href="#s4">显存账本:KV Cache vs 固定状态(计算器)</a></li>
+    <li><a href="#s5">家族谱系:线性注意力 / 线性 RNN 的主要变体</a></li>
+    <li><a href="#s6">与标准注意力的逐项对比</a></li>
+    <li><a href="#s7">线性注意力的"命门":精确回忆(Associative Recall)与 Delta Rule</a></li>
+    <li><a href="#s8">回到 Qwen3.5:为什么是 1×GQA + 3×GDN 的混合</a></li>
+    <li><a href="#s9">FAQ:常见疑问与误解</a></li>
+    <li><a href="#s10">参考文献</a></li>
+  </ol>
+</div>
+
+<!-- ================= 1 ================= -->
+<h2 id="s1">1. 回顾:标准 Softmax 注意力在做什么,贵在哪里<span class="en">Softmax Attention</span></h2>
+
+<div class="card">
+<p>给定查询 <code>Q</code>、键 <code>K</code>、值 <code>V</code>(均来自同一序列的投影,形状都是 <code>N × d</code>,N 是 token 数,d 是每头维度),缩放点积注意力为:</p>
+<div class="formula">
+  Attention(<span class="hl">Q</span>, <span class="hl2">K</span>, <span class="hl3">V</span>) = softmax( <span class="hl">Q</span> <span class="hl2">K</span><sup>T</sup> / √d ) · <span class="hl3">V</span>
+</div>
+<p>直观理解:第 <code>t</code> 个 token 拿自己的 <code>q<sub>t</sub></code> 去和**所有历史** <code>k<sub>1..t</sub></code> 逐一打分,分数经过 softmax 变成一组"精确分配"的权重,再加权求和所有 <code>v</code>。它本质上是一个<strong>精确的、内容寻址的键值数据库</strong>:任意一个历史 token 只要 key 够独特,就能被无损地检索回来。</p>
+<h3>成本:问题全在 softmax 上</h3>
+<p>先算 <code>QK<sup>T</sup></code> 得到 <code>N × N</code> 的分数矩阵,再对它逐行做 softmax,然后乘 <code>V</code>:</p>
+<table>
+  <tr><th>项目</th><th>标准注意力</th><th>说明</th></tr>
+  <tr><td>训练时间复杂度</td><td><code>O(N²·d)</code></td><td>两个 N×d 矩阵相乘(打分)再乘回 V</td></tr>
+  <tr><td>训练显存</td><td><code>O(N²)</code></td><td>需要保存 N×N 分数矩阵的激活(FlashAttention 用分块重算规避了显存,但计算量不变)</td></tr>
+  <tr><td>推理状态(KV Cache)</td><td><code>O(N·L·h·d<sub>h</sub>)</code></td><td>每层都要缓存全部历史的 K、V;序列越长缓存越大</td></tr>
+  <tr><td>推理每 token 计算量</td><td><code>O(N·d)</code>/层</td><td>生成长度走到 N 时,每个新 token 都要和全部历史打一遍分</td></tr>
+</table>
+<p><strong>注意 softmax 的角色有两个:</strong>① 归一化(每行权重和为 1,构成凸组合);② 非线性化(<code>exp</code> 让"最像的键"吃掉几乎全部权重,产生尖峰式的精确检索)。这两个好处都有代价:<code>exp</code> 把"打分"和"加权求和"两个步骤<strong>焊死在一起</strong>,你无法先对历史做任何形式的"汇总压缩",只能对每个查询都把历史从头比一遍。</p>
+<div class="note"><strong>GQA 也是省 KV Cache 的,但省的不是这份钱:</strong>标准注意力里 16 个 Q 头共享 4 组 KV 头(Grouped-Query Attention),KV cache 直接 ÷4——但打分仍然是 O(N²),每个 token 仍要读全部历史。GQA 是"把缓存变薄",线性注意力是"把缓存变成固定大小"。</div>
+</div>
+
+<div class="demo">
+  <h4>📊 演示 1 · 复杂度对比:O(N²·d) vs O(N·d²)</h4>
+  <div class="ctrl">
+    <button class="active" id="d1-mode-flops">训练计算量(FLOPs / 层)</button>
+    <button id="d1-mode-mem">推理状态显存(整模型)</button>
+    <span class="readout" id="d1-readout"></span>
+  </div>
+  <canvas id="d1-canvas" width="980" height="380"></canvas>
+  <p class="readout">横轴为序列长度 N(对数刻度),蓝线 = 标准注意力,绿线 = 线性注意力。"训练计算量"模式下的竖虚线是交叉点 N = d(取 Qwen3.5-4B 的模型宽度 2560):N 超过它之后差距随 N 线性拉大;切换到"推理状态显存"模式则是"线性增长 vs 恒定不变"的对照。上方读数栏给出了两种模式在 N = 100K / 1M 的具体数字。</p>
+</div>
+
+<!-- ================= 2 ================= -->
+<h2 id="s2">2. 线性注意力的核心思想:利用结合律,先"求和"再"查询"<span class="en">Linear Attention</span></h2>
+
+<div class="card">
+<h3>2.1 一个被 softmax 挡住的等价变换</h3>
+<p>不带 softmax 的打分加权其实可以做<strong>矩阵乘法结合律</strong>的变形:</p>
+<div class="formula">
+  (<span class="hl">Q</span> <span class="hl2">K</span><sup>T</sup>) <span class="hl3">V</span> &nbsp;≡&nbsp; <span class="hl">Q</span> ( <span class="hl2">K</span><sup>T</sup> <span class="hl3">V</span> )
+</div>
+<p>左边:<code>N×N</code> 中间矩阵(贵)。右边:<code>K<sup>T</sup>V</code> 是 <code>d×d</code> 的**小矩阵**(便宜,只跟维度有关、与 N 无关)。<strong>线性注意力的一切都源于这个括号位置的移动。</strong></p>
+<p>但标准注意力不能这么变——softmax 作用在 <code>N×N</code> 矩阵的每一行上,无法拆成"先算 <code>K<sup>T</sup>V</code>"的形式。所以线性注意力的第一步是:<strong>把 softmax 这个核函数换掉</strong>。Katharopoulos et al.(2020)提出用逐元素特征映射 <code>φ(·)</code>(如 <code>elu(x)+1</code>,恒为正)近似指数核:</p>
+<div class="formula">
+  Attn<sub>lin</sub>(<span class="hl">Q</span>,<span class="hl2">K</span>,<span class="hl3">V</span>) = <span style="color:#f472b6">φ</span>(<span class="hl">Q</span>) ( <span style="color:#f472b6">φ</span>(<span class="hl2">K</span>)<sup>T</sup> <span class="hl3">V</span> ) / ( <span style="color:#f472b6">φ</span>(<span class="hl">Q</span>) · <span style="color:#f472b6">φ</span>(<span class="hl2">K</span>)<sup>T</sup> <b>1</b> )
+  <br><small>分子:先算 d×d 的 φ(K)<sup>T</sup>V 再查询;分母:对归一化项做同样的结合律变形</small>
+</div>
+<ul>
+  <li><strong>复杂度从 O(N²d) 降到 O(N·d²)</strong>:只需计算三个"序列 → d×d 汇总"的乘积。</li>
+  <li>分母那项是 softmax 归一化的遗产:把每个查询的权重和归一成 1。代价是分母可能接近 0 造成数值不稳,后续变体各有处理办法(有的干脆去掉归一化)。</li>
+  <li>严格地说,<code>φ = elu+1</code> 只能近似(而非等价)softmax 核;Performer(FAVOR+)则用随机特征在统计意义上逼近 <code>exp</code> 核。</li>
+</ul>
+
+<div class="demo">
+  <h4>🧮 演示 2 · 结合律:中间产物是 N×N 还是 d×d?</h4>
+  <p class="readout">取 N = 4 个 token、d = 3 维的小例子,<strong>数字全部真实计算</strong>。切换两条计算路径,体会"先比后加"与"先加后查"的区别:</p>
+  <div class="ctrl">
+    <button class="active" id="d2-btn-a">路径 A:(QK<sup>T</sup>)V —— 先打分</button>
+    <button id="d2-btn-b">路径 B:Q(K<sup>T</sup>V) —— 先汇总</button>
+    <button id="d2-step">▶/⏸ 逐步动画</button>
+  </div>
+  <div class="stepdesc" id="d2-desc">点击"逐步动画"查看两条路径的中间矩阵形状。</div>
+  <div class="stepbox" id="d2-stage"></div>
+</div>
+</div>
+
+<!-- ================= 3 ================= -->
+<h2 id="s3">3. RNN 视角:线性注意力 = 固定大小状态的有穷自动机<span class="en">As a Linear RNN</span></h2>
+
+<div class="card">
+<p>把上面的"先汇总"路径按因果(每个 token 只看历史)逐位展开,会得到一个惊人的等价形式——线性注意力**就是一个线性 RNN**,它的隐状态是一个 <code>d×d</code> 矩阵 <code>S</code>:</p>
+<div class="formula">
+  <span class="hl2">S<sub>t</sub></span> = <span class="hl2">S<sub>t−1</sub></span> + <span class="hl3">v<sub>t</sub></span> <span class="hl2">k<sub>t</sub></span><sup>T</sup> &nbsp;&nbsp;&nbsp;&nbsp; 输出: y<sub>t</sub> = <span class="hl">q<sub>t</sub></span><sup>T</sup> <span class="hl2">S<sub>t</sub></span>
+  <br><small>读作:把当前 token 的 (key, value) 外积"写入"外部记忆 S;用 query 去读 S</small>
+</div>
+<p>三种等价的计算排布(现代实现的核心卖点):</p>
+<table>
+  <tr><th>模式</th><th>做法</th><th>复杂度</th><th>用途</th></tr>
+  <tr><td><strong>递归(recurrent)</strong></td><td>逐 token 更新 S</td><td>时间 O(N·d²),显存 <strong>O(d²) 常数</strong></td><td>推理生成(天然适合,无需缓存历史)</td></tr>
+  <tr><td><strong>并行(parallel)</strong></td><td>直接算 Q(φ(K)ᵀV)/归一化</td><td>O(N·d²)(配合分块可并行)</td><td>训练(GPU 友好,无 N×N 矩阵)</td></tr>
+  <tr><td><strong>分块(chunkwise)</strong></td><td>块内用并行形式、块间用递归形式</td><td>两者折中</td><td>训练实际采用的折衷(如 GLA/GDN 的 kernel)</td></tr>
+</table>
+<div class="good"><strong>与 softmax 推理的本质区别:</strong>生成第 t 个 token 时,标准注意力要把新 q 与<strong>全部 t 个历史 K/V</strong> 打分(读的量随 t 线性增长);线性 RNN 只读<strong>固定大小的 S</strong>(O(d²),与 t 无关)。长上下文下这就是"越写越慢"与"恒速"的区别。</div>
+<div class="note"><strong>代价预告:</strong>d×d 的 S 只有 d² 个数,却要装下任意长历史的信息——这是一个<strong>有损压缩器</strong>。它把"数据库"降级成了"笔记摘要"。精确回忆的损失是线性注意力所有弱点的根源,§7 详述。</div>
+</div>
+
+<!-- ================= 4 ================= -->
+<h2 id="s4">4. 显存账本:KV Cache vs 固定状态<span class="en">Memory Calculator</span></h2>
+
+<div class="card">
+<p>用 Qwen3.5-4B 的真实几何(L = 32 层,h<sub>kv</sub> = 4 KV 头,d<sub>h</sub> = 256,FP16)算一笔账:</p>
+<div class="demo">
+  <h4>🧮 演示 3 · 推理状态显存计算器</h4>
+  <div class="ctrl">
+    <label>上下文长度 N = <input type="number" id="d3-n" value="32768" min="256" step="256" style="width:110px"> token</label>
+    <label>层数 L = <input type="number" id="d3-l" value="32" min="1" style="width:60px"></label>
+    <label>KV头 h<sub>kv</sub> = <input type="number" id="d3-h" value="4" min="1" style="width:52px"></label>
+    <label>头维 d<sub>h</sub> = <input type="number" id="d3-dh" value="256" min="16" step="16" style="width:70px"></label>
+    <label>精度
+      <select id="d3-bytes"><option value="2">FP16/BF16 (2B)</option><option value="1">FP8 (1B)</option><option value="4">FP32 (4B)</option></select>
+    </label>
+  </div>
+  <canvas id="d3-canvas" width="980" height="250"></canvas>
+  <p class="readout" id="d3-readout"></p>
+  <p class="readout">绿色常数条 = 线性注意力的每层状态矩阵(h<sub>kv</sub> × d<sub>h</sub> × d<sub>h</sub>),与 N 完全无关。蓝色 = 标准(GQA)注意力的 KV Cache = 2(K和V) × L × N × h<sub>kv</sub> × d<sub>h</sub> × 字节数。<strong>N = 1M 时约 128 GiB,而线性注意力仍是 ~17 MiB。</strong></p>
+</div>
+</div>
+
+<!-- ================= 5 ================= -->
+<h2 id="s5">5. 家族谱系:线性注意力 / 线性 RNN 的主要变体<span class="en">The Family</span></h2>
+
+<div class="card">
+<p>所有变体回答同一个问题:<strong>状态 S 怎么写入、怎么遗忘、怎么读出?</strong>区别只在递推式的细节:</p>
+<table>
+  <tr><th>变体(年份)</th><th>状态更新规则</th><th>一句话特点</th></tr>
+  <tr>
+    <td><strong>Linear Transformer</strong><br>Katharopoulos 2020</td>
+    <td><code>S ← S + φ(k)v<sup>T</sup></code></td>
+    <td>开山之作;φ = elu+1;带全局归一化分母</td>
+  </tr>
+  <tr>
+    <td><strong>Performer / FAVOR+</strong><br>Choromanski 2020</td>
+    <td>随机特征 φ<sub>rand</sub> ≈ exp 核</td>
+    <td>统计意义上<strong>近似 softmax</strong>(无偏),其他多数变体是"替换"而非近似</td>
+  </tr>
+  <tr>
+    <td><strong>RetNet</strong><br>Sun et al. 2023</td>
+    <td><code>S ← γ·S + k v<sup>T</sup></code></td>
+    <td>引入<strong>固定</strong>指数衰减 γ(按头异),"保留"旧记忆随距离指数遗忘</td>
+  </tr>
+  <tr>
+    <td><strong>RWKV</strong><br>Peng et al. 2023</td>
+    <td>通道级向量状态 + 衰减</td>
+    <td>状态更小(每通道一个向量,非矩阵);社区驱动的可商用线性 RNN 系</td>
+  </tr>
+  <tr>
+    <td><strong>Mamba / S6</strong><br>Gu &amp; Dao 2023</td>
+    <td><code>S ← Ā(u)S + B̄(u)u</code></td>
+    <td>选择性状态空间:Δ、B、C 全部<strong>依赖输入</strong>,可自主决定记什么忘什么;硬件感知 scan</td>
+  </tr>
+  <tr>
+    <td><strong>GLA</strong><br>Yang et al. 2023</td>
+    <td><code>S ← α<sub>t</sub>⊙S + k v<sup>T</sup></code></td>
+    <td>门控线性注意力:<strong>数据依赖</strong>的遗忘门 α;高效的 chunkwise Triton kernel</td>
+  </tr>
+  <tr>
+    <td><strong>DeltaNet</strong><br>Schlag 2021</td>
+    <td><code>S ← S(I − βkk<sup>T</sup>) + βk v<sup>T</sup></code></td>
+    <td><strong>Delta Rule</strong>:同 key 再次出现时<strong>覆盖旧值</strong>而非累加,把"快权编程"思想引入注意力</td>
+  </tr>
+  <tr>
+    <td><strong>Gated DeltaNet(GDN)</strong><br>Yang et al. 2024<br><span class="pill purple">Qwen3.5 采用</span></td>
+    <td><code>S ← α<sub>t</sub>·S(I − β<sub>t</sub>k<sub>t</sub>k<sub>t</sub><sup>T</sup>) + β<sub>t</sub>k<sub>t</sub>v<sub>t</sub><sup>T</sup></code></td>
+    <td><strong>Delta 覆盖 + 遗忘门</strong>两者兼得:既能替换更新又能整体遗忘;当前线性注意力里召回能力最强的形态之一</td>
+  </tr>
+</table>
+<div class="note"><strong>记忆的四种操作,一张表看完:</strong>累加(Linear Transformer)、固定衰减(RetNet)、数据依赖遗忘(GLA/RWKV/Mamba)、覆盖改写(DeltaNet/GDN)。越往后,对"同一事物被多次提及"的处理越合理——人脑改口"我之前说错了"时,需要的正是<strong>覆盖</strong>而不是叠加。</div>
+</div>
+
+<!-- ================= 6 ================= -->
+<h2 id="s6">6. 与标准注意力的逐项对比<span class="en">Head-to-Head</span></h2>
+
+<div class="card">
+<table>
+  <tr><th style="width:16%">维度</th><th style="width:42%">标准 Softmax 注意力(含 GQA)</th><th style="width:42%">线性注意力 / 线性 RNN(如 GDN)</th></tr>
+  <tr><td>训练计算</td><td>O(N²·d),N 越长越平方爆炸</td><td>O(N·d²),对长度近似线性</td></tr>
+  <tr><td>训练显存</td><td>需 N×N 激活(FlashAttention 分块缓解,计算量不变)</td><td>无 N×N 中间矩阵,分块 kernel 显存友好</td></tr>
+  <tr><td>推理状态</td><td>KV Cache 随 N 线性增长(O(N));长上下文主要瓶颈</td><td>固定 d×d 状态(O(1)),与 N 无关</td></tr>
+  <tr><td>推理延迟</td><td>每 token 读全部历史,越写越慢</td><td>每 token 恒定工作,吞吐稳定</td></tr>
+  <tr><td>信息存取方式</td><td><strong>精确检索</strong>:逐对 q·k 打分,历史无损可回</td><td><strong>有损压缩</strong>:历史被滚动汇总进固定状态,存在遗忘与干扰</td></tr>
+  <tr><td>长程依赖形态</td><td>任意两 token 直接相连(路径长 1)</td><td>信息在状态中随时间衰减/被覆盖,靠门控选择性保存</td></tr>
+  <tr><td>召回类任务<br>(keys 检索、复制、ICL)</td><td><strong>强</strong>:MQAR 等精确回忆任务接近满分</td><td>固定容量下受限:键值对数超过状态容量即开始丢(MQAR 明显掉分)</td></tr>
+  <tr><td>平滑归纳偏置</td><td>softmax 产生尖峰分布 → 选择性强</td><td>线性加权更"平均",需靠门控/delta 补选择性</td></tr>
+  <tr><td>位置编码</td><td>RoPE 等作用于 pairwise 打分(见笔记 <a href="03b_mrope.html">03b</a>)</td><td>位置信息隐含在状态的时间演化中(衰减即"位置")</td></tr>
+  <tr><td>训练生态</td><td>成熟(FlashAttention / PagedAttention)</td><td>需要专门的 chunkwise/scan kernel(fla、Mamba 系),迭代更快但门槛高</td></tr>
+</table>
+<div class="good"><strong>线性注意力赢在:长序列成本。</strong>N 大到一定程度(约 N &gt; d 之后),计算与显存全面碾压;且推理吞吐不随上下文变长而衰减——这对 128K/1M 级上下文、流式视频(逐帧无限输入)是结构性优势。</div>
+<div class="bad"><strong>标准注意力赢在:精确性。</strong>它是一个无损的键值数据库;凡是需要"逐字 retrieval"的任务(长文档找细节、代码编辑、 needle-in-a-haystack)仍然是它更强。这是表达能力层面的差距,不是常数项优化能抹平的。</div>
+</div>
+
+<!-- ================= 7 ================= -->
+<h2 id="s7">7. 线性注意力的"命门":精确回忆与 Delta Rule<span class="en">Recall vs. Capacity</span></h2>
+
+<div class="card">
+<p>固定 <code>d×d</code> 状态意味着:全部历史被压进 d² 个数字。当"不同的键值对"数量超过状态容量,必然发生<strong>串扰(interference)</strong>。两个补救方向:</p>
+<ul>
+  <li><strong>别乱堆 —— Delta Rule(覆盖式写入):</strong>标准线性注意力遇到<strong>重复的 key</strong> 会把两次的 value 都累加进同一格(旧信息错误地残留)。DeltaNet 引入梯度的"增量更新":先<strong>减去</strong>该 key 方向上的旧投影,再写入新值——同一 key 再次出现 = 更新记录,而不是叠加。</li>
+  <li><strong>该忘就忘 —— 门控(Gating):</strong>给状态乘一个数据依赖的遗忘门 α<sub>t</sub>,让模型自己决定哪些记忆整体衰减(Gated DeltaNet 把覆盖与门控结合,公式见 §5 表格最后一行)。</li>
+</ul>
+
+<div class="demo">
+  <h4>🔥 演示 4 · 状态更新可视化:累加 vs Delta Rule(GDN)</h4>
+  <p class="readout">8×8 外部记忆 S 的热图。序列里同一个 key(同一行)会<strong>反复出现</strong>,每次携带不同的 value。观察两种写入方式的差别:累加模式把新旧 value <strong>越叠越亮直至糊死</strong>;Delta 模式(α=0.92, β=1.0)则<strong>覆盖旧值、遗忘久远记忆</strong>,始终保留"最新记录"。</p>
+  <div class="ctrl">
+    <button id="d4-mode-cum" class="active">累加:标准线性注意力</button>
+    <button id="d4-mode-delta">覆盖:Gated DeltaNet</button>
+    <button id="d4-prev">← 上一步</button>
+    <button id="d4-next">下一步 →</button>
+    <button id="d4-auto">▶ 自动播放</button>
+    <button id="d4-reset">重置</button>
+  </div>
+  <canvas id="d4-canvas" width="800" height="330"></canvas>
+  <p class="readout" id="d4-readout"></p>
+</div>
+
+<p>业界给出的第三个答案最务实:<strong>混合(hybrid)——两种都要</strong>。既然线性层便宜而全注意力层会精确检索,就让大多数层用线性注意力扛长程"记忆流",少数层用 softmax 注意力做"精确检索锚点"。经验上 15–25% 的全注意力层就能把召回能力拉回接近全注意力水平(Arora et al. 2024;Qwen、Jamba、MiniMax 等均走此路线),同时保住约 85% 的线性层带来的效率收益。</p>
+</div>
+
+<!-- ================= 8 ================= -->
+<h2 id="s8">8. 回到 Qwen3.5:为什么是 1×GQA + 3×GDN 的混合<span class="en">Back to Qwen3.5</span></h2>
+
+<div class="card">
+<p>现在可以完整解读<a href="08_overall_architecture.html">整体框架图</a>里语言模型那一行 <strong>“(1×GQA 全注意力 + 3×GDN 线性注意力)×8 组”</strong>:</p>
+<table>
+  <tr><th></th><th>1× GQA 全注意力层(每 4 层 1 个,共 8 个)</th><th>3× GDN 线性注意力层(共 24 个)</th></tr>
+  <tr><td>角色</td><td><strong>精确检索锚点</strong>:无损访问任意历史 token</td><td><strong>长程记忆流</strong>:以固定状态廉价地携带全局上下文</td></tr>
+  <tr><td>状态</td><td>KV Cache(随 N 增长,但只占 1/4 层数 + GQA 4 头,已经很薄)</td><td>d×d 递归矩阵(与 N 无关)</td></tr>
+  <tr><td>占比</td><td>25%</td><td>75%</td></tr>
+</table>
+<div class="good"><strong>这套混合结构对 Qwen-Drive 的规划专家至关重要:</strong>论文与代码(<code>modeling_qwen_drive.py::full_attention_layers</code>)显示,规划专家读取的 8 份 K/V 缓存<strong>恰好来自这 8 个 GQA 层</strong>(配置项 <code>layers_per_kv = 4</code>:每 4 层里只有那 1 个全注意力层产生缓存)。换言之——<strong>专家_conditioning 的正是模型的"精确检索通道"</strong>。GDN 层没有可读取的 K/V 缓存,它只有滚动状态。这也解释了为什么采样缓存时按 <code>layer_types == "full_attention"</code> 过滤,而不是按层号取前 8 层。</div>
+<ul>
+  <li><strong>效率侧收益:</strong>75% 的层无 KV Cache 增长 → 驾驶视频多帧序列(逐视角 × 逐时间步,token 数很大)的推理成本被大幅压平;这对车载部署(24GB 级单卡)是实打实的可行性差异。</li>
+  <li><strong>能力侧保底:</strong>8 个全注意力层保住精确回忆能力 —— 对驾驶场景里"几秒前那辆插入的车""交通灯从红变绿"这类需要精确定位的证据,检索通道仍在。</li>
+</ul>
+</div>
+
+<!-- ================= 9 ================= -->
+<h2 id="s9">9. FAQ:常见疑问与误解<span class="en">FAQ</span></h2>
+
+<div class="card">
+<p><strong>Q1:线性注意力是标准注意力的"近似"吗?</strong><br>
+分两派:Performer / Random Feature 类是(用随机特征逼近 exp 核);Linear Transformer、RetNet、Mamba、GDN 这类<strong>不是近似,是替换</strong>——它们定义了新的算子,牺牲精确核换取线性复杂度,再靠门控/delta rule 找回表达能力。</p>
+<p><strong>Q2:为什么推理快?不就是训练省了吗?</strong><br>
+推理快有两个来源:① 每个新 token 只更新/读取固定大小的 S(O(d²)),而 softmax 注意力要和全部历史打分(O(N·d)),N &gt; d 之后线性注意力更快;② 状态显存恒定,长上下文不会撑爆显存带宽与容量,吞吐恒定。</p>
+<p><strong>Q3:那为什么不一刀切全用线性注意力?</strong><br>
+因为<strong>精确回忆</strong>会被固定容量卡死(§7)。全线性模型在 MQAR / needle-in-a-haystack / 长文档问答上明显掉分。混合架构(如 Qwen3.5 的 3:1)是目前效率与能力的主流平衡点。</p>
+<p><strong>Q4:线性注意力还需要位置编码(RoPE)吗?</strong><br>
+通常不需要传统 RoPE:时间顺序已经由状态的时间演化(衰减/覆盖)隐式编码。这也是为什么笔记 <a href="03b_mrope.html">03b</a> 里 M-RoPE 的讨论只涉及全注意力通路——GDN 层吃的是 (t,h,w) 位置信息经过状态动态间接体现的。</p>
+<p><strong>Q5:递归模型不是不能并行训练吗?</strong><br>
+那是老 RNN 的问题。线性 RNN 的更新对状态是<strong>线性的</strong>,因此可以矩阵化分块:块内并行(小矩阵乘)、块间接力(结合律),配合 Triton/CUDA kernel 在 GPU 上高效训练(chunkwise 并行,§3 表)。Mamba 的 selective scan 与 GLA/GDN 的 chunkwise kernel 同属此类。</p>
+<p><strong>Q6:"门控"的 α、β 都是什么?</strong><br>
+α<sub>t</sub>(遗忘门):对整个旧状态乘的衰减系数,由当前输入决定——"这段历史还有多重要"。β<sub>t</sub>(写入强度/delta 系数):本次写入在 key 方向上的幅度,"新证据多确信"。两者都是小网络从 token embedding 算出的标量/向量。</p>
+</div>
+
+<!-- ================= 10 ================= -->
+<h2 id="s10">10. 参考文献<span class="en">References</span></h2>
+<div class="card" style="font-size:14px">
+<ol>
+  <li>Katharopoulos et al. <i>Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention</i>. ICML 2020.</li>
+  <li>Choromanski et al. <i>Rethinking Attention with Performers</i>. ICLR 2021.</li>
+  <li>Schlag, Irie, Schmidhuber. <i>Linear Transformers Are Secretly Fast Weight Programmers</i>. ICML 2021.(Delta Rule)</li>
+  <li>Sun et al. <i>Retentive Network: A Successor to Transformer for Large Language Models</i>. 2023.</li>
+  <li>Peng et al. <i>RWKV: Reinventing RNNs for the Transformer Era</i>. 2023.</li>
+  <li>Gu, Dao. <i>Mamba: Linear-Time Sequence Modeling with Selective State Spaces</i>. 2023.</li>
+  <li>Yang et al. <i>Gated Linear Attention Transformers with Hardware-Efficient Training</i>. 2023.</li>
+  <li>Yang et al. <i>Parallelizing Linear Transformers with the Delta Rule over Sequence Length</i>(Gated DeltaNet). NeurIPS 2024.</li>
+  <li>Arora et al. <i>Zoology: Measuring and Improving Recall in Efficient Language Models</i>. 2023;及 <i>Simple linear attention language models balance the recall-throughput tradeoff</i>. 2024.(MQAR / 混合架构)</li>
+  <li>Qwen Team &amp; HUST. <i>Qwen-Drive-1.0: An Initial Step towards a Vision-Language Foundation Model for Autonomous Driving</i>. arXiv:2609.00111. 2026.</li>
+</ol>
+</div>
+
+<footer>
+  Qwen-Drive-1.0 结构剖析笔记 09 · 线性注意力与 GDN · 本页所有交互为原生 JavaScript + Canvas,可离线打开 ·
+  相关:[03b_mrope.html](03b_mrope.html) · [06_bev_head_architecture.html](06_bev_head_architecture.html) · [08_overall_architecture.html](08_overall_architecture.html)
+</footer>
+</div>
+
+<script>
+// ============ 演示1:复杂度曲线 ============
+(function(){
+  const cv = document.getElementById('d1-canvas'), ctx = cv.getContext('2d');
+  const L=32, HKV=4, DH=256, D=2560, BYTES=2;
+  let mode='flops';
+  const NS=[1e3,3e3,1e4,3e4,1e5,3e5,1e6];
+  const flopsSoft=N=>4*N*N*D, flopsLin=N=>4*N*D*D;
+  const memSoft=N=>2*L*N*HKV*DH*BYTES, memLin=N=>L*HKV*DH*DH*BYTES;
+  const fmt=x=>{ if(x>=1e12) return (x/1e12).toFixed(1)+'T'; if(x>=1e9) return (x/1e9).toFixed(1)+'B'; if(x>=1e6) return (x/1e6).toFixed(1)+'M'; if(x>=1e3) return (x/1e3).toFixed(0)+'K'; return x.toFixed(0); };
+  const fmtMem=x=>{ if(x>=1024**3) return (x/1024**3).toFixed(1)+' GiB'; if(x>=1024**2) return (x/1024**2).toFixed(1)+' MiB'; return (x/1024).toFixed(0)+' KiB'; };
+  function draw(){
+    const W=cv.width, H=cv.height, padL=86, padR=24, padT=30, padB=46;
+    ctx.clearRect(0,0,W,H);
+    const lgx=Math.log10(1e3), rgx=Math.log10(1e6);
+    const ys=[], vals=[];
+    for(const N of NS){ vals.push(mode==='flops'?[flopsSoft(N),flopsLin(N)]:[memSoft(N),memLin(N)]); }
+    let lo=Infinity, hi=-Infinity;
+    for(const [a,b] of vals){ lo=Math.min(lo,a,b); hi=Math.max(hi,a,b); }
+    const lgy=Math.log10(lo)-0.15, rgy=Math.log10(hi)+0.25;
+    const X=N=>padL+(Math.log10(N)-lgx)/(rgx-lgx)*(W-padL-padR);
+    const Y=v=>H-padB-(Math.log10(v)-lgy)/(rgy-lgy)*(H-padT-padB);
+    // grid + ticks
+    ctx.font='12px Consolas, monospace'; ctx.fillStyle='#5b6472'; ctx.strokeStyle='#e2e8f0';
+    const dec=Math.floor(lgy), top=Math.ceil(rgy);
+    for(let e=dec;e<=top;e++){ const y=Y(10**e); if(y<padT-6||y>H-padB+6)continue;
+      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+      ctx.textAlign='right'; ctx.fillText(mode==='flops'?('10^'+e):fmtMem(10**e), padL-8, y+4); }
+    for(const N of [1e3,1e4,1e5,1e6]){ ctx.textAlign='center'; ctx.fillText(fmt(N), X(N), H-padB+20); }
+    ctx.fillText('序列长度 N(tokens)', (padL+W-padR)/2, H-8);
+    ctx.save(); ctx.translate(16,(padT+H-padB)/2); ctx.rotate(-Math.PI/2); ctx.textAlign='center';
+    ctx.fillText(mode==='flops'?'每层计算量(FLOPs)':'推理状态显存', 0, 0); ctx.restore();
+    // crossover line
+    if(mode==='flops'){ const xX=X(D);
+      ctx.strokeStyle='#94a3b8'; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(xX,padT); ctx.lineTo(xX,H-padB); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle='#64748b'; ctx.textAlign='center'; ctx.fillText('交叉点 N = d = 2560', xX, padT+14); }
+    // curves
+    function curve(f,color,label){
+      ctx.strokeStyle=color; ctx.lineWidth=2.4; ctx.beginPath();
+      for(let i=0;i<=120;i++){ const lg=lgx+(rgx-lgx)*i/120, N=10**lg, y=Y(f(N)); i?ctx.lineTo(X(N),y):ctx.moveTo(X(N),y); }
+      ctx.stroke(); ctx.lineWidth=1;
+      const N=3e5; ctx.fillStyle=color; ctx.beginPath(); ctx.arc(X(N),Y(f(N)),4,0,7); ctx.fill();
+      ctx.font='12.5px sans-serif'; ctx.textAlign= label.startsWith('标准')?'right':'left';
+      const x=X(N)+(label.startsWith('标准')?-10:10); ctx.fillText(label,x,Y(f(N))-10);
+    }
+    curve(mode==='flops'?flopsSoft:memSoft, '#2563eb','标准注意力');
+    curve(mode==='flops'?flopsLin:memLin, '#059669','线性注意力');
+    // readout numbers at N=1e5 / 1e6
+    const N1=1e5, N2=1e6;
+    function line(N){
+      if(mode==='flops'){ const r=flopsSoft(N)/flopsLin(N);
+        return `N=${fmt(N)}:标准 ${flopsSoft(N).toExponential(2)} FLOPs vs 线性 ${flopsLin(N).toExponential(2)} FLOPs(比值 ${r.toFixed(0)}×)`; }
+      return `N=${fmt(N)}:标准 KV Cache ${fmtMem(memSoft(N))} vs 线性状态 ${fmtMem(memLin(N))}(比值 ${(memSoft(N)/memLin(N)).toFixed(0)}×)`;
+    }
+    document.getElementById('d1-readout').textContent = line(N1) + '　|　' + line(N2);
+  }
+  document.getElementById('d1-mode-flops').onclick=e=>{ mode='flops'; set1('d1-mode-flops'); draw(); };
+  document.getElementById('d1-mode-mem').onclick=e=>{ mode='mem'; set1('d1-mode-mem'); draw(); };
+  function set1(id){ ['d1-mode-flops','d1-mode-mem'].forEach(x=>document.getElementById(x).classList.toggle('active',x===id)); }
+  draw();
+})();
+
+// ============ 演示2:结合律 ============
+(function(){
+  // Q,K,V: N=4, d=3
+  const Q=[[1,0,2],[0,1,1],[2,1,0],[1,1,1]];
+  const K=[[1,1,0],[0,1,1],[1,0,1],[2,0,1]];
+  const V=[[1,2,0],[0,1,2],[2,0,1],[1,1,0]];
+  const mul=(A,B)=>A.map(r=>B[0].map((_,j)=>r.reduce((s,x,k)=>s+x*B[k][j],0)));
+  const tr=A=>A[0].map((_,j)=>A.map(r=>r[j]));
+  const S1=mul(Q,tr(K));   // 4x4
+  const OUT_A=mul(S1,V);   // 4x3
+  const S2=mul(tr(K),V);   // 3x3
+  const OUT_B=mul(Q,S2);   // 4x3
+  let path='a', step=0, timer=null;
+  const mat=(M,hot)=>`<table class="mat">${M.map(r=>'<tr>'+r.map(x=>`<td class="${hot||''}">${x}</td>`).join('')+'</tr>').join('')}</table>`;
+  const name=M=>`<span class="mono" style="font-size:12.5px">${M}</span>`;
+  function render(){
+    const st=document.getElementById('d2-stage'), ds=document.getElementById('d2-desc');
+    let html='', desc='';
+    if(path==='a'){
+      if(step===0){ html=name('Q (4×3)')+mat(Q)+name('K (4×3)')+mat(K)+name('V (4×3)')+mat(V);
+        desc='素材:4 个 token 的 Q、K、V。路径 A 沿用标准注意力次序:先算所有两两点积。'; }
+      else if(step===1){ html=name('S = QKᵀ (4×4!)+ ')+mat(S1,'hot')+name('V (4×3)')+mat(V);
+        desc='中间产物是 <b>4×4 的打分矩阵</b> —— 它随 N² 增长。N=4 无所谓,N=100K 就是 100 亿格。'; }
+      else { html=name('QKᵀ (4×4)')+mat(S1)+name('·V')+name('输出 (4×3)')+mat(OUT_A,'hot2');
+        desc='再乘 V 得到输出。总代价 O(N²·d)。'; }
+    } else {
+      if(step===0){ html=name('K (4×3)')+mat(K)+name('V (4×3)')+mat(V);
+        desc='路径 B 先对历史做汇总:计算 KᵀV(把每对 (k,v) 的外积累加起来)。'; }
+      else if(step===1){ html=name('KᵀV (3×3!!)+ ')+mat(S2,'hot');
+        desc='中间产物只有 <b>3×3</b>(= d×d)—— <b>与 N 完全无关</b>!这就是可递归的原因:读完 100 万 token,它也只有 3×3。'; }
+      else { html=name('Q (4×3)')+mat(Q)+name('·KᵀV (3×3)')+name('输出 (4×3)')+mat(OUT_B,'hot2');
+        desc='每个 token 用自己的 Q 查询这张小汇总表。总代价 O(N·d²)。两条路径输出完全相同 —— 结合律!'; }
+    }
+    st.innerHTML=html; ds.innerHTML=desc;
+  }
+  document.getElementById('d2-btn-a').onclick=()=>{ path='a'; step=0; stopAuto(); setA(); render(); };
+  document.getElementById('d2-btn-b').onclick=()=>{ path='b'; step=0; stopAuto(); setB(); render(); };
+  function setA(){ document.getElementById('d2-btn-a').classList.add('active'); document.getElementById('d2-btn-b').classList.remove('active'); }
+  function setB(){ document.getElementById('d2-btn-b').classList.add('active'); document.getElementById('d2-btn-a').classList.remove('active'); }
+  function stopAuto(){ if(timer){ clearInterval(timer); timer=null; document.getElementById('d2-step').textContent='▶/⏸ 逐步动画'; } }
+  document.getElementById('d2-step').onclick=()=>{
+    if(timer){ stopAuto(); return; }
+    timer=setInterval(()=>{ step=(step+1)%3; render(); },1600);
+    document.getElementById('d2-step').textContent='⏸ 暂停';
+  };
+  render();
+})();
+
+// ============ 演示3:显存计算器 ============
+(function(){
+  const cv=document.getElementById('d3-canvas'), ctx=cv.getContext('2d');
+  const fmtMem=x=>{ if(x>=1024**4) return (x/1024**4).toFixed(2)+' TiB'; if(x>=1024**3) return (x/1024**3).toFixed(2)+' GiB'; if(x>=1024**2) return (x/1024**2).toFixed(1)+' MiB'; return (x/1024).toFixed(0)+' KiB'; };
+  function draw(){
+    const N=+document.getElementById('d3-n').value||4096;
+    const L=+document.getElementById('d3-l').value||32;
+    const H=+document.getElementById('d3-h').value||4;
+    const DH=+document.getElementById('d3-dh').value||256;
+    const B=+document.getElementById('d3-bytes').value;
+    const soft=2*L*N*H*DH*B, lin=L*H*DH*DH*B;
+    const W=cv.width, Hc=cv.height, padL=200, padR=140;
+    ctx.clearRect(0,0,W,Hc);
+    const mx=Math.max(soft,lin), scale=(W-padL-padR)/mx;
+    const rows=[['标准注意力 KV Cache',soft,'#2563eb'],['线性注意力 状态(恒定)',lin,'#059669']];
+    ctx.font='13.5px sans-serif';
+    rows.forEach(([lab,v,c],i)=>{
+      const y=52+i*84;
+      ctx.fillStyle='#1f2430'; ctx.textAlign='right'; ctx.fillText(lab,padL-12,y+24);
+      ctx.fillStyle='#eef2f7'; ctx.fillRect(padL,y,W-padL-padR,36);
+      ctx.fillStyle=c; ctx.fillRect(padL,y,Math.max(v*scale,2),36);
+      ctx.fillStyle=c; ctx.textAlign='left'; ctx.font='bold 14px sans-serif';
+      ctx.fillText(fmtMem(v), padL+Math.max(v*scale,2)+10, y+24);
+      ctx.font='13.5px sans-serif';
+    });
+    document.getElementById('d3-readout').innerHTML =
+      `每 token 的 KV Cache 开销 = 2×L×h<sub>kv</sub>×d<sub>h</sub>×bytes = <b>${fmtMem(2*L*H*DH*B)}</b>/token;线性状态 = L×h<sub>kv</sub>×d<sub>h</sub>²×bytes = <b>${fmtMem(lin)}</b>(固定)。比值:<b>${(soft/lin).toFixed(0)}×</b>`;
+  }
+  ['d3-n','d3-l','d3-h','d3-dh','d3-bytes'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+  draw();
+})();
+
+// ============ 演示4:Delta Rule 热图 ============
+(function(){
+  const cv=document.getElementById('d4-canvas'), ctx=cv.getContext('2d');
+  const D=8, ALPHA=0.92;
+  // keys: one-hot at slots 0..7, chosen to repeat with different values
+  const keyIdx=[0,3,6,0,3,1,6,4,0,6,3,0];
+  const vals=[
+    [0.9,0.1,0.2],[0.8,0.3,0.1],[0.2,0.7,0.5],[0.1,0.9,0.6],[0.5,0.2,0.9],[0.6,0.6,0.2],
+    [0.3,0.8,0.8],[0.7,0.4,0.3],[0.4,0.9,0.9],[0.9,0.5,0.1],[0.2,0.2,0.7],[0.8,0.8,0.4]
+  ]; // each token scatters a 3-hot value into 3 cols: (i)%8, (i+3)%8, (i+5)%8
+  function valueVec(t){ const v=new Array(D).fill(0); const g=vals[t];
+    v[(t)%8]=g[0]; v[(t+3)%8]=g[1]; v[(t+5)%8]=g[2]; return v; }
+  let S=null, mode='cum', t=0, timer=null;
+  function newState(){ return Array.from({length:D},()=>new Array(D).fill(0)); }
+  function step(){
+    const k=new Array(D).fill(0); k[keyIdx[t]]=1;
+    const v=valueVec(t);
+    const outer=new Array(D).fill(0).map((_,i)=>k[i]? v.slice(): new Array(D).fill(0));
+    if(mode==='cum'){
+      for(let i=0;i<D;i++) for(let j=0;j<D;j++) S[i][j]+=outer[i][j];
+    } else {
+      // S <- a*S(I - k k^T) + k v^T ; I - kk^T zeroes column? k is one-hot at r=keyIdx: (kk^T)_{ij}=k_i k_j -> only (r,r)=1
+      const old=S.map(r=>r.slice());
+      for(let i=0;i<D;i++) for(let j=0;j<D;j++){
+        const decay=(i===keyIdx[t]&&j===keyIdx[t])?1:ALPHA;
+        const corr=(i===keyIdx[t]&&j===keyIdx[t])?old[i][j]:0; // S(I-kkT): removes S[r][r] only when both i,j=r; for i=r,j≠r: (kkT)_{rj}=0 -> stays, times a
+        S[i][j]=decay*old[i][j]-corr+outer[i][j];
+      }
+    }
+    t++;
+  }
+  function draw(){
+    const W=cv.width,Hh=cv.height, ox=190, oy=30, cell=(330-40)/D;
+    ctx.clearRect(0,0,W,Hh);
+    // find scale
+    let mx=1e-9; for(const r of S) for(const x of r) mx=Math.max(mx,x);
+    for(let i=0;i<D;i++) for(let j=0;j<D;j++){
+      const x=S[i][j]/mx, a=Math.max(0,Math.min(1,x));
+      ctx.fillStyle=`rgba(37,99,235,${0.06+0.9*a})`;
+      ctx.fillRect(ox+j*cell,oy+i*cell,cell-2,cell-2);
+      if(S[i][j]>0.01){ ctx.fillStyle= a>0.55?'#fff':'#1f2430'; ctx.font='10.5px Consolas, monospace'; ctx.textAlign='center';
+        ctx.fillText(S[i][j].toFixed(1), ox+j*cell+cell/2-1, oy+i*cell+cell/2+3); }
+    }
+    // labels
+    ctx.fillStyle='#5b6472'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('value 维度 j →', ox+D*cell/2, oy+D*cell+22);
+    ctx.save(); ctx.translate(ox-58,oy+D*cell/2); ctx.rotate(-Math.PI/2); ctx.fillText('key 维度 i(行=写入位置)→',0,0); ctx.restore();
+    // right panel: current token info
+    const rx=ox+D*cell+40;
+    ctx.fillStyle='#1f2430'; ctx.font='bold 14px sans-serif'; ctx.textAlign='left';
+    ctx.fillText(`第 ${t}/${keyIdx.length} 个 token`, rx, 50);
+    if(t>0){
+      const ti=t-1;
+      ctx.font='13px sans-serif';
+      ctx.fillText(`key 写入行: 第 ${keyIdx[ti]} 行(重复出现 ${keyIdx.slice(0,t+1).filter(x=>x===keyIdx[ti]).length} 次)`, rx, 80);
+      ctx.fillText(`value 向量: [${valueVec(ti).filter(x=>x>0).map(x=>x.toFixed(1)).join(', ')}]`, rx, 102);
+      ctx.fillText(mode==='cum'?'更新: S ← S + k vᵀ(纯累加)':'更新: S ← α·S(I−βkkᵀ) + βkvᵀ(α=0.92)', rx, 128);
+      const rep=keyIdx.slice(0,t).filter(x=>x===keyIdx[ti]).length;
+      ctx.fillStyle= rep>0? '#d97706':'#5b6472';
+      ctx.fillText(rep>0? '⚠ 该 key 之前出现过!看同一行的变化':'该 key 首次出现', rx, 154);
+    }
+    // axis ticks for key rows
+    ctx.fillStyle='#94a3b8'; ctx.font='10.5px Consolas, monospace'; ctx.textAlign='right';
+    for(let i=0;i<D;i++) ctx.fillText('k'+i, ox-8, oy+i*cell+cell/2+3);
+  }
+  function reset(){ S=newState(); t=0; draw(); }
+  document.getElementById('d4-mode-cum').onclick=()=>{ mode='cum'; setm('d4-mode-cum'); reset(); };
+  document.getElementById('d4-mode-delta').onclick=()=>{ mode='delta'; setm('d4-mode-delta'); reset(); };
+  function setm(id){ ['d4-mode-cum','d4-mode-delta'].forEach(x=>document.getElementById(x).classList.toggle('active',x===id)); }
+  document.getElementById('d4-reset').onclick=reset;
+  document.getElementById('d4-next').onclick=()=>{ if(t<keyIdx.length){ step(); draw(); } };
+  document.getElementById('d4-prev').onclick=()=>{ // replay from scratch to t-1
+    const target=Math.max(0,t-1); S=newState(); t=0;
+    while(t<target) step(); draw(); };
+  document.getElementById('d4-auto').onclick=()=>{
+    if(timer){ clearInterval(timer); timer=null; document.getElementById('d4-auto').textContent='▶ 自动播放'; return; }
+    document.getElementById('d4-auto').textContent='⏸ 暂停';
+    timer=setInterval(()=>{ if(t>=keyIdx.length){ clearInterval(timer); timer=null; document.getElementById('d4-auto').textContent='▶ 自动播放'; return;} step(); draw(); },1100);
+  };
+  reset();
+})();
+</script>
+</body>
+</html>
