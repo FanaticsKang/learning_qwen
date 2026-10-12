@@ -1,0 +1,3 @@
+[submodule "Qwen-Drive-1.0"]
+	path = Qwen-Drive-1.0
+	url = https://github.com/QwenLM/Qwen-Drive-1.0.git

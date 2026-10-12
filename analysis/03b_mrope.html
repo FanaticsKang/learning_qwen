@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多模态 RoPE(M-RoPE)详解 — 三个位置轴 × 三段旋转维度</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --pink: #db2777;
+    --pink-soft: #fce7f3;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #312e81 0%, #6d28d9 55%, #0891b2 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 27px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 12px; }
+  header.hero a { color: #a5f3fc; }
+  h2 {
+    font-size: 21px; margin: 42px 0 6px; padding-left: 12px;
+    border-left: 5px solid var(--purple);
+  }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  .qa {
+    background: var(--purple-soft); border: 1px solid #ddd6fe; border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0;
+  }
+  .qa b.tag { color: var(--purple); }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .cmt { color: #7dd3fc; }
+  .kwd { color: #fbbf24; }
+  .num { color: #f472b6; }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .center { text-align: center; }
+  .dim-label { color: var(--muted); font-size: 13px; }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--purple); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .backlink { font-size: 13.5px; margin-bottom: 14px; }
+  .backlink a { color: var(--accent); text-decoration: none; }
+  .backlink a:hover { text-decoration: underline; }
+  .demo-panel {
+    background: #fbfcfe; border: 1.5px dashed #a78bfa; border-radius: 12px;
+    padding: 16px 18px; margin: 14px 0;
+  }
+  .demo-title { font-weight: 700; color: var(--purple); font-size: 14.5px; margin-bottom: 6px; }
+  .btn {
+    display: inline-block; border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+    padding: 7px 14px; border-radius: 8px; background: var(--accent); color: #fff;
+    margin: 2px 6px 2px 0; font-family: inherit;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.green { background: var(--green); }
+  .btn.orange { background: var(--orange); }
+  .btn.gray { background: #64748b; }
+  .btn.purple { background: var(--purple); }
+  .btn.pink { background: var(--pink); }
+  /* token 条 */
+  .strip { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin: 12px 0; }
+  .fgrid {
+    display: grid; grid-template-columns: repeat(3, auto); gap: 4px;
+    padding: 5px; border-radius: 8px;
+  }
+  .fgrid.f0 { border: 1.5px dashed #93c5fd; background: #f0f7ff; }
+  .fgrid.f1 { border: 1.5px dashed #6ee7b7; background: #f0fdf7; }
+  .chip {
+    border-radius: 8px; padding: 4px 8px; font-size: 12.5px; cursor: pointer;
+    border: 1.5px solid #94a3b8; background: #f1f5f9; text-align: center;
+    line-height: 1.35; user-select: none; font-family: inherit;
+  }
+  .chip small { display: block; font-size: 9.5px; color: #64748b; }
+  .chip.text { background: #334155; border-color: #334155; color: #fff; }
+  .chip.text small { color: #cbd5e1; }
+  .chip.tag { background: #ede9fe; border-color: #c4b5fd; color: #6d28d9; }
+  .chip.cell { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; font-family: Consolas, monospace; }
+  .fgrid.f1 .chip.cell { background: #d1fae5; border-color: #6ee7b7; color: #047857; }
+  .chip.selA { outline: 3px solid var(--purple); outline-offset: 1px; }
+  .chip.selB { outline: 3px solid var(--pink); outline-offset: 1px; }
+  .pair-echo {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 14px; font-size: 14px; margin: 8px 0; text-align: center;
+  }
+  .pair-echo b.a { color: var(--purple); }
+  .pair-echo b.b { color: var(--pink); }
+  /* 打分分解条 */
+  .segrow { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13.5px; }
+  .segrow .lab { width: 190px; flex: 0 0 auto; }
+  .segrow .lab b.st { color: var(--accent); }
+  .segrow .lab b.sh { color: var(--green); }
+  .segrow .lab b.sw { color: var(--orange); }
+  .barwrap { background: #eef1f6; border-radius: 6px; height: 16px; position: relative; flex: 1; min-width: 120px; }
+  .barmid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1.5px; background: #94a3b8; }
+  .barval { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; }
+  .barval.pos { left: 50%; background: var(--green); }
+  .barval.neg { right: 50%; background: var(--red); }
+  .segrow .val { width: 64px; flex: 0 0 auto; text-align: right; font-family: Consolas, monospace; }
+  /* 32 组分段条 */
+  .seg32 { display: flex; gap: 2px; width: max-content; max-width: 100%; margin: 10px auto 4px; flex-wrap: wrap; justify-content: center; }
+  .s32 { width: 17px; height: 28px; border-radius: 3px; cursor: pointer; display: flex; align-items: flex-end; justify-content: center; font-size: 8px; color: rgba(0,0,0,.45); }
+  .s32.st { background: #bfdbfe; }
+  .s32.sh { background: #a7f3d0; }
+  .s32.sw { background: #fde68a; }
+  .s32:hover { outline: 2.5px solid var(--purple); }
+  .seg32-readout {
+    text-align: center; font-size: 13px; margin-top: 6px; min-height: 22px;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  /* 展平演示网格 */
+  .flatwrap { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
+  .flatgrid { display: grid; grid-template-columns: repeat(3, 66px); gap: 6px; }
+  .fcell {
+    width: 66px; height: 54px; border: 1.5px solid #cbd5e1; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: Consolas, monospace; font-size: 15px; font-weight: 700; background: #fff;
+  }
+  .fcell small { font-size: 10px; color: #64748b; font-weight: 400; }
+  .fgridname { text-align: center; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .uA  { box-shadow: inset 0 -5px 0 #2563eb; }
+  .uAB { box-shadow: inset 0 -5px 0 #2563eb, inset 0 -10px 0 #d97706; }
+  .uBG { box-shadow: inset 0 -5px 0 #d97706, inset 0 -10px 0 #059669; }
+  .uG  { box-shadow: inset 0 -5px 0 #059669; }
+  .uD  { box-shadow: inset 0 -5px 0 #dc2626; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .legend .u { display: inline-block; width: 22px; height: 0; border-bottom: 4px solid; vertical-align: 3px; margin-right: 5px; }
+  .formula {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; font-family: Consolas, "Courier New", monospace;
+    font-size: 13.5px; margin: 10px 0; overflow-x: auto; line-height: 2;
+  }
+  .formula b { color: var(--purple); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .readout { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .ro-cell {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 12px; font-size: 13px; min-width: 110px; flex: 0 1 auto;
+  }
+  .ro-cell b { font-family: Consolas, monospace; color: var(--purple); font-size: 13.5px; }
+  .ro-cell.hl { border-color: var(--green); background: var(--green-soft); }
+  .segbar { display: flex; width: 100%; max-width: 620px; margin: 10px auto 4px; border-radius: 8px; overflow: hidden; font-size: 12px; color: #fff; text-align: center; }
+  .seg { padding: 8px 4px; }
+  .pill { display: inline-block; border-radius: 999px; padding: 1px 12px; font-size: 12.5px; font-weight: 600; margin: 0 4px; }
+  .pill.blue { background: var(--accent-soft); color: var(--accent); }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+  .pill.orange { background: var(--orange-soft); color: var(--orange); }
+  .pill.purple { background: var(--purple-soft); color: var(--purple); }
+  svg text { font-family: inherit; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>多模态 RoPE(M-RoPE)详解</h1>
+  <p>三个位置轴 (t, h, w) × 三段旋转维度 —— 视觉 token 如何在注意力里"在何时、何处"</p>
+  <p>承接 03a:单轴 RoPE 把位置变成角度;本篇回答"多张图、多帧、图文混排时,位置号怎么发、维度怎么分、打分怎么变"。</p>
+  <p class="sub">RoPE 系列:<a href="03_vit_process.html">03 篇 §⑧(概览)</a> → <a href="03a_rope.html">03a(单轴机制与动画)</a> → <b>本篇(M-RoPE 深入)</b> · 依据:Qwen2-VL 技术报告(arXiv:2409.12191,M-RoPE 原始提出)+ 本项目已验证的 config(mrope_section = [11, 11, 10])。演示均浏览器本地计算。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#tldr">⓪ 太长不看</a> ·
+  <a href="#blind">① 一维位置的盲区:序列相邻 ≠ 空间相邻</a> ·
+  <a href="#assign">② 分配规则:每个 token 领三个位置号(交互)</a> ·
+  <a href="#sections">③ [11,11,10] 分段:三段维度各跟一个轴(打分分解)</a> ·
+  <a href="#code">④ get_rope_index:位置表怎么算(代码)</a> ·
+  <a href="#details">⑤ 设计取舍与机制细节</a> ·
+  <a href="#faq">⑥ FAQ</a>
+</div>
+
+<!-- ============ ⓪ TLDR ============ -->
+<h2 id="tldr">⓪ 太长不看<span class="en">TL;DR</span></h2>
+<div class="qa">
+  <p><b class="tag">M-RoPE 是什么:</b>把单轴 RoPE 的"一个位置号 m"升级成"<b>三个位置号 (t, h, w)</b>"(时间帧、图像行、图像列),并把每个注意力头的 32 个旋转组切成三段(mrope_section = [11, 11, 10])——前 11 组跟着 <b>t</b> 转、中间 11 组跟着 <b>h</b> 转、后 10 组跟着 <b>w</b> 转。旋转机制与 03a 完全相同,只是同一头的维度被三张"角度表"分段驱动。</p>
+  <p><b class="tag">分配规则:</b>文本 token:t = h = w = 自身序号(退化回一维 RoPE);视觉 token:t = 段起点 st,h = st + 行号,w = st + 列号。每个视觉段从它所在序列位置领号,多视角、多帧自然排队。</p>
+  <p style="margin-bottom:0"><b class="tag">为什么需要:</b>一维位置号有两个盲区——"序列相邻但空间不相邻"(展平碰撞)和"1D 距离相同但语义完全不同"(换行 vs 跨帧),§① 有逐对数字。M-RoPE 把打分拆成 (Δt, Δh, Δw) 三个独立的相对差:<b>时间差与空间差解耦到不同维度段</b>,注意力可以分别感知、自由组合——这正是驾驶场景"同一位置跨帧 = 运动、同一时刻跨像素 = 空间结构"所需的位置结构。</p>
+</div>
+
+<!-- ============ ① blind ============ -->
+<h2 id="blind">① 一维位置的盲区:序列相邻 ≠ 空间相邻<span class="en">why 1D is not enough</span></h2>
+
+<div class="card">
+  <p>图像 patch 按<b>行优先</b>展平成序列后,一维位置号只能表达"序列上隔几个",而丢失了网格结构。沿用 03 篇 §⑧ 的示例(2 行 × 3 列的一帧,段起点 st = 11),四个真实的关系对:</p>
+
+  <div class="flatwrap">
+    <div>
+      <div class="flatgrid">
+        <div class="fcell uG">11<small>(0,0)</small></div>
+        <div class="fcell uA">12<small>(0,1)</small></div>
+        <div class="fcell uAB">13<small>(0,2)</small></div>
+        <div class="fcell uBG">14<small>(1,0)</small></div>
+        <div class="fcell">15<small>(1,1)</small></div>
+        <div class="fcell uD">16<small>(1,2)</small></div>
+      </div>
+      <div class="fgridname">帧0(序列位置 11–16,行优先展平)</div>
+    </div>
+    <div>
+      <div class="flatgrid">
+        <div class="fcell uD">19<small>(0,0)</small></div>
+        <div class="fcell">20<small>(0,1)</small></div>
+        <div class="fcell">21<small>(0,2)</small></div>
+        <div class="fcell">22<small>(1,0)</small></div>
+        <div class="fcell">23<small>(1,1)</small></div>
+        <div class="fcell">24<small>(1,2)</small></div>
+      </div>
+      <div class="fgridname">帧1(序列位置 19–24)</div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="u" style="border-color:#2563eb"></span>α:12→13 同行右邻</span>
+    <span><span class="u" style="border-color:#d97706"></span>β:13→14 行末→下行行首</span>
+    <span><span class="u" style="border-color:#059669"></span>γ:11→14 同帧正下方</span>
+    <span><span class="u" style="border-color:#dc2626"></span>δ:16→19 跨帧(隔标签 17–18)</span>
+  </div>
+
+  <p class="dim-label center">下表由本页载入时实时计算(d = 64、32 个旋转组、θ_j = 10000<sup>−j/32</sup>,均匀权重近似):</p>
+  <table id="blindTable">
+    <tr><th>对</th><th>语义关系</th><th>1D Δ</th><th>一维打分 g(Δ)</th><th>M-RoPE (Δt, Δh, Δw)</th><th>M-RoPE 打分</th></tr>
+  </table>
+
+  <ul style="font-size:14.5px">
+    <li><b>盲区一(展平碰撞)α vs β:</b>12→13 是"同行右邻一格",13→14 是"从行末跳到下一行行首"(空间上斜跨几乎整个图宽)——但序列里都只差 1,<b>一维打分完全相等</b>(同一列的两个数逐位相同)。</li>
+    <li><b>盲区二(跨结构碰撞)γ vs δ:</b>11→14 是"同一时刻、正下方一行";16→19 是"时刻推进(跨帧)、且位置从行末到行首"——一维距离都是 3,打分又完全相等。</li>
+    <li><b>盲区三(时/空耦合):</b>一维只有一条距离轴,无法同时表达"同一时刻、隔几行几列"(纯空间)和"同一位置、隔了几帧"(纯时序)——而后者正是驾驶里的"运动信号"(03 篇 A↔C 对比)。</li>
+  </ul>
+
+  <div class="note"><b>关于"M-RoPE 打分"列:</b>这里取单位向量、均匀权重的近似,只为看结构。真实注意力还会给每个维度学不同的幅度权重 |q|·|k|,把有用的维度段放大——但<b>一维的"完全相等"是结构性的</b>(输入就一样),无论权重怎么学都分不开;M-RoPE 的三段输入不同,天然可分。</div>
+  <div class="good"><b>M-RoPE 的解法预告:</b>给每个 token 发三个位置号,把"隔几帧 / 隔几行 / 隔几列"分别编码、分别旋转——§② 交互展示怎么发号,§③ 展示三段维度怎么分头消化。</div>
+</div>
+
+<!-- ============ ② assign ============ -->
+<h2 id="assign">② 分配规则:每个 token 领三个位置号 (t, h, w)<span class="en">interactive assignment</span></h2>
+
+<div class="card">
+  <p>规则只有两条:</p>
+  <table>
+    <tr><th>token 类型</th><th>t(时间)</th><th>h(行)</th><th>w(列)</th><th>效果</th></tr>
+    <tr><td><b>文本</b>(含 &lt;FRONT VIEW&gt;、frame 标签等)</td><td colspan="3" class="center">t = h = w = 自身序列序号 i</td><td>三分量相同 → 与一维 RoPE <b>完全等价</b>,文本不受多轴影响</td></tr>
+    <tr><td><b>视觉</b>(一帧图像的 h×w 个 token,段起点 = st)</td><td>st(整帧恒定)</td><td>st + 行号</td><td>st + 列号</td><td>帧内 Δt=0 → "同一时刻";行、列各自给出网格坐标</td></tr>
+  </table>
+  <p class="dim-label">st = 该视觉段第一个 token 的序列位置。多视角、多帧、图文混排时逐段顺延,无需任何特殊处理。</p>
+
+  <h3>交互:点两个 token,看它们的三分量与三个差</h3>
+  <p class="dim-label">示例序列与 03 篇 §⑧ 完全同号(文本 0–7 → &lt;FRONT VIEW&gt; 8 → frame:0 标签 9–10 → 帧0 = 11–16 → frame:1 标签 17–18 → 帧1 = 19–24 → 文本 25)。<b>第 1 次点击选 A(紫圈),第 2 次点击选 B(粉圈),再点重新开始</b>;或直接点预设对比按钮。</p>
+
+  <div class="demo-panel">
+    <div class="strip" id="tokStrip"></div>
+    <div class="center">
+      <button class="btn" id="ps1">同行右邻</button>
+      <button class="btn orange" id="ps2">换行(1D 碰撞)</button>
+      <button class="btn green" id="ps3">跨帧同位置(运动)</button>
+      <button class="btn pink" id="ps4">跨帧行首→行首</button>
+      <button class="btn gray" id="psClear">清空选择</button>
+    </div>
+    <div class="pair-echo" id="pairEcho">先点一个 token 作为 A,再点一个作为 B。</div>
+    <div id="compareBox" style="display:none">
+      <table>
+        <tr><th></th><th>token</th><th>序列位置</th><th>t</th><th>h</th><th>w</th></tr>
+        <tr><td style="color:var(--purple);font-weight:700">A</td><td id="cAName"></td><td id="cAPos"></td><td id="cAT"></td><td id="cAH"></td><td id="cAW"></td></tr>
+        <tr><td style="color:var(--pink);font-weight:700">B</td><td id="cBName"></td><td id="cBPos"></td><td id="cBT"></td><td id="cBH"></td><td id="cBW"></td></tr>
+        <tr><td style="font-weight:700">差 Δ</td><td class="dim-label">B − A</td><td id="cD1"></td><td id="cDT"></td><td id="cDH"></td><td id="cDW"></td></tr>
+        <tr><td style="font-weight:700">注意力读出</td><td colspan="5" id="cMean"></td></tr>
+      </table>
+      <p class="dim-label center" id="cNote"></p>
+    </div>
+  </div>
+
+  <div class="note"><b>读表要点:</b>① 帧内所有视觉 token 的 <b>t 恒等于帧起点</b>(如帧0 全是 11)——"同一时刻"不靠猜,是发号规则直接保证的;② 行号、列号只进各自的分量,frame 标签、&lt;FRONT VIEW&gt; 这些"夹在中间的文本"完全不影响帧内 (h, w) 网格,只顺延下一个段的 st;③ 文本 token 的三分量永远相等,和 03a 的一维动画对得上。</div>
+</div>
+
+<!-- ============ ③ sections ============ -->
+<h2 id="sections">③ [11, 11, 10] 分段:三段维度各跟一个轴<span class="en">score decomposition</span></h2>
+
+<div class="card">
+  <p>每个注意力头的 Q/K 有 64 维 = <b>32 个旋转组</b>(03a 的"平面")。M-RoPE 把这 32 组按 mrope_section 切成三段,<b>三段共用同一条频率梯子</b> θ<sub>j</sub> = 10000<sup>−j/32</sup>(j = 0…31),区别只在"读哪张位置表":</p>
+
+  <div class="segbar">
+    <div class="seg" style="flex:11; background:#2563eb">组 0–10(11 组)<br>角度 = t × θ<sub>j</sub></div>
+    <div class="seg" style="flex:11; background:#059669">组 11–21(11 组)<br>角度 = h × θ<sub>j</sub></div>
+    <div class="seg" style="flex:10; background:#d97706">组 22–31(10 组)<br>角度 = w × θ<sub>j</sub></div>
+  </div>
+
+  <p>于是注意力打分(单位向量近似)严格分解为三段之和:</p>
+  <div class="formula">
+    score(A, B) = Σ<sub>j=0..10</sub> cos(<b>Δt</b>·θ<sub>j</sub>) + Σ<sub>j=11..21</sub> cos(<b>Δh</b>·θ<sub>j</sub>) + Σ<sub>j=22..31</sub> cos(<b>Δw</b>·θ<sub>j</sub>)
+    &nbsp;&nbsp;<span class="dim-label">← 三个相对差各进各的段,互不串扰</span>
+  </div>
+
+  <h3>交互:对 §② 选出的 (A, B),看三段各贡献多少</h3>
+  <div class="demo-panel">
+    <div class="pair-echo" id="pairEcho2">与 §② 共用同一对选择。</div>
+    <div id="decompBox">
+      <div class="segrow"><span class="lab"><b class="st">t 段</b>(组 0–10)Δt = <b id="dT1"></b></span><div class="barwrap"><div class="barmid"></div><div class="barval" id="barT"></div></div><span class="val" id="valT"></span></div>
+      <div class="segrow"><span class="lab"><b class="sh">h 段</b>(组 11–21)Δh = <b id="dH1"></b></span><div class="barwrap"><div class="barmid"></div><div class="barval" id="barH"></div></div><span class="val" id="valH"></span></div>
+      <div class="segrow"><span class="lab"><b class="sw">w 段</b>(组 22–31)Δw = <b id="dW1"></b></span><div class="barwrap"><div class="barmid"></div><div class="barval" id="barW"></div></div><span class="val" id="valW"></span></div>
+      <div class="readout">
+        <div class="ro-cell hl">M-RoPE 打分(三段和)= <b id="valTot"></b></div>
+        <div class="ro-cell">若压平成一维(三分量都用 1D Δ)= <b id="val1D"></b></div>
+        <div class="ro-cell">1D 距离 Δ = <b id="d1D"></b></div>
+      </div>
+      <p class="dim-label" id="verdictLine" style="margin-top:8px"></p>
+
+      <p class="center dim-label" style="margin:14px 0 2px">32 个旋转组一览(鼠标悬停任意一格,看它的轴、频率与当前贡献):</p>
+      <div class="seg32" id="seg32"></div>
+      <div class="seg32-readout" id="seg32Readout">把鼠标悬停到上面任意一格。</div>
+    </div>
+  </div>
+
+  <ul style="font-size:14.5px">
+    <li><b>解耦:</b>Δt 只出现在第一段的 cos 里,Δh、Δw 只出现在各自段——"运动信号"(Δt 大、Δh=Δw=0)与"空间邻接"(Δt=0、Δh/Δw 小)落在<b>不同的维度集合</b>上,头可以学出"只看某几段"的组合。</li>
+    <li><b>每段内部仍是 03a 的多频率钟表:</b>t 段里 θ₀=1(快针)分辨相邻帧的精细差别,θ₁₀≈0.24(慢针)看长时序;w 段同理分辨列距离。</li>
+    <li><b>越靠后的组频率越低:</b>w 段(组 22–31)整体是低频段,Δw=1 引起的角度变化很小——所以网格坐标的精细分辨主要靠每段开头的几根"快针",学习到的幅度权重会按需加权。</li>
+  </ul>
+</div>
+
+<!-- ============ ④ code ============ -->
+<h2 id="code">④ get_rope_index:位置表怎么算出来<span class="en">implementation</span></h2>
+<div class="card">
+  <p>整个机制只有两个函数:<b>发号</b>(扫描序列,产出 [3, L] 的位置表)和<b>拼角度</b>(按 mrope_section 把三张角度表缝成 32 组)。PyTorch 风格最小实现(命名对齐 HF/Qwen 的 <code>get_rope_index</code> / <code>apply_rotary_pos_emb</code>):</p>
+
+<pre><code><span class="cmt"># ── 1. 一个视觉段的三元组:段起点 st,网格 h 行 × w 列 ──────────────</span>
+<span class="kwd">def</span> <span class="num">image_positions</span>(st, h, w):
+    r = torch.arange(h).repeat_interleave(w)   <span class="cmt"># 行号:0,0,0,1,1,1(行优先)</span>
+    c = torch.arange(w).repeat(h)              <span class="cmt"># 列号:0,1,2,0,1,2</span>
+    <span class="kwd">return</span> torch.stack([torch.full((h*w,), float(st)),
+                        st + r,
+                        st + c])               <span class="cmt"># [3, h*w]:t=st 恒定,h=st+r,w=st+c</span>
+
+<span class="cmt"># ── 2. 扫描序列:文本 (i,i,i);视觉段用 image_positions,st = 当前序列位置 ──</span>
+<span class="kwd">def</span> <span class="num">get_rope_index</span>(input_ids, image_spans):
+    <span class="cmt"># image_spans:每个视觉段的 (h, w),来自预处理时记录的 image_grid_thw</span>
+    pos, st = [], <span class="num">0</span>
+    <span class="kwd">for</span> i, tok <span class="kwd">in</span> enumerate(input_ids):
+        <span class="kwd">if</span> is_text(tok):
+            pos.append([st, st, st])           <span class="cmt"># 文本:三分量 = 自身序号</span>
+            st += <span class="num">1</span>
+        <span class="kwd">else</span>:                                  <span class="cmt"># 视觉段第一个 token</span>
+            h, w = image_spans[tok]
+            seg = image_positions(st, h, w)    <span class="cmt"># [3, h*w]</span>
+            pos.append(seg.t())
+            st += h * w                        <span class="cmt"># 整段占掉 h*w 个序列位置</span>
+    <span class="kwd">return</span> torch.tensor(pos)                   <span class="cmt"># → [3, L](真实实现再堆叠出 [3, batch, L])</span>
+
+<span class="cmt"># ── 3. 每层注意力:按 mrope_section 把三张角度表缝成 32 组 ───────────</span>
+inv_freq = <span class="num">10000</span> ** (-torch.arange(<span class="num">32</span>) / <span class="num">32</span>)      <span class="cmt"># θ_j = 10000^(-2j/64), j = 0..31</span>
+<span class="kwd">def</span> <span class="num">mrope_freqs</span>(pos):                          <span class="cmt"># pos: [3, L]</span>
+    f = pos[:, :, <span class="kwd">None</span>] * inv_freq             <span class="cmt"># [3, L, 32] —— t/h/w 三张角度表</span>
+    <span class="kwd">return</span> torch.cat([f[<span class="num">0</span>, :, <span class="num">0</span>:<span class="num">11</span>],          <span class="cmt"># 组 0–10 读 t 表</span>
+                      f[<span class="num">1</span>, :, <span class="num">11</span>:<span class="num">22</span>],         <span class="cmt"># 组 11–21 读 h 表</span>
+                      f[<span class="num">2</span>, :, <span class="num">22</span>:<span class="num">32</span>]], dim=-<span class="num">1</span>)  <span class="cmt"># 组 22–31 读 w 表</span>
+<span class="cmt"># 之后与 03a 完全相同:emb = cat(freqs, freqs) → cos/sin → apply_rope(Q, K)</span></code></pre>
+
+  <div class="good">
+    <b>三个实现要点:</b>
+    <ul style="margin:4px 0 0; padding-left:20px; font-size:14px">
+      <li>位置表 <b>[3, batch, L] 只算一次</b>,全部 32 层共用(03 篇的 <code>_rope_positions</code>);每层拿它拼出自己的 cos/sin 施加到 Q、K;</li>
+      <li>发号顺序天然处理<b>多图</b>:每个视觉段用自己的 st,段与段之间由文本/标签 token 顺延——Qwen-Drive 的 12 帧 3054 个视觉 token 就是这样排进一条序列的;</li>
+      <li>视频输入时 t 维不再是常量:每帧的 t 沿帧序推进(Qwen2.5-VL 起更默认改为按帧率换算的<b>绝对时间</b>,见 §⑤)。</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ ⑤ details ============ -->
+<h2 id="details">⑤ 设计取舍与机制细节<span class="en">design notes</span></h2>
+<div class="card">
+  <h3>1. 文本 = (i, i, i):一套装置服务两种模态</h3>
+  <p>文本 token 三分量相同,精确退化回一维 RoPE——纯文本场景下 M-RoPE <b>就是</b> RoPE,零额外开销。更重要的是图文 token 共享同一套旋转坐标系:文字"看"图像时,不需要任何坐标换算,同一套 cos/sin 装置直接打分。</p>
+
+  <h3>2. t 为什么取帧起点 st,而不是 0/1/2 帧号?</h3>
+  <p>这样设计一举三得:① 帧内 Δt = 0,"同一时刻"由发号规则直接保证;② 跨帧 Δt = 两帧在序列里的距离——"隔得越远、时刻差越大";③ 实现上不需要独立的帧计数器。代价:帧间 t 差会把中间夹的标签、文本都算进"时序距离"。<b>后续演进:</b>Qwen2.5-VL 起视频的时间轴默认改为按帧率换算的绝对时间(秒),帧间隔不再受中间 token 数影响;对本模型这类等间隔驾驶帧,两种设计给出的相对结构一致(本模型以发布权重实现为准)。</p>
+
+  <h3>3. 三段共用同一条频率梯子</h3>
+  <p>θ<sub>j</sub> 只由组号 j 决定,与轴无关;mrope_section 只是"查表路由"——第 j 组读 t/h/w 三张角度表中的哪一张。可以把 M-RoPE 想成<b>三块共用齿轮的表盘</b>:齿轮(频率)一样,指针读的表不一样。</p>
+
+  <h3>4. K 缓存与 Planning Expert 的衔接</h3>
+  <p>每层注意力中 Q、K 被旋转、V 不转(03a 要点);K 旋转后进 KV 缓存——<b>Planning Expert 直接读缓存,位置相位已在其中</b>。50 个 waypoint token 从 anchor(前缀最后一个 token 的位置)起<b>继续</b> M-RoPE 编号,保证专家生成的位置与 VLM 前缀连续无缝(03 篇 §⑧)。</p>
+
+  <h3>5. ViT 侧是 2D 版</h3>
+  <p>ViT 每次只编码一帧,没有时间轴,用的是 (h, w) 两轴的 2D RoPE;进入 LLM 后升级为完整 (t, h, w)。两处的旋转公式、频率梯子完全同源,只是轴数不同。</p>
+</div>
+
+<!-- ============ ⑥ faq ============ -->
+<h2 id="faq">⑥ FAQ<span class="en">faq</span></h2>
+<div class="card">
+  <h3>Q1:M-RoPE 的 "3D" 是物理三维空间 (x, y, z) 吗?</h3>
+  <p>不是。三个轴是<b>时间 t + 图像行 h + 图像列 w</b>:空间部分是"图像网格"坐标,不是 3D 世界坐标。车辆在 3D 空间中的几何关系由 BEV 感知/规划组件处理(04–07 篇),M-RoPE 只负责"序列 + 图像网格"的位置结构。</p>
+
+  <h3>Q2:同一帧内 Δt = 0,模型怎么知道帧的先后?</h3>
+  <p>"先后"编码在<b>帧间</b>:帧起点 st 沿序列递增,跨帧同位置 token 的 Δt > 0 且随帧距增大。帧内本来就不需要先后——它们同时发生,Δt = 0 正是正确语义。</p>
+
+  <h3>Q3:为什么是 [11, 11, 10] 而不是平均分?</h3>
+  <p>32 个旋转组不能被 3 整除,必须有一段多/少一组;具体分配是设计选择(时间与行各多一组)。约束只有"各段非空、总和 = 组数";不同模型版本的 section 比例不同。</p>
+
+  <h3>Q4:文本夹在两帧之间,会把 Δt 拉开吗?</h3>
+  <p>会——这正是 t = 帧起点设计的含义:时序差按序列距离度量,中间的标签、文本都计入。若希望时序差反映物理时间而不受文本长度影响,就是 §⑤-2 说的绝对时间方案(Qwen2.5-VL 起用于视频)。</p>
+
+  <h3>Q5:训练时见过 (11, 12, 11) 这种三分量"错位"的组合吗?</h3>
+  <p>见过且是常态:视觉 token 的 (st, st+r, st+c) 天然三分量接近但不相等;只有纯文本是 (i, i, i) 对角线。M-RoPE 模型就是在这样的位置分布上训练的,推理时同分布。</p>
+
+  <h3>Q6:多视角、多帧的图像(如 Qwen-Drive 的 12 帧)怎么发号?</h3>
+  <p>逐段处理:每个视觉段有自己的 st,段内按 (帧, 行, 列) 展开,段间由文本/标签顺延。不同视角、不同时刻的 token 靠各自的 (t, h, w) 自然区分——03 篇 ⑨ 节的 3054 个视觉 token 就是这样组织进一条序列的。</p>
+</div>
+
+<footer>
+  来源:Qwen2-VL 技术报告(arXiv:2409.12191,M-RoPE 原始提出);Qwen2.5-VL(arXiv:2502.13923,视频时间轴绝对化);RoFormer(arXiv:2104.09864,RoPE 基础);示例序列与数字沿用 03_vit_process.html §⑧(st = 11/19、2×3 网格)。本页所有打分为"单位向量 + 均匀权重"的教学近似,真实注意力含逐维学习的幅度权重;动画与表格均为浏览器本地计算,可离线打开。
+</footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  /* ============ 数据:示例序列(与 03 篇 §⑧ 同号) ============ */
+  var FRAME_ST = [11, 19];
+  var seq = [];
+  for (var i = 0; i < 8; i++) seq.push({ pos: i, kind: 'text', label: '文', sub: String(i) });
+  seq.push({ pos: 8, kind: 'tag', label: '<FRONT VIEW>', sub: '8' });
+  seq.push({ pos: 9, kind: 'tag', label: 'frame: 0', sub: '9–10' });
+  for (var f = 0; f < 2; f++) {
+    if (f === 1) seq.push({ pos: 17, kind: 'tag', label: 'frame: 1', sub: '17–18' });
+    for (var r = 0; r < 2; r++) for (var c = 0; c < 3; c++) {
+      seq.push({ pos: FRAME_ST[f] + r * 3 + c, kind: 'cell', f: f, r: r, c: c, sub: String(FRAME_ST[f] + r * 3 + c) });
+    }
+  }
+  seq.push({ pos: 25, kind: 'tag', label: '…', sub: '25' });
+
+  function thw(t) {
+    if (t.f !== undefined) { var st = FRAME_ST[t.f]; return [st, st + t.r, st + t.c]; }
+    return [t.pos, t.pos, t.pos];
+  }
+  function tname(t) {
+    if (t.f !== undefined) return '帧' + t.f + '(行' + t.r + ',列' + t.c + ')';
+    if (t.kind === 'text') return '文本 #' + t.pos;
+    return t.label + ' #' + t.pos;
+  }
+  function cellLabel(t) { return '(' + t.r + ',' + t.c + ')'; }
+
+  /* ============ 频率与打分(教学近似:单位向量 + 均匀权重) ============ */
+  function thJ(j) { return Math.pow(10, -j / 16); }               // θ_j = 10000^(-j/32)
+  function gSeg(d, j0, j1) {                                       // 段贡献(按 32 归一)
+    var s = 0; for (var j = j0; j <= j1; j++) s += Math.cos(d * thJ(j)); return s / 32;
+  }
+  function g1D(d) { var s = 0; for (var j = 0; j < 32; j++) s += Math.cos(d * thJ(j)); return s / 32; }
+  function mScore(dt, dh, dw) { return gSeg(dt, 0, 10) + gSeg(dh, 11, 21) + gSeg(dw, 22, 31); }
+
+  function axisPhrase(axis, d) {
+    var abs = Math.abs(d);
+    if (axis === 't') {
+      return d === 0 ? '同一时刻(帧内 t 恒等于帧起点)'
+                     : '不同时刻:B 比 A 晚 ' + d + ' 个序列位置(跨帧时序差)';
+    }
+    if (axis === 'h') {
+      if (d === 0) return '同一行';
+      var s = d > 0 ? '下' : '上';
+      return abs === 1 ? '紧邻的' + s + '一行' : s + '方隔 ' + abs + ' 行';
+    }
+    if (d === 0) return '同一列';
+    var s2 = d > 0 ? '右' : '左';
+    return abs === 1 ? '紧邻的' + s2 + '一列' : s2 + '方隔 ' + abs + ' 列';
+  }
+
+  /* ============ §② token 条 ============ */
+  var strip = $('tokStrip'), chips = [];
+  var curGrid = null, curF = null;
+  seq.forEach(function (t, idx) {
+    var el = document.createElement('span');
+    var cls = t.kind === 'text' ? 'text' : (t.kind === 'tag' ? 'tag' : 'cell');
+    if (t.kind === 'cell') {
+      el.className = 'chip cell';
+      el.innerHTML = cellLabel(t) + '<small>#' + t.sub + '</small>';
+    } else {
+      el.className = 'chip ' + cls;
+      el.innerHTML = esc(t.label) + '<small>#' + t.sub + '</small>';
+    }
+    el.title = tname(t) + ' → (t,h,w) = (' + thw(t).join(', ') + ')';
+    el.addEventListener('click', function () { clickTok(idx); });
+    // 每帧的 cell 包进一个虚线分组框(帧0 蓝 / 帧1 绿)
+    var parent = strip;
+    if (t.f !== undefined) {
+      if (curGrid === null || curF !== t.f) {
+        curGrid = document.createElement('div');
+        curGrid.className = 'fgrid f' + t.f;
+        strip.appendChild(curGrid);
+        curF = t.f;
+      }
+      parent = curGrid;
+    } else {
+      curGrid = null; curF = null;
+    }
+    parent.appendChild(el);
+    chips.push(el);
+  });
+
+  var A = null, B = null, nextIsA = true;
+  function clickTok(idx) {
+    if (nextIsA) { A = idx; B = null; } else { B = idx; }
+    nextIsA = !nextIsA;
+    render();
+  }
+  function setPair(aIdx, bIdx) { A = aIdx; B = bIdx; nextIsA = true; render(); }
+
+  /* ============ 渲染 ============ */
+  function render() {
+    chips.forEach(function (el, idx) {
+      el.classList.toggle('selA', A === idx);
+      el.classList.toggle('selB', B === idx);
+    });
+    var echo = $('pairEcho'), echo2 = $('pairEcho2');
+    if (A === null) {
+      echo.textContent = '先点一个 token 作为 A,再点一个作为 B。';
+      echo2.textContent = '与 §② 共用同一对选择。';
+    } else if (B === null) {
+      echo.innerHTML = '<b class="a">A = ' + esc(tname(seq[A])) + '</b>' +
+        ' → (t,h,w) = (' + thw(seq[A]).join(', ') + ');再点一个 token 作为 B。';
+      echo2.innerHTML = 'A = ' + esc(tname(seq[A])) + ';等待选择 B。';
+    }
+    var box = $('compareBox'), dbox = $('decompBox');
+    if (A === null || B === null) {
+      box.style.display = 'none';
+      if (A === null) dbox.style.visibility = 'hidden';
+      else dbox.style.visibility = 'visible';
+      if (A !== null) fillDecomp();
+      return;
+    }
+    box.style.display = 'block';
+    dbox.style.visibility = 'visible';
+
+    var ta = seq[A], tb = seq[B], pa = thw(ta), pb = thw(tb);
+    var dt = pb[0] - pa[0], dh = pb[1] - pa[1], dw = pb[2] - pa[2], d1 = tb.pos - ta.pos;
+
+    echo.innerHTML = '<b class="a">A = ' + esc(tname(ta)) + '</b> ↔ <b class="b">B = ' + esc(tname(tb)) + '</b>';
+    echo2.innerHTML = 'A = ' + esc(tname(ta)) + ' ↔ B = ' + esc(tname(tb));
+
+    $('cAName').textContent = tname(ta); $('cBName').textContent = tname(tb);
+    $('cAPos').textContent = ta.pos; $('cBPos').textContent = tb.pos;
+    $('cAT').textContent = pa[0]; $('cAH').textContent = pa[1]; $('cAW').textContent = pa[2];
+    $('cBT').textContent = pb[0]; $('cBH').textContent = pb[1]; $('cBW').textContent = pb[2];
+    $('cD1').textContent = (d1 > 0 ? '+' : '') + d1;
+    $('cDT').textContent = (dt > 0 ? '+' : '') + dt;
+    $('cDH').textContent = (dh > 0 ? '+' : '') + dh;
+    $('cDW').textContent = (dw > 0 ? '+' : '') + dw;
+    $('cMean').innerHTML = '<b style="color:#2563eb">时间:</b>' + axisPhrase('t', dt) +
+      ';&nbsp;<b style="color:#059669">行:</b>' + axisPhrase('h', dh) +
+      ';&nbsp;<b style="color:#d97706">列:</b>' + axisPhrase('w', dw);
+    $('cNote').textContent = '一维位置只能给出 Δ = ' + d1 + ';M-RoPE 把它拆成三个独立的相对差,由三段维度分别消化(见 §③)。';
+
+    fillDecomp();
+  }
+
+  function setBar(barEl, v) {
+    var w = Math.min(50, Math.abs(v) * 50);
+    barEl.style.width = w + '%';
+    barEl.className = 'barval ' + (v >= 0 ? 'pos' : 'neg');
+  }
+  function fillDecomp() {
+    var pa = thw(seq[A]), pb = thw(seq[B]);
+    var dt = pb[0] - pa[0], dh = pb[1] - pa[1], dw = pb[2] - pa[2], d1 = pb ? seq[B].pos - seq[A].pos : 0;
+    $('dT1').textContent = dt; $('dH1').textContent = dh; $('dW1').textContent = dw;
+    var cT = gSeg(dt, 0, 10), cH = gSeg(dh, 11, 21), cW = gSeg(dw, 22, 31);
+    setBar($('barT'), cT); setBar($('barH'), cH); setBar($('barW'), cW);
+    $('valT').textContent = cT.toFixed(3);
+    $('valH').textContent = cH.toFixed(3);
+    $('valW').textContent = cW.toFixed(3);
+    var tot = cT + cH + cW, one = g1D(d1);
+    $('valTot').textContent = tot.toFixed(3);
+    $('val1D').textContent = one.toFixed(3);
+    $('d1D').textContent = d1;
+    $('verdictLine').textContent = '本对:M-RoPE 打分 ' + tot.toFixed(3) + ' vs 一维打分 ' + one.toFixed(3) +
+      (Math.abs(tot - one) > 0.02
+        ? ' → 两套机制给出不同分数,关系被区分。'
+        : ' → 数值接近;但注意结构差异:1D 对"同 Δ 的碰撞对"必然逐位相等,M-RoPE 对不同 (Δt,Δh,Δw) 组合输入不同。');
+  }
+
+  /* ============ 预设 ============ */
+  function findByPos(pos) {
+    for (var i = 0; i < seq.length; i++) if (seq[i].pos === pos) return i;
+    return -1;
+  }
+  $('ps1').addEventListener('click', function () { setPair(findByPos(11), findByPos(12)); });
+  $('ps2').addEventListener('click', function () { setPair(findByPos(13), findByPos(14)); });
+  $('ps3').addEventListener('click', function () { setPair(findByPos(11), findByPos(19)); });
+  $('ps4').addEventListener('click', function () { setPair(findByPos(16), findByPos(19)); });
+  $('psClear').addEventListener('click', function () { A = null; B = null; nextIsA = true; render(); });
+
+  /* ============ §③ 32 组条 ============ */
+  var seg32 = $('seg32');
+  for (var j = 0; j < 32; j++) {
+    (function (j) {
+      var d = document.createElement('div');
+      d.className = 's32 ' + (j < 11 ? 'st' : (j < 22 ? 'sh' : 'sw'));
+      d.textContent = j;
+      d.addEventListener('mouseenter', function () {
+        var axis = j < 11 ? 't' : (j < 22 ? 'h' : 'w');
+        var dd = 0;
+        if (A !== null && B !== null) {
+          var pa2 = thw(seq[A]), pb2 = thw(seq[B]);
+          dd = pb2[j < 11 ? 0 : (j < 22 ? 1 : 2)] - pa2[j < 11 ? 0 : (j < 22 ? 1 : 2)];
+        }
+        var th = thJ(j);
+        $('seg32Readout').textContent = '组 ' + j + ' · ' + axis + ' 轴 · θ' + j + ' = ' + th.toFixed(4) +
+          ' rad/位置' + ((A !== null && B !== null) ? ' · 角度差 ' + axis + '·θ = ' + (dd * th).toFixed(4) +
+          ' rad · 贡献 cos = ' + Math.cos(dd * th).toFixed(4) : '(选好 A、B 后显示贡献)');
+      });
+      seg32.appendChild(d);
+    })(j);
+  }
+
+  /* ============ §① 盲区表(载入时计算) ============ */
+  (function () {
+    var pairs = [
+      { n: 'α', a: 12, b: 13, rel: '同行右邻一格' },
+      { n: 'β', a: 13, b: 14, rel: '行末 → 下行行首(空间斜跨)' },
+      { n: 'γ', a: 11, b: 14, rel: '同帧正下方一行' },
+      { n: 'δ', a: 16, b: 19, rel: '跨帧(隔标签 17–18)' }
+    ];
+    var tb = $('blindTable');
+    pairs.forEach(function (p) {
+      function thwOf(pos) {
+        if (pos >= 11 && pos <= 16) { var k = pos - 11; return [11, 11 + Math.floor(k / 3), 11 + (k % 3)]; }
+        if (pos >= 19 && pos <= 24) { var k2 = pos - 19; return [19, 19 + Math.floor(k2 / 3), 19 + (k2 % 3)]; }
+        return [pos, pos, pos];
+      }
+      var pa = thwOf(p.a), pb = thwOf(p.b);
+      var dt = pb[0] - pa[0], dh = pb[1] - pa[1], dw = pb[2] - pa[2], d1 = p.b - p.a;
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><b>' + p.n + '</b></td><td>' + p.rel + '</td><td>' + d1 +
+        '</td><td class="mono">' + g1D(d1).toFixed(4) + '</td>' +
+        '<td class="mono">(' + dt + ', ' + dh + ', ' + dw + ')</td>' +
+        '<td class="mono">' + mScore(dt, dh, dw).toFixed(4) + '</td>';
+      tb.appendChild(tr);
+    });
+  })();
+
+  /* 初始:展示一个预设对 */
+  setPair(findByPos(11), findByPos(19));
+})();
+</script>
+</body>
+</html>

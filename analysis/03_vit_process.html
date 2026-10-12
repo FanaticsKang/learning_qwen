@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ViT 视觉编码全过程 — patch 16×16 与 token 32×32 详解</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #0ea5e9 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 27px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .75; margin-top: 12px; }
+  h2 {
+    font-size: 21px; margin: 42px 0 6px; padding-left: 12px;
+    border-left: 5px solid var(--accent);
+  }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  .qa {
+    background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0;
+  }
+  .qa b.tag { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .cmt { color: #7dd3fc; }
+  .kwd { color: #fbbf24; }
+  .num { color: #f472b6; }
+  .pill {
+    display: inline-block; border-radius: 999px; padding: 1px 12px; font-size: 12.5px;
+    font-weight: 600; margin: 0 4px;
+  }
+  .pill.blue { background: var(--accent-soft); color: var(--accent); }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+  .pill.orange { background: var(--orange-soft); color: var(--orange); }
+  .pill.purple { background: var(--purple-soft); color: var(--purple); }
+  .pill.red { background: var(--red-soft); color: var(--red); }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 16px 0; }
+  .flow .step {
+    flex: 1 1 130px; background: var(--card); border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 10px 8px; text-align: center; font-size: 13px;
+    display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 128px;
+  }
+  .flow .step b { font-size: 13.5px; }
+  .flow .step small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+  .flow .arrow { align-self: center; color: #94a3b8; font-size: 20px; font-weight: 700; }
+  .demo-img {
+    display: grid; gap: 2px; background: #cbd5e1; border: 3px solid #334155;
+    border-radius: 6px; width: max-content; margin: 12px auto;
+  }
+  .demo-img .cell {
+    width: 26px; height: 26px; border-radius: 2px; position: relative;
+    font-size: 9px; color: rgba(255,255,255,.0); display: flex; align-items: center;
+    justify-content: center; transition: transform .12s;
+  }
+  .demo-img .cell:hover { transform: scale(1.25); z-index: 5; color: rgba(0,0,0,.55); font-weight: 700; box-shadow: 0 0 0 2px #fff, 0 2px 8px rgba(0,0,0,.4); }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+  .center { text-align: center; }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .dim-label { color: var(--muted); font-size: 13px; }
+  .big-num { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .vs-box { border-radius: 12px; padding: 16px 20px; height: 100%; }
+  .vs-box.patch { background: var(--orange-soft); border: 1.5px solid #fcd34d; }
+  .vs-box.token { background: var(--green-soft); border: 1.5px solid #6ee7b7; }
+  .vs-box h4 { margin: 0 0 6px; font-size: 16px; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+  /* 垂直流程图(vflow) */
+  .vflow { display: flex; flex-direction: column; align-items: center; margin: 16px 0 4px; }
+  .vf-box {
+    background: var(--card); border: 1.5px solid #93c5fd; border-radius: 10px;
+    padding: 8px 16px; text-align: center; min-width: 320px; max-width: 660px;
+    box-shadow: 0 1px 4px rgba(37,99,235,.10); font-size: 14px;
+  }
+  .vf-box .vf-sub { font-size: 12.5px; color: var(--muted); }
+  .vf-dim {
+    display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+    border-radius: 6px; padding: 2px 10px; margin-top: 6px;
+  }
+  .vf-arrow { display: flex; flex-direction: column; align-items: center; padding: 3px 0; }
+  .vf-arrow .lbl {
+    background: var(--orange-soft); color: var(--orange); border: 1px solid #fcd34d;
+    font-size: 12px; border-radius: 999px; padding: 1px 12px; margin: 2px 0; text-align: center;
+  }
+  .vf-arrow .down { color: #94a3b8; font-size: 16px; line-height: 1; }
+  .vf-nest {
+    border: 1.5px dashed var(--purple); background: #faf8ff;
+    border-radius: 10px; padding: 10px 14px; max-width: 720px; width: 100%;
+  }
+  .vf-nest h5 { margin: 0 0 4px; color: var(--purple); font-size: 13.5px; text-align: center; }
+  /* RoPE 图示 */
+  .rope-strip { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; justify-content: center; margin: 10px 0 4px; }
+  .ritem { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .ritem > small { color: var(--muted); font-size: 10px; }
+  .rtok { background: #94a3b8; color: #fff; border-radius: 6px; padding: 5px 7px; font-size: 11px; white-space: nowrap; }
+  .rframe { display: grid; grid-template-columns: repeat(3, 17px); gap: 2px; padding: 3px; border-radius: 6px; border: 1.5px solid; }
+  .rframe i { width: 17px; height: 17px; border-radius: 3px; display: block; }
+  .rframe.f0 { border-color: #3b82f6; } .rframe.f0 i { background: #93c5fd; }
+  .rframe.f1 { border-color: #10b981; } .rframe.f1 i { background: #6ee7b7; }
+  .rframe.f2 { border-color: #f59e0b; } .rframe.f2 i { background: #fcd34d; }
+  .rope-grid { display: grid; grid-template-columns: repeat(3, 86px); gap: 4px; width: max-content; margin: 10px auto 4px; }
+  .rgcell { border: 1.5px solid #93c5fd; border-radius: 6px; padding: 4px 2px; text-align: center; font-size: 11px; background: #eff6ff; font-family: Consolas, "Courier New", monospace; }
+  .segbar { display: flex; width: 100%; max-width: 620px; margin: 10px auto 4px; border-radius: 8px; overflow: hidden; font-size: 12px; color: #fff; text-align: center; }
+  .seg { padding: 8px 4px; }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>ViT 视觉编码全过程详解</h1>
+  <p>以 Qwen-Drive-1.0(基座 Qwen3.5-4B VLM)为例:一张图像如何变成 LLM 序列里的 token?</p>
+  <p class="sub">依据:论文 arXiv:2609.00111 + 官方仓库 QwenLM/Qwen-Drive-1.0(src/qwen_drive/scene.py、configuration_qwen_drive.py、docs/model.md),数字均经代码验证。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#qa">① 一句话回答:patch 与 token 的区别</a> ·
+  <a href="#pipeline">② 全流程总览</a> ·
+  <a href="#step1">③ Step1 动态分辨率</a> ·
+  <a href="#step2">④ Step2 归一化与时间维</a> ·
+  <a href="#step3">⑤ Step3 切 patch(16×16)</a> ·
+  <a href="#step4">⑥ Step4 ViT 编码</a> ·
+  <a href="#step5">⑦ Step5 2×2 合并(token=32×32)</a> ·
+  <a href="#step6">⑧ Step6 进入 LLM</a> ·
+  <a href="#numbers">⑨ 实际数字计算</a> ·
+  <a href="#faq">⑩ 常见疑问</a> ·
+  <a href="#attention">⑪ 两次注意力与 QKV 发生在哪</a>
+</div>
+
+<!-- ============ ① QA ============ -->
+<h2 id="qa">① 一句话回答:patch 16×16 和 token 32×32 分别是什么?<span class="en">patch vs token</span></h2>
+
+<div class="qa">
+  <p><b class="tag">patch 16×16</b> 是 <b>ViT 内部的最小处理单元</b>。把图像切成无数个 16×16 像素的小方块,每个方块展平成一个向量送进 ViT 里的自注意力层。它是 ViT "眼睛看到的最小粒子" —— 相当于 ViT <b>读的"字"</b>。</p>
+  <p><b class="tag">token 32×32</b> 是 <b>进入大语言模型(LLM)序列的单元</b>。ViT 输出之后,把相邻 2×2 排列的 4 个 patch(合起来正好覆盖 32×32 像素)<b>合并成一个向量</b>,这个向量才是 LLM 输入序列中的一个 token,和文字 token 排在一起。相当于 LLM <b>读的"词"</b>。</p>
+  <p style="margin-bottom:0">所以 <b>"1 个 token = 32×32 像素"</b> 的意思是:<b>LLM 序列里的每一个视觉 token,负责"承载"原图中 32×32 那一小块区域的信息</b>;而这 32×32 像素的区域在 ViT 内部其实是被当成 4 个 16×16 的 patch 分别处理后,再合并回来的。</p>
+</div>
+
+<div class="grid2">
+  <div class="vs-box patch">
+    <h4>🟧 patch(补丁)= 16×16 像素</h4>
+    <ul style="margin:6px 0 0; padding-left: 20px; font-size: 14px;">
+      <li>谁在用:<b>ViT(视觉编码器内部)</b></li>
+      <li>数量:384×416 的图 → 24×26 = <b>624 个</b></li>
+      <li>每个展平为 3×2×16×16 = <b>1536 维</b>向量</li>
+      <li>作用:让 ViT 能做精细的自注意力</li>
+      <li>类比:一篇文章里的<b>字母</b></li>
+    </ul>
+  </div>
+  <div class="vs-box token">
+    <h4>🟩 token(词元)= 32×32 像素</h4>
+    <ul style="margin:6px 0 0; padding-left: 20px; font-size: 14px;">
+      <li>谁在用:<b>LLM(语言模型序列)</b></li>
+      <li>数量:384×416 的图 → <b>156 个</b>(624÷4)</li>
+      <li>由 4 个相邻 patch 合并 + 投影得到</li>
+      <li>作用:控制序列长度,省注意力计算</li>
+      <li>类比:一篇文章里的<b>单词</b></li>
+    </ul>
+  </div>
+</div>
+
+<div class="note">
+  <b>为什么要合并 4 个 patch 再给 LLM?</b> LLM 的注意力计算量随序列长度<b>平方</b>增长。合并后序列长度降为 1/4,计算量约降为 1/16;而 32×32 像素(约为 SD 标准分辨率的粒度)对语言模型理解语义来说足够细腻,细粒度的空间细节由 ViT 在合并前已经消化完毕。
+</div>
+
+<!-- ============ ② pipeline ============ -->
+<h2 id="pipeline">② 全流程总览<span class="en">pipeline</span></h2>
+<div class="card">
+  <div class="flow">
+    <div class="step"><b>原图</b><small>972×1079<br>任意分辨率</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>① 动态 Resize</b><small>缩放到 32 的倍数<br>320p / 720p 两档</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>② 归一化</b><small>[-1,1]<br>时间维复制 ×2</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>③ 切 patch</b><small>16×16/块<br>每块 1536 维</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>④ ViT 编码</b><small>自注意力<br>2D 位置编码</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>⑤ 2×2 合并</b><small>4 patch → 1 token<br>token = 32×32 px</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>⑥ 投影进 LLM</b><small>替换 &lt;image&gt; 占位<br>多模态 RoPE</small></div>
+  </div>
+  <p class="dim-label center">维度变化(以历史帧 384×416 为例):图像 (H,W,3) → patches (624, 1536) → ViT 输出 (624, D<sub>VIT</sub>) → 合并 (156, 4·D<sub>VIT</sub>) → 投影 (156, D<sub>LLM</sub>);实际值 D<sub>VIT</sub> = 1024、D<sub>LLM</sub> = 2560(发布 config.json)</p>
+</div>
+
+<!-- ============ ③ step1 ============ -->
+<h2 id="step1">③ Step 1:动态分辨率 Resize<span class="en">smart_resize</span></h2>
+<div class="card">
+  <p>Qwen-VL 系不要求固定输入分辨率(不是把所有图强行拉成 448×448),而是<b>保持长宽比、把分辨率吸附到 32 的倍数</b>(32 = patch 16 × 合并 2,这样恰好能被整除切分),同时不超过像素预算:</p>
+  <table>
+    <tr><th>帧类型</th><th>预算/目标</th><th>demo 实际(原图 972×1079)</th><th>为什么</th></tr>
+    <tr><td>历史帧 ×9(t-1.5s~t-0.5s)</td><td>预算 174,080 px(≈320p 档)</td><td><b>384×416</b></td><td>运动历史,少花 token</td></tr>
+    <tr><td>当前帧 ×3(t=0)</td><td>目标 720p 档(demo 给 720×799)</td><td>吸附后 <b>704×800</b></td><td>当前观测,保细节</td></tr>
+  </table>
+  <pre><code><span class="cmt"># scene.py :: smart_resize —— 分辨率四舍五入到 32 的倍数,并缩进预算内</span>
+bar_h = round(h / <span class="num">32</span>) * <span class="num">32</span>;  bar_w = round(w / <span class="num">32</span>) * <span class="num">32</span>
+<span class="cmt"># 超预算 → 按 sqrt(原像素/预算) 等比缩小(floor 取整到 32 倍数)</span></code></pre>
+  <p class="dim-label">验证:972×1079 按历史预算 174,080 → 384×416(与 demo 元数据完全一致);720×799 → round(799/32)×32=800、round(720/32)×32=704。</p>
+  <div class="note">
+  <b>注意区分两条流水线(常与 06 篇对照):</b>本篇是<b>规划流水线</b> —— 12 帧 = 3 视图(前/左前/右前)× 4 时刻,历史帧 ×9 用低分辨率省 token、当前帧 ×3 用 720p 档保细节,分辨率动态可变。而 <b>BEV 感知头(06 篇)是另一条流水线</b>:严格单帧(只有 t-0s 的环视 6/8 相机,没有历史帧),输入<b>固定 896×512</b> —— 那是感知权重训练时的固定相机布局与分辨率。两处尺寸不同不是矛盾,是两个模型各自的输入规范。
+  </div>
+</div>
+
+<!-- ============ ④ step2 ============ -->
+<h2 id="step2">④ Step 2:归一化 + 时间维复制<span class="en">normalize &amp; temporal patch</span></h2>
+<div class="card">
+  <pre><code><span class="cmt"># scene.py :: _patchify</span>
+pixels = pil_to_tensor(img).float().div_(<span class="num">255</span>).sub_(<span class="num">0.5</span>).div_(<span class="num">0.5</span>)   <span class="cmt"># → [-1, 1]</span>
+pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-1</span>, <span class="num">2</span>, <span class="num">-1</span>, <span class="num">-1</span>)              <span class="cmt"># 时间维复制成 2 份</span></code></pre>
+
+  <h3>这一步的维数变化(易错点)</h3>
+  <div class="vflow">
+    <div class="vf-box">归一化后的<b>整张图</b><div class="vf-dim">(3, H, W)&nbsp;&nbsp;例: (3, 416, 384)</div></div>
+    <div class="vf-arrow"><span class="lbl">unsqueeze(1):在通道维 C 之后插入长度 1 的时间维</span><span class="down">↓</span></div>
+    <div class="vf-box">插入占位时间维<div class="vf-dim">(3, 1, H, W)</div></div>
+    <div class="vf-arrow"><span class="lbl">expand(-1, 2, -1, -1):时间维复制成 2(PyTorch 零拷贝广播视图)</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>结果 = "两帧"整图</b><div class="vf-dim">(3, 2, H, W)&nbsp;&nbsp;例: (3, 2, 416, 384)</div><div class="vf-sub">仍是整张图,所有像素都还在;16×16 的切分发生在下一步 reshape</div></div>
+  </div>
+  <div class="note">易错:expand 之后<b>不是</b> (3, 2, 16, 16)。(3, 2, 16, 16) 是最终输出里<b>每一个 patch 向量</b>的内部结构(见 Step 3 的形状逐行轨迹)。</div>
+
+  <p><b>为什么要复制成 2 份?</b> <code>image_temporal_patch_size = 2</code>:这套 ViT 是为<b>视频</b>设计的——每次取<b>相邻 2 帧</b>的同一位置 patch 打包处理,让 ViT 能感知帧间运动。输入单张静止图像时,就把同一帧复制两份凑齐时间维,<b>与视频共用同一套权重</b>。这就是每 patch 输入维度里那个"×2"的来源。</p>
+</div>
+
+<!-- ============ ⑤ step3 ============ -->
+<h2 id="step3">⑤ Step 3:切成 16×16 的 patch<span class="en">patchify</span></h2>
+<div class="card">
+  <p>把缩放后的图像按 <b>16×16 像素</b>切成网格。下面用一张 <b>128×96 像素</b>的小图演示(8×6 = 48 个 patch;鼠标悬停可看每个 patch):</p>
+
+  <div class="demo-img" id="patchGrid"></div>
+  <div class="legend">
+    <span><span class="sw" style="background:#f59e0b"></span>普通 patch(16×16 px)</span>
+    <span><span class="sw" style="background:#dc2626"></span>被放大的那个 patch</span>
+  </div>
+
+  <h3>一个 patch 怎么变成向量?(1536 维的构成)</h3>
+  <pre><code>一个 patch = 16 × 16 像素 × 3 通道(RGB) × 2 时刻(时间维)
+           = <span class="num">1536</span> 个数字  →  展平成一个 1536 维向量,这就是 ViT 的"输入字"</code></pre>
+  <table>
+    <tr><th>因子</th><th>含义</th><th>说明</th></tr>
+    <tr><td>16 × 16 = 256</td><td>像素位置</td><td>一个补丁块内有 256 个像素位置</td></tr>
+    <tr><td>× 3</td><td>RGB 颜色通道</td><td>每个像素由红/绿/蓝 3 个数值描述</td></tr>
+    <tr><td>× 2</td><td><b>时间维</b>(temporal patch size = 2)</td><td>为<b>视频</b>设计:打包<b>相邻两帧</b>同一位置的 patch,让 ViT 能感知运动;输入单张图片时<b>把同一帧复制 2 份</b>凑齐,不带来新信息,只为与视频共用同一套权重(Qwen-Drive 需支持"Driving videos"输入)</td></tr>
+  </table>
+  <p class="dim-label">256 位置 × 3 通道 × 2 时刻 = 1536。代码出处:scene.py:240(<code>expand(-1, 2, -1, -1)</code> 即时间维复制)。</p>
+  <pre><code>排列顺序(scene.py:241-252):按 (行块/2, 列块/2, 块内行2, 块内列2) 排列
+—— 即 <b>每 4 个连续的 patch 恰好属于同一个 32×32 像素块</b>,
+   为 Step⑤ 的 2×2 合并提前排好队。</code></pre>
+
+  <h3>张量形状逐行轨迹(以历史帧 384×416 为例,已用 numpy 复算验证)</h3>
+  <pre><code>pil_to_tensor 后        : (3, 416, 384)          ← (C, H, W) 整张图
+unsqueeze(1) 后         : (3, 1, 416, 384)       ← H 前插入长度 1 的时间维
+.expand(-1, 2, -1, -1) 后: (3, 2, 416, 384)       ← 时间维复制成 2,仍是<b>整张图</b>,16×16 还没出现
+.reshape(3,1,2,13,2,16,12,2,16)                   ← 16×16 在这一步才被切开:
+                                                     13×12 = patch 块网格, 2×2 = 合并组, 16×16 = 块内像素
+.permute(1,3,6,4,7,0,2,5,8)  → (1, 13, 12, 2, 2, 3, 2, 16, 16)
+.reshape(rows*cols, -1)      → (624, 1536)        ← 每行 = 一个 patch = (C=3, T=2, 16, 16) 展平</code></pre>
+  <p class="dim-label">注意:(3, 2, 16, 16) 描述的是<b>最终输出中每一行(patch 向量)的内部结构</b>,不是 expand 之后整张张量的形状——expand 之后是 (3, 2, H, W)。另外 PyTorch 的 <code>expand</code> 是零拷贝广播视图,不复制内存。</p>
+</div>
+
+<!-- ============ ⑥ step4 ============ -->
+<h2 id="step4">⑥ Step 4:ViT 自注意力编码<span class="en">vision transformer</span></h2>
+<div class="card">
+  <p>624 个 1536 维的 patch 向量(以历史帧 384×416 为例)一起送进 <b>ViT(视觉 Transformer)</b>。流程图中<b>深色标签就是每一步的张量维度</b>,使用符号:<b>D<sub>VIT</sub> = 1024</b>(ViT 隐层宽度)、<b>h = 16</b>(头数)、<b>d<sub>head</sub> = D<sub>VIT</sub>/h = 64</b>、<b>D<sub>FFN</sub> = 4096</b>(FFN 升维宽度),层数 depth = 24;均取自发布 config.json(vision_config = <code>qwen3_5_vision</code>):</p>
+
+  <div class="vflow">
+    <div class="vf-box"><b>输入:624 个 patch 向量</b><div class="vf-sub">每 patch = (3 通道 × 2 时刻 × 16 × 16) 展平</div><div class="vf-dim">(624, 1536)</div></div>
+
+    <div class="vf-arrow"><span class="lbl">① Patch Embedding:Linear <b>1536 → D<sub>VIT</sub></b>(= 1024;矩阵投影,非查词表)+ 2D RoPE 位置编码(行、列)</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>嵌入序列</b><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+
+    <div class="vf-arrow"><span class="lbl">② 送入 Transformer 块 × <b>depth = 24</b> 层 —— 下面展开的是其中任意一层,每层输出回到顶部再进下一层</span><span class="down">↓</span></div>
+
+    <div class="vf-nest">
+      <h5>一层 Transformer Block 内部(24 层中的每一层都长这样,维数完全相同)</h5>
+      <div class="vflow" style="margin:0">
+        <div class="vf-box">输入 x<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+        <div class="vf-arrow"><span class="lbl">RMSNorm(前置归一化,不改变形状)</span><span class="down">↓</span></div>
+        <div class="vf-box"><b>QKV 投影(多头!)</b>:x·W<sub>Q</sub>、x·W<sub>K</sub>、x·W<sub>V</sub>,拆成 <b>h = 16 个头 × 每头 d<sub>head</sub> = 64 维</b>(D<sub>VIT</sub> = h × d<sub>head</sub> = 16×64)<div class="vf-dim">Q, K, V 各 (h, 624, d<sub>head</sub>)</div></div>
+        <div class="vf-arrow"><span class="lbl">多头自注意力:softmax(Q·K<sup>T</sup>/√d<sub>head</sub>)·V —— h = 16 个头各自独立算一遍</span><span class="down">↓</span></div>
+        <div class="vf-box"><b>注意力矩阵</b> = 每个 patch 对全部 624 个 patch 的打分,每头一份<div class="vf-dim">(h, 624, 624)</div><div class="vf-sub">← 注意力计算量 O(L²) 的来源;h 个头的结果拼接回</div><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+        <div class="vf-arrow"><span class="lbl">输出投影 W<sub>O</sub>(D<sub>VIT</sub> → D<sub>VIT</sub>)+ 残差连接(加上输入 x)</span><span class="down">↓</span></div>
+        <div class="vf-box">注意力输出 x′<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+        <div class="vf-arrow"><span class="lbl">RMSNorm → FFN(两层 MLP:先升维再降维)</span><span class="down">↓</span></div>
+        <div class="vf-box"><b>FFN</b>(intermediate_size = D<sub>FFN</sub> = 4096)<div class="vf-dim">(624, D<sub>FFN</sub>) → (624, D<sub>VIT</sub>)</div></div>
+        <div class="vf-arrow"><span class="lbl">残差连接(加上 x′)→ 本层输出</span><span class="down">↓</span></div>
+        <div class="vf-box">x″<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+      </div>
+    </div>
+
+    <div class="vf-arrow"><span class="down">↓</span><span class="lbl">24 层全部跑完后</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>输出:624 个上下文向量</b><div class="vf-sub"><b>数量不变!</b>每个 patch 已融合全图上下文:<br>"我这块是车轮" + "我在一辆车的前部" → 语义化的区域向量</div><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+  </div>
+
+  <div class="good">
+  <b>ViT 的权重是训练好的,推理时不"迭代计算":</b>权重初始化自预训练的 Qwen3.5-4B(非从零训练),发布时已是固定参数。推理时整张图只需<b>一次前向传播</b>(24 层顺序各算一遍,层间没有循环反馈)。
+  </div>
+
+  <p class="dim-label">两个常见疑问:① depth = 24 是<b>串联</b> —— 第 1 层输出喂第 2 层,依次到第 24 层(上面流程图里"每层输出回到顶部再进下一层"就是这个意思),不是并联;② <b>全部 624 个 patch 共享同一个 ViT</b> —— 同一套权重,一次前向里拼成一个序列一起算注意力,不存在"每个 patch 一个网络"。</p>
+
+  <div class="note">
+  <b>patch 16×16 在这一步的意义:</b>自注意力的"字词表"就是这些小块。切得越小(如 8×8),细节越丰富但计算量平方级暴涨;切得越大,越省但糊。16×16 是 Qwen-VL 系在细节与成本之间的平衡点。Qwen 系 ViT 通常在部分层使用窗口注意力以控制长序列成本,本模型 vision config 未列出窗口参数(deepstack_visual_indexes 为空),以发布权重实现为准。
+  </div>
+  <p class="dim-label">重要:ViT 这一步<b>不改变 patch 的数量</b>。624 个 patch 进去,624 个向量出来(维度在入口的 Embedding 处由 1536 变为 D<sub>VIT</sub> = 1024,之后 24 层形状完全不变)——"变少"发生在下一步(2×2 合并)。</p>
+</div>
+
+<!-- ============ ⑦ step5 ============ -->
+<h2 id="step5">⑦ Step 5:2×2 合并 —— token 才诞生(32×32)<span class="en">spatial merge</span></h2>
+<div class="card">
+  <p>ViT 输出后,把 <b>相邻 2×2 的 4 个 patch 向量在通道维拼接</b>成 1 个长向量,再经投影层压回 LLM 的隐层维度。这 4 个 patch 合起来覆盖的正是 <b>32×32 像素</b>:</p>
+
+  <div class="demo-img" id="mergeGrid"></div>
+  <div class="legend">
+    <span><span class="sw" style="background:#3b82f6"></span>token 1(4 个 patch 合并)</span>
+    <span><span class="sw" style="background:#10b981"></span>token 2</span>
+    <span><span class="sw" style="background:#f59e0b"></span>token 3</span>
+    <span><span class="sw" style="background:#ef4444"></span>token 4</span>
+    <span style="color:#94a3b8">…… 每 4 个同色 patch(32×32 px)→ LLM 序列里的 1 个 token</span>
+  </div>
+
+  <pre><code><span class="cmt"># 合并 + 计数(scene.py)</span>
+token_count = rows * cols // merge_size**<span class="num">2</span>      <span class="cmt"># merge_size = 2</span>
+<span class="cmt"># 384×416:  (24×26) ÷ 4 = 156 个 token</span>
+<span class="cmt"># 704×800:  (44×50) ÷ 4 = 550 个 token</span>
+
+<span class="cmt"># 维度变化:每 patch 向量 D<sub>VIT</sub>(= 1024)维 → 4 个拼接 → 4·D<sub>VIT</sub>(= 4096)维</span>
+<span class="cmt">#   → Projector(MLP)→ D<sub>LLM</sub>(= 2560)维 = LLM hidden_size(与文字 embedding 同宽)</span>
+
+<span class="cmt"># config 默认(configuration_qwen_drive.py:128-130)</span>
+image_patch_size          = <span class="num">16</span>   <span class="cmt"># ViT 内部 patch 边长 → "字"的粒度</span>
+image_spatial_merge_size  = <span class="num">2</span>    <span class="cmt"># 2×2 合并 → "词"由 4 个"字"组成</span>
+image_temporal_patch_size = <span class="num">2</span>    <span class="cmt"># 时间维打包(视频用,单帧复制)</span></code></pre>
+
+  <div class="good">
+  <b>效果:</b>LLM 要处理的视觉序列长度直接 ÷4。以上面小图为例:48 个 patch → <b>12 个 token</b>。真实历史帧 624 patch → 156 token;注意力是 O(L²),序列短 4 倍 ≈ 计算量省 16 倍,而每个 token 仍完整保留了 32×32 区域经 ViT 精细编码后的全部信息。
+  </div>
+</div>
+
+<!-- ============ ⑧ step6 ============ -->
+<h2 id="step6">⑧ Step 6:投影并插入 LLM 序列<span class="en">projector &amp; insertion</span></h2>
+<div class="card">
+  <pre><code><span class="cmt"># prompt 中的占位(scene.py:296):预处理时就已经知道要放多少个</span>
+&lt;vision_start&gt; [image] [image] … [image] &lt;vision_end&gt;
+                └──── 恰好 token_count 个占位 ────┘
+
+<span class="cmt"># 前向时(modeling_qwen_drive.py :: _prefill):</span>
+vlm(input_ids, pixel_values=patches, image_grid_thw=…)
+  └→ 内部:ViT 编码(24 层,宽 D<sub>VIT</sub>=1024)→ 2×2 合并(4·D<sub>VIT</sub>)→ Projector 投影到 D<sub>LLM</sub>(=2560)
+  └→ 投影后的向量按顺序<b>替换</b>序列中的 &lt;image&gt; 占位 token
+  └→ 全序列做<b>多模态 RoPE</b>:每个视觉 token 有 (时间t, 行h, 列w) 三维位置
+     (mrope_section = [11,11,10],32 维旋转位置分三段)→ LLM 知道每块图"在何时、何处"</code></pre>
+  <p>之后视觉 token 与文字 token 完全平权:一起参与 LLM 的自注意力,一起被写进 K/V 缓存 —— Planning Expert 读的正是这些缓存(每 4 层取 1 份,共 8 份)。</p>
+
+  <div class="note" style="border-left-color: var(--purple); background: var(--purple-soft);">
+    <b>备注:什么是"多模态 RoPE"?</b><br>
+    <span style="font-size:13px">📖 本框为概览;RoPE 的原理拆解、交互动画(二维旋转、平移不变性)与代码逐步验证,见 <a href="03a_rope.html"><b>03a_rope.html《RoPE 旋转位置编码详解》</b></a>;M-RoPE 专题深入(一维盲区、交互式 (t,h,w) 分配、[11,11,10] 打分分解、位置表代码)见 <a href="03b_mrope.html"><b>03b_mrope.html《多模态 RoPE 详解》</b></a>。</span><br><br>
+    <b>RoPE 为什么需要:</b>自注意力本身对顺序不敏感——不打乱 token 顺序,注意力输出完全一样。RoPE(Rotary Position Embedding,旋转位置编码)负责补上位置信息:把每个 token 的 Q/K 向量按"位置对应的角度"在二维平面内旋转,旋转后两个 token 的注意力得分只取决于它们的<b>相对位置差</b>。纯文本 LLM 里,每个 token 只有一个位置号 0, 1, 2, …<br><br>
+    <b>多模态 RoPE(M-RoPE):1 个位置号 → 3 个位置分量 (t, h, w)</b><br>
+    视觉 token 的位置天然是三维的:第几帧(时间 t)、patch 网格第几行(h)、第几列(w),这些编号在预处理时就由 <code>image_grid_thw</code> 记录下来。M-RoPE 的分配规则:<br>
+    ① <b>文本 token</b>:t = h = w = 它在文本中的序号(三分量相同,退化为普通一维 RoPE);<br>
+    ② <b>视觉 token</b>:t = 帧号、h = 行号、w = 列号(如"前视、frame 2、第 5 行第 8 列"的 token 就是 (2, 5, 8));<br>
+    ③ <b>维度分段</b>:每个头的旋转维度被切成三段(mrope_section = [11, 11, 10])——11 个维度跟着 t 转、11 个跟着 h 转、10 个跟着 w 转,三套"转速表"各管一个轴。<br><br>
+    <b>效果:</b>注意力既能分辨"这两块图隔了几帧"(时序运动),又能分辨"隔了几行几列"(空间关系),且视觉与文字共享同一套旋转坐标系——LLM 因此明确知道每块图"在何时、何处",这正是驾驶场景里推理运动趋势所需的位置结构。Planning Expert 的 50 个 waypoint token 也紧接 VLM 前缀之后<b>继续</b> M-RoPE 编号(起点 anchor = 前缀最后一个 token 的位置),保证专家与 VLM 的位置相位一致。
+
+    <hr style="border:none; border-top:1px dashed #c4b5fd; margin:14px 0 10px;">
+    <b>图示 + 例子</b>(把每帧简化成 2 行 × 3 列 = 6 个视觉 token,单视角连续 3 帧;真实场景是 26×24 → 156 token/帧,结构完全相同):
+
+    <div class="rope-strip">
+      <div class="ritem"><div class="rtok">…文本…</div><small>位置 0–7</small></div>
+      <div class="ritem"><div class="rtok">&lt;FRONT VIEW&gt;</div><small>8</small></div>
+      <div class="ritem"><div class="rtok">frame: 0</div><small>9–10</small></div>
+      <div class="ritem"><div class="rframe f0"><i></i><i></i><i></i><i></i><i></i><i></i></div><small>帧0:11–16</small></div>
+      <div class="ritem"><div class="rtok">frame: 1</div><small>17–18</small></div>
+      <div class="ritem"><div class="rframe f1"><i></i><i></i><i></i><i></i><i></i><i></i></div><small>帧1:19–24</small></div>
+      <div class="ritem"><div class="rtok">frame: 2</div><small>25–26</small></div>
+      <div class="ritem"><div class="rframe f2"><i></i><i></i><i></i><i></i><i></i><i></i></div><small>帧2:27–32</small></div>
+      <div class="ritem"><div class="rtok">…</div><small>33</small></div>
+    </div>
+    <div class="legend"><span>灰色 = 文本 token</span><span>彩色 = 一帧图像的 6 个视觉 token(每 17×17px 小格 = 1 个 token,覆盖 32×32 px)</span></div>
+
+    <div class="rope-grid">
+      <div class="rgcell">(11, 11, 11)<br><span class="dim-label">帧0 行0列0</span></div>
+      <div class="rgcell">(11, 11, 12)<br><span class="dim-label">帧0 行0列1</span></div>
+      <div class="rgcell">(11, 11, 13)<br><span class="dim-label">帧0 行0列2</span></div>
+      <div class="rgcell">(11, 12, 11)<br><span class="dim-label">帧0 行1列0</span></div>
+      <div class="rgcell">(11, 12, 12)<br><span class="dim-label">帧0 行1列1</span></div>
+      <div class="rgcell">(11, 12, 13)<br><span class="dim-label">帧0 行1列2</span></div>
+    </div>
+    <p class="dim-label center">帧0 全部 6 个 token 的 <b>t 恒为 11</b>(= 帧起点位置 → "同一时刻");行号进 h(+11)、列号进 w(+11),枚举出 2×3 网格</p>
+
+    <div class="segbar">
+      <div class="seg" style="flex:11; background:#3b82f6">11 维:跟 t(时间)转</div>
+      <div class="seg" style="flex:11; background:#10b981">11 维:跟 h(行)转</div>
+      <div class="seg" style="flex:10; background:#f59e0b">10 维:跟 w(列)转</div>
+    </div>
+    <p class="dim-label center">每个头的旋转维度按 mrope_section [11, 11, 10] 分成三段,各轴独立计"相对位移" → 注意力打分等效于只依赖 (Δt, Δh, Δw)</p>
+
+    <table>
+      <tr><th>位置</th><th>token</th><th>t(时间)</th><th>h(行)</th><th>w(列)</th><th>读法</th></tr>
+      <tr><td>10</td><td><code>0</code>(文本)</td><td>10</td><td>10</td><td>10</td><td>文本:三分量 = 自身位置</td></tr>
+      <tr><td>11</td><td>帧0·(行0,列0)</td><td>11</td><td>11</td><td>11</td><td>帧起点 st = 11</td></tr>
+      <tr><td>12</td><td>帧0·(行0,列1)</td><td>11</td><td>11</td><td>12</td><td>同帧右移一列 → 只有 w +1</td></tr>
+      <tr><td>14</td><td>帧0·(行1,列0)</td><td>11</td><td>12</td><td>11</td><td>同帧下移一行 → 只有 h +1</td></tr>
+      <tr><td>16</td><td>帧0·(行1,列2)</td><td>11</td><td>12</td><td>13</td><td>帧0 内 t 恒 = 11:同一时刻</td></tr>
+      <tr><td>18</td><td><code>1</code>(文本)</td><td>18</td><td>18</td><td>18</td><td>文本回到一维</td></tr>
+      <tr><td>19</td><td>帧1·(行0,列0)</td><td>19</td><td>19</td><td>19</td><td>新帧起点 st = 19</td></tr>
+      <tr><td>24</td><td>帧1·(行1,列2)</td><td>19</td><td>20</td><td>21</td><td>帧1 内 t 恒 = 19</td></tr>
+    </table>
+
+    <b>三个关键读数(注意力从位置差里"看"到什么):</b>
+    <ul style="margin:4px 0; padding-left:20px; font-size:14px;">
+      <li>同帧任意两 token:Δt = 0 → "这是<b>同一时刻</b>"(帧内 t 都等于帧起点);</li>
+      <li>跨帧同位置(帧0(0,0) vs 帧1(0,0)):Δt = 19−11 = 8 → "隔了 8 个 token 的<b>时序差</b>"(真实场景帧间 Δt = 156,更大);</li>
+      <li>同帧相邻 token:Δh = 1 或 Δw = 1、Δt = 0 → "<b>空间上紧挨着</b>",且知道方向(上下 or 左右)。</li>
+    </ul>
+
+    <hr style="border:none; border-top:1px dashed #c4b5fd; margin:14px 0 10px;">
+    <b>RoPE 和图像 token 向量怎么结合?(机制)</b><br>
+    关键:RoPE <b>不把位置信息"存进"token 向量</b>——向量本身不被修改;位置是在<b>每层注意力计算时</b>,临时施加在 Q 和 K 上的:
+    <div class="vflow" style="margin:10px 0 4px;">
+      <div class="vf-box"><b>视觉 token 向量 x</b><div class="vf-dim">(D<sub>LLM</sub> = 2560)</div><div class="vf-sub">内容向量,不含位置信息 —— RoPE 不修改它本身</div></div>
+      <div class="vf-arrow"><span class="lbl">每层注意力都重复(第 1…32 层):Q = x·W<sub>Q</sub>,K = x·W<sub>K</sub>,先正常投影</span><span class="down">↓</span></div>
+      <div class="vf-box"><b>Q 和 K(各按 16 头拆分)</b><div class="vf-dim">Q, K: (16 头, 256 维)</div></div>
+      <div class="vf-arrow"><span class="lbl">每头取旋转维度 64 维 = 32 个旋转组,按 mrope_section [11,11,10] 分三段(θ = 位置值 × 该组频率)</span><span class="down">↓</span></div>
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+        <div class="vf-box" style="min-width:150px; border-color:#3b82f6;"><b>前 11 组</b><div class="vf-sub">用 <b>t</b>(时间)的角度转</div></div>
+        <div class="vf-box" style="min-width:150px; border-color:#10b981;"><b>中 11 组</b><div class="vf-sub">用 <b>h</b>(行)的角度转</div></div>
+        <div class="vf-box" style="min-width:150px; border-color:#f59e0b;"><b>后 10 组</b><div class="vf-sub">用 <b>w</b>(列)的角度转</div></div>
+      </div>
+      <div class="vf-arrow"><span class="down">↓</span></div>
+      <div class="vf-box"><b>成对二维旋转(Q、K 同时做)</b><div class="vf-sub" style="font-family:Consolas,'Courier New',monospace; font-size:12.5px;">x1' = x1·cosθ − x2·sinθ;&nbsp;&nbsp;x2' = x1·sinθ + x2·cosθ</div></div>
+      <div class="vf-arrow"><span class="lbl">打分 = Q'·K'(只有 Q、K 旋转;V 不转)</span><span class="down">↓</span></div>
+      <div class="vf-box"><b>注意力打分</b><div class="vf-sub">旋转后的内积自动只依赖相对差</div><div class="vf-dim">(Δt, Δh, Δw)</div></div>
+    </div>
+    四个要点:
+    <ul style="margin:4px 0; padding-left:20px; font-size:14px;">
+      <li>只有 Q、K 被旋转,<b>V 不转</b>——"内容"不被位置污染,位置只影响"谁该关注谁";</li>
+      <li><b>每层都重新转一次</b>,但共用同一张位置表(<code>_rope_positions</code> 算出的 [3, batch, seq_len],算一次、32 层共用);</li>
+      <li>各旋转组<b>频率不同</b>(低频组看大尺度远近、高频组看精细相邻),一个轴内也能同时表达"远/近";</li>
+      <li>K 缓存里存的是<b>已旋转的 K</b> —— Planning Expert 直接读缓存就能感知位置。</li>
+    </ul>
+
+    <b>微演示</b>(接上表):A = 帧0(行0,列0) → (11,11,11);B = 帧0(行0,列1) → (11,11,12);C = 帧1(行0,列0) → (19,19,19)。计算 A 的注意力时:
+    <table>
+      <tr><th>对比</th><th>Δt</th><th>Δh</th><th>Δw</th><th>注意力"读出"的含义</th></tr>
+      <tr><td>A ↔ B</td><td>0</td><td>0</td><td>1</td><td>时间轴无转差 → <b>同一时刻</b>;列轴差 1 格 → <b>紧邻的右边一块</b>(空间相邻)</td></tr>
+      <tr><td>A ↔ C</td><td>8</td><td>8</td><td>8</td><td>三个轴都有大转差 → <b>换了时刻、同一空间位置</b> → 这正是"运动信号"</td></tr>
+    </table>
+    若只有一维位置号,A↔B 与 A↔C 无法这样分开表达——三维位置把<b>时序差与空间差解耦</b>到不同的旋转维度组里,注意力可以分别感知、自由组合。
+
+    <p class="dim-label">实现出处:位置编号由 <code>vlm.model.get_rope_index</code>(modeling_qwen_drive.py 的 <code>_rope_positions</code>)从 <code>image_grid_thw</code> 算出,输出 [3, batch, seq_len] 的位置表;t/h/w = "该帧起点 + 帧内行/列号"。RoPE 只看相对差,所以绝对数值大小不影响表达。</p>
+  </div>
+</div>
+
+<!-- ============ ⑨ numbers ============ -->
+<h2 id="numbers">⑨ 实际数字计算(Qwen-Drive-1.0 一个规划场景)<span class="en">real numbers</span></h2>
+<div class="card">
+  <table>
+    <tr><th>帧</th><th>ViT 输入 (W×H)</th><th>patch 网格 (cols×rows)</th><th>patch 数</th><th>token 数 (÷4)</th><th>每 token 覆盖</th></tr>
+    <tr><td>历史帧 × 9</td><td>384×416</td><td>24 × 26</td><td>624</td><td><b>156</b></td><td rowspan="3">32×32 px<br>= 1024 px²</td></tr>
+    <tr><td>当前帧 × 3</td><td>704×800</td><td>44 × 50</td><td>2200</td><td><b>550</b></td></tr>
+    <tr><td><b>合计 12 帧</b></td><td>—</td><td>—</td><td>10,332</td><td><b>3,054</b></td></tr>
+  </table>
+  <p class="dim-label">每视图 = 3×156 + 550 = 1018 token;3 个视图 = 3054。这就是 prompt 里 &lt;image&gt; 占位的总数,也是 BEV 感知头 F<sup>m</sup> 特征的长度。</p>
+  <div class="center">
+    <span class="big-num">16×16</span> patch(ViT 的"字")&nbsp;&nbsp;×4&nbsp;&nbsp;<span class="big-num">32×32</span> token(LLM 的"词")
+  </div>
+</div>
+
+<!-- ============ ⑩ faq ============ -->
+<h2 id="faq">⑩ 常见疑问<span class="en">FAQ</span></h2>
+<div class="card">
+  <h3>Q1:"取 32×32 的数据作为一个 token"这个说法对吗?</h3>
+  <p>方向对,但机制上不是"直接取"——不是把 32×32 的像素块直接喂给 LLM。实际是:<b>先按 16×16 切成 4 个 patch 分别过 ViT</b>(精细编码),<b>再把这 4 个 patch 的输出向量合并</b>成 1 个 token。这 1 个 token 在 LLM 眼里"负责"的区域恰好是 32×32 像素,所以说"1 token ↔ 32×32 px",它是<b>信息覆盖范围</b>,不是<b>采样方式</b>。</p>
+
+  <h3>Q2:为什么不直接切 32×32 的 patch、跳过合并?</h3>
+  <p>那样 ViT 内部的注意力粒度就粗了 4 倍,细节(远处小目标、交通灯状态)更容易糊;而"小 patch 编码 + 事后合并"既保住了 ViT 内部的细粒度,又把 LLM 的序列长度压下来——两头都占。另外视觉 token 数减少 4 倍还直接降低了 Planning Expert 要读的 K/V 缓存体积。</p>
+
+  <h3>Q3:token 数为什么不是固定值?</h3>
+  <p>动态分辨率:token 数 = (W/32) × (H/32),跟随图像长宽比变化,只受像素预算约束(历史 174,080 px、当前 921,600 px)。这是 Qwen-VL 系"原生动态分辨率"的设计。</p>
+
+  <h3>Q4:时间维那个 ×2 在图像输入时是不是浪费?</h3>
+  <p>单帧场景下两份内容相同,信息不增加,但这是为视频输入(驾驶视频、多帧时序)共用同一套 ViT 权重的代价;Qwen-Drive 支持"Driving videos"输入(图 2),所以保留视频接口。</p>
+
+  <h3>Q5:ViT 的 24 层是并联还是串联?每个 patch 有独立的 ViT 吗?</h3>
+  <p><b>串联。</b>第 1 层的输出是第 2 层的输入,一层接一层到第 24 层 —— "depth = 24" 就是这个含义(与 LLM 的 32 层同理)。同时<b>所有 patch 共享同一个 ViT</b>:它们拼成一个长度 624 的序列,过同一套 Patch Embedding 与 24 层权重;层内自注意力让每个 patch 看到其余 623 个,所以一次前向就融合了全图上下文。权重只有一份,patch 之间不各配网络。</p>
+
+  <h3>Q6:历史帧 384×416、当前帧 704×800,和 06 篇感知头的 896×512 什么关系?</h3>
+  <p>两条流水线、两套输入规范,数字互不换算:<b>本篇(规划)</b>是 12 帧动态分辨率 —— 历史帧 ×9 @384×416(预算 174,080 px)、当前帧 ×3 @704×800(720p 档,预算 921,600 px);<b>06 篇(感知)</b>是严格单帧、固定 896×512(6/8 相机环视),感知权重按这个固定布局训练。详见 06 篇 ① 节的对照表。</p>
+</div>
+
+<!-- ============ ⑪ attention ============ -->
+<h2 id="attention">⑪ 澄清:两次注意力、两次 QKV 发生在哪?<span class="en">where attention happens</span></h2>
+<div class="card">
+  <p>常见误解:"patch 合并成 token 之后再做注意力"。实际顺序相反——<b>自注意力发生在合并之前(ViT 内,对象是 patch);合并之后,LLM 里还有第二次注意力(对象是 token)</b>。完整时间线:</p>
+  <pre><code>624 个 patch 向量(各 1536 维 = 16×16×3通道×2时刻)
+   │
+   │ ① Patch Embedding:一个线性层(矩阵乘法)把 1536 维投影到 ViT 工作维度,
+   │    并加 2D 位置编码(RoPE)。作用等同文字 embedding,但实现是"投影"而非"查词表"
+   ▼
+┌─ ViT Transformer 块 × N 层 ─────────────────────────────┐
+│  每层:                                                   │
+│   ② 每个向量分别乘 W_Q / W_K / W_V 三个矩阵 → Q、K、V      │
+│   ③ 多头自注意力:624 个 patch 互相"看",交换全图上下文       │
+│   ④ FFN                                                   │
+└─────────────────────────────────────────────────────────┘
+   │    ← 第 1 次 QKV + 注意力,对象是 patch("字"级,单图内部细粒度)
+   ▼
+⑤ 2×2 空间合并:相邻 4 个 patch 的输出向量拼接 → 156 个 token(此刻 token 才诞生)
+   │
+   │ ⑥ Projector(MLP)投影到 LLM 隐层维度
+   ▼
+插入 LLM 序列(替换 &lt;image&gt; 占位),与文字 token 并排
+   ▼
+┌─ LLM Transformer 块 × N 层 ─────────────────────────────┐
+│  每层:token 各自做 QKV 投影 → 多头自注意力                  │
+│       (视觉 token 与文字 token 互相关注,跨模态融合)→ FFN    │
+└─────────────────────────────────────────────────────────┘
+        ← 第 2 次 QKV + 注意力,对象是 token("词"级,全序列跨模态)
+</code></pre>
+  <table>
+    <tr><th></th><th>第 1 次(ViT 内)</th><th>第 2 次(LLM 内)</th></tr>
+    <tr><td>作用对象</td><td>patch(16×16 px,"字")</td><td>token(32×32 px,"词")与文字 token</td></tr>
+    <tr><td>数量</td><td>624 个 / 历史帧</td><td>156 个 / 历史帧(+ 文字)</td></tr>
+    <tr><td>注意力范围</td><td>一张图内部</td><td>整个序列(全部图像 + 全部文本)</td></tr>
+    <tr><td>Embedding / QKV 来源</td><td>1536 维 patch 经线性投影 embedding;每层乘 W_Q/W_K/W_V 得 Q/K/V</td><td>投影后的视觉向量已在 LLM 维度,<b>不再查词表</b>,直接乘 LLM 的 W_Q/W_K/W_V</td></tr>
+    <tr><td>位置编码</td><td>2D RoPE(行、列)</td><td>多模态 RoPE:时间 t / 行 h / 列 w 三段(mrope_section [11,11,10])</td></tr>
+  </table>
+  <p class="dim-label">实际数值(发布 config.json):ViT = 24 层、D<sub>VIT</sub> = <b>1024</b>、h = <b>16</b> 头 × d<sub>head</sub> = <b>64</b>、D<sub>FFN</sub> = <b>4096</b>;LLM = 32 层(3×GDN + 1×GQA,共 8 组,对应论文图 3b)、D<sub>LLM</sub> = <b>2560</b>、16 Q 头 / 4 KV 头 × 256。Planning Expert 只取 LLM 8 个 full_attention 层的 K/V(每 4 层 1 份)。</p>
+  <div class="good">
+  <b>关键结论:</b>"合并成 token"发生在两次注意力<b>之间</b>。ViT 的注意力让 patch 互相关注(消化视觉细节),LLM 的注意力让视觉 token 与文字 token 互相关注(多模态融合)。Planning Expert 读的 K/V 缓存正是第 2 次注意力的中间产物(每 4 层取 1 份,共 8 份)。
+  </div>
+</div>
+
+<footer>
+  来源:论文《Qwen-Drive-1.0》(arXiv:2609.00111)§2.1/§2.3;仓库 QwenLM/Qwen-Drive-1.0 @ 28091c1 — src/qwen_drive/scene.py(smart_resize / _patchify / build_input_ids)、src/qwen_drive/configuration_qwen_drive.py、docs/model.md;demo 数据 data/demo(planning_scenes.jsonl、972×1079 原图)。所有 token 数已按仓库同款逻辑复算验证。Transformer 维度实际数值取自 ModelScope 发布的 Qwen/Qwen-Drive-1.0-4B config.json(vision_config: depth 24 / hidden_size 1024 / num_heads 16 / intermediate_size 4096;text_config: hidden_size 2560 / 32 层,3×linear_attention+1×full_attention ×8 组)。
+</footer>
+</div>
+
+<script>
+// 生成 patch 网格演示图(128×96 像素 → 8×6 个 patch)
+(function () {
+  var cols = 8, rows = 6, cell = 26;
+  var g = document.getElementById('patchGrid');
+  g.style.gridTemplateColumns = 'repeat(' + cols + ', ' + cell + 'px)';
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var d = document.createElement('div');
+      d.className = 'cell';
+      var hue = (r * cols + c) * 7 % 360;
+      d.style.background = 'hsl(' + hue + ', 65%, ' + (58 + ((r + c) % 3) * 8) + '%)';
+      d.title = 'patch (' + r + ',' + c + ')\n覆盖像素 x:' + (c*16) + '~' + (c*16+15) + ', y:' + (r*16) + '~' + (r*16+15) + '\n= 16×16 px = 1536 维输入向量';
+      g.appendChild(d);
+    }
+  }
+  // 合并演示:同一张图,每 2×2 patch 染成一色 = 1 个 token
+  var g2 = document.getElementById('mergeGrid');
+  g2.style.gridTemplateColumns = 'repeat(' + cols + ', ' + cell + 'px)';
+  var palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#84cc16', '#ec4899', '#6366f1', '#a855f7'];
+  for (var r2 = 0; r2 < rows; r2++) {
+    for (var c2 = 0; c2 < cols; c2++) {
+      var d2 = document.createElement('div');
+      d2.className = 'cell';
+      var ti = Math.floor(r2/2) * (cols/2) + Math.floor(c2/2);
+      d2.style.background = palette[ti % palette.length];
+      d2.title = '属于 token #' + (ti+1) + '\n该 token 覆盖 32×32 px\n(4 个 patch 合并)';
+      g2.appendChild(d2);
+    }
+  }
+})();
+</script>
+</body>
+</html>

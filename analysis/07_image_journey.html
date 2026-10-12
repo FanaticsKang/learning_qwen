@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一张图像的旅程(4:3 相机版):像素 → ViT → UVTR → BEV Transformer</title>
+<style>
+  :root {
+    --bg: #f6f8fa; --card: #ffffff; --ink: #1f2430; --muted: #5b6472;
+    --accent: #2563eb; --accent-soft: #dbeafe; --green: #059669; --green-soft: #d1fae5;
+    --orange: #d97706; --orange-soft: #fef3c7; --purple: #7c3aed; --purple-soft: #ede9fe;
+    --red: #dc2626; --border: #e2e8f0; --code-bg: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.7; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #0c4a6e 0%, #0284c7 55%, #22d3ee 100%);
+    color: #fff; border-radius: 16px; padding: 34px 36px 28px; margin-bottom: 26px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 26px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 10px; }
+  h2 { font-size: 21px; margin: 40px 0 6px; padding-left: 12px; border-left: 5px solid #0284c7; }
+  h3 { font-size: 16.5px; margin: 22px 0 6px; }
+  p { margin: 8px 0; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 22px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  .mono { font-family: Consolas, "Courier New", monospace; font-size: 12.5px; }
+  .note { border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 9px 15px; margin: 10px 0; font-size: 13.5px; }
+  .good { border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 9px 15px; margin: 10px 0; font-size: 13.5px; }
+  .toc { font-size: 13.5px; } .toc a { color: #0369a1; text-decoration: none; }
+  footer { margin-top: 46px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .center { text-align: center; }
+  svg text { font-family: inherit; }
+  .arch { margin: 14px auto; max-width: 960px; }
+  .arow { display: flex; justify-content: center; gap: 14px; }
+  .abox { border: 2px solid; border-radius: 10px; padding: 7px 12px; text-align: center;
+    background: var(--card); font-size: 13px; min-width: 130px; }
+  .abox b { font-size: 13.5px; display: block; }
+  .abox small { color: var(--muted); font-size: 11.5px; line-height: 1.45; display: block; }
+  .abox .d { display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, monospace; font-size: 11px; border-radius: 5px; padding: 1px 8px; margin-top: 4px; }
+  .ab-img { border-color: #64748b; } .ab-vit { border-color: #0d9488; background: #f0fdfa; }
+  .ab-llm { border-color: #7c3aed; background: #faf8ff; } .ab-uvtr { border-color: #ea580c; background: #fff7ed; }
+  .ab-bev { border-color: #4f46e5; background: #eef2ff; } .ab-out { border-color: #059669; background: #ecfdf5; }
+  .ab-plan { border-color: #94a3b8; background: #f8fafc; }
+  .ab-lock { border-color: #334155; background: #0f172a; color: #e2e8f0; }
+  .ab-lock b { color: #fff; } .ab-lock small { color: #94a3b8; }
+  .aarr { text-align: center; color: #94a3b8; font-size: 14px; line-height: 1.35; padding: 2px 0; }
+  .aarr .lbl { background: var(--orange-soft); color: var(--orange); border: 1px solid #fcd34d;
+    font-size: 11.5px; border-radius: 999px; padding: 0 10px; margin: 0 4px; display: inline-block; }
+  .warn { color: #d97706; cursor: help; font-weight: 700; border-bottom: 1px dotted #d97706; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>一张图像的旅程(4:3 相机版):像素 → ViT → UVTR → BEV Transformer</h1>
+  <p>以 t-0s 时刻一张 4:3 前视相机画面(原图 1440×1080)为线索:进 VLM(带历史帧)与进 BEVFormer(尺寸、长宽比都不同)</p>
+  <p class="sub">依据:官方仓库 scene.py(smart_resize 保长宽比)、configuration_perception.py、view_transform.py、modeling_perception.py、heads.py + docs/perception.md;所有维数按原图 1440×1080 实算。Qwen3.5-4B 画成黑盒。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#film">① 同一画面,两张"入场照"(4:3)</a> ·
+  <a href="#overview">② 总览数据流(只画感知路)</a> ·
+  <a href="#percep">③ 感知路的尺寸账(像素 → patch → token)</a> ·
+  <a href="#uvtr">④ UVTR 前后 —— 从图像平面到 BEV 空间</a> ·
+  <a href="#bevformer">⑤ BEV Transformer 的 Embedding / query / K·V</a> ·
+  <a href="#recap">⑥ 一张图的完整旅程(回顾表)</a>
+</div>
+
+<!-- ================= ① ================= -->
+<h2 id="film">① 同一画面,两张"入场照"(4:3)</h2>
+<div class="card">
+  <p>t-0s 时刻,如果前视相机拍到一张 <b>1440×1080</b> 的原始画面(4:3),它在系统里有<b>两份 resize 后进入模型</b>:</p>
+  <p style="margin:4px 0 4px 18px">
+    1. <b>VLM 一份</b>(smart_resize 保长宽比 → 当前帧 <b>1088×800</b>);<br>
+    2. <b>感知头一份</b>(拉伸到固定 <b>896×512</b>)。
+  </p>
+  <p>另外,VLM 还需要 <b>9 个历史时刻</b>的画面(<b>480×352</b>)。注意 VLM 每次进的不止一台相机:6/8 个相机里只有 <b>3 个前向视图</b>(前视 / 左前 / 右前)进 VLM,每个视图取 <b>4 个时刻</b>(3 个历史时刻 + 当前),共 <b>12 帧</b>;感知头则用<b>全部相机</b>、只取当前一帧。</p>
+  <svg viewBox="0 0 900 300" width="100%" style="max-width:900px">
+    <defs>
+      <pattern id="gA" width="6.4" height="6.4" patternUnits="userSpaceOnUse"><path d="M6.4,0H0V6.4" fill="none" stroke="#93c5fd" stroke-width="0.6"/></pattern>
+      <pattern id="gB" width="11.2" height="11.2" patternUnits="userSpaceOnUse"><path d="M11.2,0H0V11.2" fill="none" stroke="#6ee7b7" stroke-width="0.6"/></pattern>
+      <pattern id="gC" width="4.8" height="4.8" patternUnits="userSpaceOnUse"><path d="M4.8,0H0V4.8" fill="none" stroke="#fdba74" stroke-width="0.5"/></pattern>
+    </defs>
+    <text x="450" y="22" text-anchor="middle" font-size="13" font-weight="bold" fill="#0c4a6e">同一个 t-0s 物理画面(4:3 原图 1440×1080)</text>
+    <!-- VLM current -->
+    <rect x="40" y="40" width="218" height="160" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <rect x="40" y="40" width="218" height="160" fill="url(#gA)"/>
+    <polygon points="70,200 238,200 200,128 118,128" fill="#cbd5e1"/>
+    <rect x="196" y="160" width="26" height="14" rx="3" fill="#3b82f6"/>
+    <text x="149" y="260" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">VLM 当前帧 × 3 视图</text>
+    <text x="149" y="277" text-anchor="middle" font-size="10.5" fill="#64748b">1088×800(≈4:3)· 68×50 patch · 850 token</text>
+    <!-- VLM history -->
+    <rect x="301" y="74" width="168" height="123" fill="#d1fae5" stroke="#34d399" stroke-width="1.2"/>
+    <rect x="293" y="66" width="168" height="123" fill="#d1fae5" stroke="#34d399" stroke-width="1.2"/>
+    <rect x="285" y="58" width="168" height="123" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+    <rect x="285" y="58" width="168" height="123" fill="url(#gB)"/>
+    <polygon points="310,181 433,181 396,105 357,105" fill="#cbd5e1"/>
+    <rect x="370" y="130" width="18" height="10" rx="2" fill="#3b82f6"/>
+    <text x="369" y="260" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">VLM 历史帧 × 9(t-1.5s~t-0.5s)</text>
+    <text x="369" y="277" text-anchor="middle" font-size="10.5" fill="#64748b">480×352(≈4:3)· 30×22 patch · 165 token/帧</text>
+    <!-- perception -->
+    <rect x="500" y="50" width="269" height="154" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+    <rect x="500" y="50" width="269" height="154" fill="url(#gC)"/>
+    <polygon points="530,204 739,204 684,134 585,134" fill="#cbd5e1"/>
+    <rect x="620" y="142" width="30" height="16" rx="3" fill="#3b82f6"/>
+    <text x="634" y="260" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">感知头:同一画面另取一份(环视 ×6/8)</text>
+    <text x="634" y="277" text-anchor="middle" font-size="10.5" fill="#64748b">896×512(7:4,拉伸不保比)· 56×32 patch(16 px)</text>
+  </svg>
+  <div class="note"><b>三条长宽比各不相同,都是设计使然:</b><br>
+  ① VLM 路:smart_resize <b>保持原图比例</b> —— 原图 1440×1080 → 1088×800(≈1.36)/ 480×352(≈1.36),只吸附到 32 的倍数并压进像素预算;<br>
+  ② 感知路:<b>拉伸</b>到训练布局 896×512(1.75 ≈ 16:9 的 nuScenes/nuPlan 相机),不保比。</div>
+</div>
+
+<!-- ================= ② ================= -->
+<h2 id="overview">② 总览数据流(只画感知路;Qwen3.5-4B 为黑盒)</h2>
+<div class="card">
+  <div class="arch">
+    <div class="arow"><div class="abox ab-img"><b>当前环视 × 6/8 相机</b><small>t-0s 单帧 · 拉伸到训练固定布局</small><span class="d">896×512</span>
+      <span class="warn" title="尺寸与长宽比都和VLM输入(规划路)不同">⚠ 悬停看差异</span>
+    </div></div>
+    <div class="aarr">▼ <span class="lbl">6/8 帧拼成一条序列,同时过</span></div>
+    <div class="arow"><div class="abox ab-vit" style="max-width:780px;width:100%"><b>Vision Encoder —— ViT(24 层串联,全部 patch 共享权重)</b>
+      <small>切 16×16 patch → 每 patch 编码成 1024 维向量,<b>patch 数量不变</b>(token 由后面的 merger 合并产生)</small>
+      <span class="d">56×32 = 1792 patch × 1024</span>
+    </div></div>
+    <div class="aarr">▼ <span class="lbl">主干:merger(2×2 合并,1024×4 → 2560)→ 🔒 LLM(32 层)→ 隐状态 —— 一条主干,两个取材点</span></div>
+    <div class="arow" style="align-items:stretch">
+      <div class="abox ab-uvtr" style="flex:1;max-width:430px"><b>取材点① —— 核心:UVTR 深度视图变换</b>
+        <small>merger 入口取<b>合并前细格</b>(56×32×1024),不经合并、<b>不经过 LLM</b> → 深度 + 视锥池化(④ 详解)</small>
+        <span class="d">→ [256,16,200,200] → BEV token [40000,256]</span>
+      </div>
+      <div class="abox ab-llm" style="flex:1;max-width:430px"><b>取材点② —— 核心:Qwen3.5-4B(LLM)</b>
+        <small>merger 出 448 token × 2560/相机,过完 🔒 32 层 LLM,取<b>末层隐状态</b> → 4 尺度金字塔</small>
+        <span class="d">= BEVFormer 的 K/V</span>
+      </div>
+    </div>
+    <div class="aarr">↘ <span class="lbl">取材① = BEV token,加进 query</span> &nbsp; ↙ <span class="lbl">取材② = K/V</span></div>
+    <div class="arow"><div class="abox ab-bev" style="max-width:780px;width:100%"><b>BEV Transformer(BEVFormer 编码器 × 6 层)</b>
+      <small>query = 可学习 embedding [40000,256] + 取材① token · K/V = 取材② 金字塔</small>
+      <span class="d">bev_embed [40000, 256]</span>
+    </div></div>
+    <div class="aarr">↙ <span class="lbl">检测解码</span> <span class="lbl">占用融合</span> <span class="lbl">建图裁剪</span></div>
+    <div class="arow" style="align-items:stretch">
+      <div class="abox ab-out" style="flex:1"><b>3D 检测</b><small>900 query → 6 层解码</small><span class="d">≤300 框 · 7 类</span></div>
+      <div class="abox ab-out" style="flex:1"><b>占用栅格</b><small>BEV 重排 + UVTR 体积融合 → 3D U-Net</small><span class="d">[10, 200, 200, 16]</span></div>
+      <div class="abox ab-out" style="flex:1"><b>BEV 建图</b><small>裁 60×30 m → U-Net</small><span class="d">[6, 200, 400] @0.15 m</span></div>
+    </div>
+  </div>
+  <div class="note"><b>LLM 在哪里?</b>它在主干上:ViT 之后先 merger(2×2 合并 → 448 token × 2560/相机),再进 🔒 LLM。取材点① 在 merger <b>入口</b>,所以 UVTR <b>不经过 LLM</b>;K/V 取自 LLM 末层的隐状态 —— 几何、语义各取一处,互不干扰。</div>
+  <div class="good"><b>读图要点:</b>每个框只标<b>数据此刻的尺寸</b> —— 图像框 896×512,ViT 后 1792 patch × 1024,merger 后 448 token × 2560/相机,UVTR 后 [256,16,200,200],BEV token [40000,256];⚠ 悬停看与 VLM 输入(规划路)的差异。<b>规划路(12 帧进 VLM → 轨迹)不在此图</b>;其入场尺寸见 ①。</div>
+</div>
+
+<!-- ================= ③ ================= -->
+<h2 id="percep">③ 感知路的尺寸账:896×512(像素 → patch → token)</h2>
+<div class="card">
+  <p>同一段 896×512 的画面,在 ViT 前后经历"像素 → patch → token"三次计数变化 —— <b>图像尺寸不变,网格逐渐变粗</b>(同一张图,用的格子越来越少、越来越大):</p>
+  <svg viewBox="0 0 900 310" width="100%" style="max-width:900px">
+    <defs>
+      <pattern id="mP" width="3" height="3" patternUnits="userSpaceOnUse"><path d="M3,0H0V3" fill="none" stroke="#cbd5e1" stroke-width="0.5"/></pattern>
+      <pattern id="mQ" width="4.3" height="4.3" patternUnits="userSpaceOnUse"><path d="M4.3,0H0V4.3" fill="none" stroke="#fdba74" stroke-width="0.7"/></pattern>
+      <pattern id="mT" width="8.6" height="8.6" patternUnits="userSpaceOnUse"><path d="M8.6,0H0V8.6" fill="none" stroke="#f59e0b" stroke-width="1"/></pattern>
+      <marker id="aO" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d97706"/></marker>
+    </defs>
+    <text x="450" y="26" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0c4a6e">同一张 896×512 的画面 —— 图像尺寸不变,网格逐渐变粗</text>
+    <rect x="50" y="70" width="240" height="137" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+    <rect x="50" y="70" width="240" height="137" fill="url(#mP)"/>
+    <text x="170" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">① 原始像素</text>
+    <text x="170" y="250" text-anchor="middle" font-size="10.5" fill="#64748b">896×512 px · 458,752 个像素</text>
+    <line x1="296" y1="138" x2="322" y2="138" stroke="#d97706" stroke-width="2" marker-end="url(#aO)"/>
+    <text x="309" y="124" text-anchor="middle" font-size="10.5" fill="#d97706">切 16×16</text>
+    <rect x="330" y="70" width="240" height="137" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+    <rect x="330" y="70" width="240" height="137" fill="url(#mQ)"/>
+    <text x="450" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">② 16×16 patch(ViT 的"字")</text>
+    <text x="450" y="250" text-anchor="middle" font-size="10.5" fill="#64748b">56×32 = 1792 个 × 1024 维 · 数量不变进 24 层</text>
+    <line x1="576" y1="138" x2="602" y2="138" stroke="#d97706" stroke-width="2" marker-end="url(#aO)"/>
+    <text x="589" y="124" text-anchor="middle" font-size="10.5" fill="#d97706">2×2 合并</text>
+    <rect x="610" y="70" width="240" height="137" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+    <rect x="610" y="70" width="240" height="137" fill="url(#mT)"/>
+    <text x="730" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">③ 32×32 token(merger 合并后)</text>
+    <text x="730" y="250" text-anchor="middle" font-size="10.5" fill="#64748b">28×16 = 448 个 × 2560 维/相机 · 过 LLM → K/V</text>
+    <text x="450" y="288" text-anchor="middle" font-size="11" fill="#334155">同一张图:格子越大、数量越少 —— patch 数是 token 数的 4 倍;感知流要细格(不合并),语义 K/V 要合并后的 token</text>
+  </svg>
+  <table>
+    <tr><th>阶段</th><th>网格</th><th>数量</th><th>每单元</th><th>去向</th></tr>
+    <tr><td>原始像素</td><td class="mono">896 × 512</td><td class="mono">458,752 px</td><td>1 个像素</td><td>—</td></tr>
+    <tr><td>ViT patch(16×16)</td><td class="mono">56 × 32</td><td class="mono">1792 个 × 1024 维</td><td>16×16 px 的内容</td><td>取材①:不合并 → UVTR</td></tr>
+    <tr><td>merger 2×2 → token(32×32)</td><td class="mono">28 × 16</td><td class="mono">448 个 × 2560 维/相机</td><td>32×32 px 的语义</td><td>取材②:过 LLM → K/V</td></tr>
+  </table>
+  <div class="good"><b>一条主干、两个取材点(再强调):</b>主干 = ViT → merger(2×2 合并)→ 🔒 LLM;取材点① 在 merger 入口拿<b>不合并</b>的 1792 个细格去 UVTR,取材点② 在 LLM 末层拿 448 个 token 的隐状态去 K/V。</div>
+</div>
+
+<!-- ================= ④ ================= -->
+
+<!-- ================= ⑤ ================= -->
+<h2 id="uvtr">④ UVTR 前后 —— 从图像平面到 BEV 空间</h2>
+<div class="card">
+  <svg viewBox="0 0 900 400" width="100%" style="max-width:900px">
+    <defs>
+      <pattern id="gF" width="4.8" height="4.8" patternUnits="userSpaceOnUse"><path d="M4.8,0H0V4.8" fill="none" stroke="#fdba74" stroke-width="0.5"/></pattern>
+      <marker id="aR" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#dc2626"/></marker>
+    </defs>
+    <!-- image plane -->
+    <text x="152" y="60" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#1f2430">进入前:图像平面(2D)</text>
+    <rect x="40" y="76" width="224" height="128" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+    <rect x="40" y="76" width="224" height="128" fill="url(#gF)"/>
+    <rect x="184" y="153" width="4.8" height="4.8" fill="#dc2626"/>
+    <rect x="228" y="180" width="14" height="8" rx="2" fill="#3b82f6" opacity="0.75"/>
+    <text x="152" y="224" text-anchor="middle" font-size="11" fill="#64748b">[256, 32, 56] · 每格 16×16 px</text>
+    <text x="152" y="240" text-anchor="middle" font-size="11" fill="#64748b">+ 深度分布 D:每格 118 档</text>
+    <!-- link to camera -->
+    <line x1="191" y1="157" x2="300" y2="152" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="300" y="136" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#1f2430">视锥(2.5D):方向 × 深度</text>
+    <!-- frustum -->
+    <polygon points="300,152 560,62 560,242" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.3" opacity="0.65"/>
+    <rect x="294" y="140" width="12" height="24" rx="3" fill="#1f2430"/>
+    <line x1="380" y1="122" x2="380" y2="182" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <line x1="455" y1="96" x2="455" y2="208" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <line x1="540" y1="69" x2="540" y2="235" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <line x1="306" y1="152" x2="552" y2="152" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 4" marker-end="url(#aR)"/>
+    <circle cx="400" cy="152" r="4" fill="#dc2626"/><circle cx="470" cy="152" r="4" fill="#dc2626"/><circle cx="540" cy="152" r="5" fill="#dc2626"/>
+    <text x="430" y="52" text-anchor="middle" font-size="11" fill="#64748b">56×32 方向 × 118 深度档 = 211,456 候选点/相机</text>
+    <text x="380" y="278" text-anchor="middle" font-size="10.5" fill="#64748b">d₀ = 1.0 m</text>
+    <text x="455" y="278" text-anchor="middle" font-size="10.5" fill="#64748b">⋯ 0.5 m 一档 ⋯</text>
+    <text x="540" y="278" text-anchor="middle" font-size="10.5" fill="#64748b">d₁₁₇ = 59.5 m</text>
+    <text x="430" y="300" text-anchor="middle" font-size="11.5" fill="#334155">深度分布 D 决定每格特征"落"在哪几档</text>
+    <!-- ray to voxel -->
+    <line x1="556" y1="152" x2="742" y2="224" stroke="#dc2626" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#aR)"/>
+    <!-- voxel grid -->
+    <text x="740" y="90" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#1f2430">之后:BEV/体素空间(3D)</text>
+    <polygon points="640,150 740,115 840,150 740,185" fill="#d1fae5" stroke="#059669" stroke-width="1.4"/>
+    <polygon points="640,150 740,185 740,285 640,250" fill="#a7f3d0" stroke="#059669" stroke-width="1.4"/>
+    <polygon points="740,185 840,150 840,250 740,285" fill="#6ee7b7" stroke="#059669" stroke-width="1.4"/>
+    <g stroke="#059669" stroke-width="0.6" opacity="0.5">
+      <line x1="665" y1="141" x2="765" y2="176"/><line x1="690" y1="132" x2="790" y2="167"/>
+      <line x1="715" y1="123" x2="815" y2="158"/>
+      <line x1="640" y1="175" x2="740" y2="210"/><line x1="640" y1="200" x2="740" y2="235"/><line x1="640" y1="225" x2="740" y2="260"/>
+      <line x1="740" y1="210" x2="840" y2="175"/><line x1="740" y1="235" x2="840" y2="200"/><line x1="740" y1="260" x2="840" y2="225"/>
+    </g>
+    <polygon points="745,212 775,201 775,229 745,240" fill="#dc2626" opacity="0.85"/>
+    <text x="740" y="312" text-anchor="middle" font-size="11" fill="#64748b">[256, 16, 200, 200] · 自车系 3D</text>
+    <text x="740" y="328" text-anchor="middle" font-size="10.5" fill="#64748b">体素 0.512×0.512×0.65 m · 覆盖 102.4×102.4×10.4 m</text>
+    <text x="740" y="348" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#047857">高度保留 → 占用预测可用</text>
+  </svg>
+  <table>
+    <tr><th>阶段</th><th>形状</th><th>所在空间</th><th>一格的物理含义</th></tr>
+    <tr><td>UVTR 进入前</td><td class="mono">[256, 32, 56]</td><td><b>图像平面</b>(896×512,7:4 拉伸)</td><td>16×16 px 的画面内容</td></tr>
+    <tr><td>中间:视锥</td><td class="mono">[256, 56, 32, 118]</td><td>图像方向 × 深度(2.5D)</td><td>"该方向、该距离"的候选点</td></tr>
+    <tr><td>UVTR 之后</td><td class="mono">[256, 16, 200, 200]</td><td><b>自车 3D 空间</b>(102.4×102.4×10.4 m)</td><td>0.512×0.512×0.65 m 的物理格</td></tr>
+    <tr><td>压成 BEV token</td><td class="mono">[40000, 256]</td><td>自车鸟瞰平面(200×200)</td><td>0.512×0.512 m,16 层高度已拼进通道</td></tr>
+  </table>
+</div>
+
+<!-- ================= ⑥ ================= -->
+<h2 id="bevformer">⑤ BEV Transformer 的 Embedding / query / K·V</h2>
+<div class="card">
+  <svg viewBox="0 0 900 340" width="100%" style="max-width:900px">
+    <defs>
+      <marker id="aI" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#4f46e5"/></marker>
+      <marker id="aJ" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#a78bfa"/></marker>
+    </defs>
+    <text x="105" y="24" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1f2430">① 可学习 embedding</text>
+    <rect x="50" y="36" width="110" height="110" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.4"/>
+    <path d="M72,36V146M94,36V146M116,36V146M138,36V146M50,58H160M50,80H160M50,102H160M50,124H160" stroke="#93c5fd" stroke-width="0.7" fill="none"/>
+    <text x="185" y="98" text-anchor="middle" font-size="22" fill="#334155">＋</text>
+    <text x="265" y="24" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1f2430">② UVTR BEV token</text>
+    <rect x="210" y="36" width="110" height="110" fill="#fff7ed" stroke="#f97316" stroke-width="1.4"/>
+    <path d="M232,36V146M254,36V146M276,36V146M298,36V146M210,58H320M210,80H320M210,102H320M210,124H320" stroke="#fdba74" stroke-width="0.7" fill="none"/>
+    <rect x="232" y="102" width="22" height="22" fill="#34d399" opacity="0.9"/>
+    <rect x="254" y="80" width="22" height="22" fill="#34d399" opacity="0.9"/>
+    <rect x="276" y="58" width="22" height="22" fill="#34d399" opacity="0.9"/>
+    <text x="345" y="98" text-anchor="middle" font-size="22" fill="#334155">＝</text>
+    <text x="425" y="24" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1f2430">初始 query(①+② 按格相加)</text>
+    <rect x="370" y="36" width="110" height="110" fill="#dbeafe" stroke="#4f46e5" stroke-width="1.4"/>
+    <path d="M392,36V146M414,36V146M436,36V146M458,36V146M370,58H480M370,80H480M370,102H480M370,124H480" stroke="#a5b4fc" stroke-width="0.7" fill="none"/>
+    <rect x="392" y="102" width="22" height="22" fill="#34d399" opacity="0.9"/>
+    <rect x="414" y="80" width="22" height="22" fill="#34d399" opacity="0.9"/>
+    <rect x="436" y="58" width="22" height="22" fill="#34d399" opacity="0.9"/>
+    <text x="105" y="164" text-anchor="middle" font-size="10" fill="#64748b">[40000, 256]</text>
+    <text x="265" y="164" text-anchor="middle" font-size="10" fill="#64748b">[40000, 256] · 来自 ⑤</text>
+    <text x="425" y="164" text-anchor="middle" font-size="10" fill="#64748b">[40000, 256]</text>
+    <!-- pyramid -->
+    <text x="720" y="24" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1f2430">③ Qwen3.5-4B 金字塔(K/V)</text>
+    <rect x="640" y="36" width="160" height="34" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.2"/>
+    <text x="720" y="57" text-anchor="middle" font-size="10" fill="#5b21b6">[256, 112, 64] ×4</text>
+    <rect x="685" y="80" width="70" height="26" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.2"/>
+    <text x="720" y="97" text-anchor="middle" font-size="9.5" fill="#5b21b6">[56, 32] ×2</text>
+    <rect x="706" y="116" width="28" height="20" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.2"/>
+    <text x="744" y="130" font-size="9.5" fill="#5b21b6">[28,16]</text>
+    <rect x="716" y="146" width="10" height="14" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.2"/>
+    <text x="734" y="157" font-size="9.5" fill="#5b21b6">[14,8]</text>
+    <text x="720" y="182" text-anchor="middle" font-size="10.5" fill="#6d28d9">来自黑盒隐状态(④ 语言流)</text>
+    <!-- encoder -->
+    <line x1="425" y1="172" x2="425" y2="204" stroke="#4f46e5" stroke-width="2" marker-end="url(#aI)"/>
+    <rect x="90" y="210" width="470" height="86" rx="10" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+    <text x="325" y="238" text-anchor="middle" font-size="13" font-weight="bold" fill="#1f2430">BEV Transformer —— BEVFormer 编码器 × 6 层</text>
+    <text x="325" y="260" text-anchor="middle" font-size="11.5" fill="#1f2430">每层:时间自注意力 → 空间交叉注意力 → FFN</text>
+    <text x="325" y="281" text-anchor="middle" font-size="10.5" fill="#64748b">query 只由 ①+② 构成;K/V 只被采样,不改写 query</text>
+    <line x1="560" y1="240" x2="650" y2="80" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#aJ)"/>
+    <line x1="560" y1="272" x2="700" y2="150" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#aJ)"/>
+    <text x="575" y="318" font-size="10.5" fill="#6d28d9">可变形采样:位置/权重由 query 预测(② 先验在此起效)</text>
+    <text x="325" y="332" text-anchor="middle" font-size="12" font-weight="bold" fill="#047857">输出 bev_embed [40000, 256] → 检测 · 占用 · 建图</text>
+  </svg>
+  <div class="good"><b>② 的来源接回 ⑤:</b>UVTR 体积 [256,16,200,200] 把 16 层高度拼进通道([4096,200,200]),经 1×1 卷积压回 256、展平成 [40000,256],与可学习 embedding 同构相加 —— 一张图的"几何影子"从此写进每个 BEV 格的问题里。</div>
+  <div class="note"><b>疑问:后向相机没进"那个 VLM",后向 BEV 格岂不是没有 K/V?</b>——不会,这里不能把两条流水线混在一起:<br>
+  ① "VLM 只用前向 3 视图"说的是<b>规划路</b> —— 它的输出是语言/轨迹,<b>根本不进 BEVFormer</b>,谈不上缺 K/V;<br>
+  ② BEV Transformer 的 K/V 来自<b>感知路自己的那次前向</b>:黑盒这一次吃的是<b>全部 6/8 个相机</b>(896×512),后向相机的 image-token 隐状态同样变成金字塔里的 K/V —— 后向 BEV 格有对应的 K/V 可采;<br>
+  ③ 空间交叉注意力的投影 mask 再保证"各取各的":后向格子只采后向相机的 K/V,前向格子只采前向的,互不越界、互不缺失。</div>
+</div>
+
+<!-- ================= ⑥ ================= -->
+<h2 id="recap">⑥ 一张图的完整旅程(回顾表)</h2>
+<div class="card">
+  <table>
+    <tr><th>#</th><th>站点</th><th>规划路(进 VLM)</th><th>感知路(进 BEVFormer)</th></tr>
+    <tr><td>0</td><td>物理画面 t-0s</td><td colspan="2" class="center">同一张 4:3 前视画面(原图 1440×1080);历史时刻的画面只走左路</td></tr>
+    <tr><td>1</td><td>入场缩放</td><td>当前 <b>1088×800</b>(≈4:3);历史 <b>480×352</b> ×9(保比)</td><td>固定 <b>896×512</b>(7:4,拉伸)(×6/8 相机)</td></tr>
+    <tr><td>2</td><td>ViT patch</td><td>68×50=3400 / 30×22=660 个,×1024 维</td><td>56×32=<b>1792</b> 个 ×1024 维(合并前细格)</td></tr>
+    <tr><td>3</td><td>2×2 合并</td><td><b>850</b> / 165 个 token ×2560</td><td>语言流 448×2560 → 黑盒;感知流不合并</td></tr>
+    <tr><td>4</td><td>Qwen3.5-4B(黑盒)</td><td>推理文本 + <b>50 点轨迹</b>(不进 BEVFormer)</td><td>image-token 隐状态 → <b>4 尺度金字塔 = K/V</b></td></tr>
+    <tr><td>5</td><td>UVTR</td><td>—</td><td>[256,32,56] → 视锥 → <b>[256,16,200,200]</b> → BEV token [40000,256]</td></tr>
+    <tr><td>6</td><td>BEV Transformer</td><td>—</td><td>query = ①embedding + ②token;6 层 × K/V 采样 → <b>bev_embed [40000,256]</b></td></tr>
+    <tr><td>7</td><td>输出</td><td>轨迹:50 点 @10 Hz</td><td>检测 ≤300 框 · 占用 [10,200,200,16] · 建图 [6,200,400]</td></tr>
+  </table>
+  <div class="good"><b>一句话收束:</b>同一帧 4:3 画面被拍成两张"入场照" —— 左边保着 4:3 比例、陪 9 个历史帧进黑盒,换来"往后怎么开";右边被拉成 7:4、以 16 px 细粒度经 UVTR 落进 3D,再由 BEV Transformer 与黑盒特征对齐,换来"周围是什么"。比例不同、粒度不同,ViT 是同一个。</div>
+</div>
+
+<footer>
+  依据:QwenLM/Qwen-Drive-1.0 仓库 scene.py(smart_resize 保长宽比、CAMERA_VIEWS)、configuration_perception.py、view_transform.py、modeling_perception.py、heads.py、docs/perception.md + 论文图 2/图 3。4:3 举例按原图 1440×1080 实算:当前档 → 1088×800(850 token)、历史档 → 480×352(165 token);感知固定 896×512(56×32 patch、448 token/相机)。姊妹篇:03(ViT 全流程)、04(深度视图变换)、05(UVTR vs LSS)、06(感知头全架构)。
+</footer>
+
+</div>
+</body>
+</html>

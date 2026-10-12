@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BEV Perception Head 全架构 — 图 3(a) 逐路维数详解</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #1e3a8a 0%, #4f46e5 55%, #7c3aed 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 27px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 12px; }
+  h2 { font-size: 21px; margin: 42px 0 6px; padding-left: 12px; border-left: 5px solid #4f46e5; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  td.mono, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13px;
+  }
+  code {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: none; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .center { text-align: center; }
+  .quote {
+    background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 10px;
+    padding: 12px 18px; margin: 12px 0; font-size: 14px; color: #334155;
+  }
+  .qa { background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px 22px; margin: 14px 0; }
+  .qa b.tag { color: var(--accent); }
+  /* 架构总览框图(HTML/CSS) */
+  .arch { margin: 16px auto; max-width: 900px; }
+  .arow { display: flex; justify-content: center; gap: 16px; }
+  .abox {
+    border: 2px solid; border-radius: 10px; padding: 8px 14px; text-align: center;
+    background: var(--card); font-size: 13.5px; min-width: 150px;
+  }
+  .abox b { font-size: 14px; display: block; }
+  .abox small { color: var(--muted); font-size: 11.5px; line-height: 1.45; display: block; }
+  .abox .d {
+    display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, monospace; font-size: 11.5px; border-radius: 5px; padding: 1px 8px; margin-top: 4px;
+  }
+  .ab-img { border-color: #64748b; }
+  .ab-vit { border-color: #0d9488; background: #f0fdfa; }
+  .ab-llm { border-color: #7c3aed; background: #faf8ff; }
+  .ab-uvtr { border-color: #ea580c; background: #fff7ed; }
+  .ab-bev { border-color: #4f46e5; background: #eef2ff; }
+  .ab-out { border-color: #059669; background: #ecfdf5; }
+  .aarr { text-align: center; color: #94a3b8; font-size: 15px; line-height: 1.3; padding: 2px 0; }
+  .aarr .lbl {
+    background: var(--orange-soft); color: var(--orange); border: 1px solid #fcd34d;
+    font-size: 11.5px; border-radius: 999px; padding: 0 10px; margin: 0 4px; display: inline-block;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>BEV Perception Head 全架构解读</h1>
+  <p>论文图 3(a):原始图像 → Vision Encoder → 两条支路 → BEV Transformer → 三个输出头,每一步的维数变化</p>
+  <p class="sub">依据:论文图 3 原文说明 + 官方仓库 src/qwen_drive_perception/(modeling_perception.py、bev_encoder.py、attention.py、perception_transformer.py、heads.py),所有维数均经代码核对。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#fig3">① 图 3(a) 说了什么</a> ·
+  <a href="#overview">② 架构总览框图</a> ·
+  <a href="#dims">③ 全链路维数地图</a> ·
+  <a href="#uvtr">④ 感知流:UVTR 做了什么</a> ·
+  <a href="#llm">⑤ 语言流:VLM 特征金字塔怎么来</a> ·
+  <a href="#bev">⑥ BEV Transformer 做了什么</a> ·
+  <a href="#heads">⑦ 三个输出头</a> ·
+  <a href="#division">⑧ 分工总结</a> ·
+  <a href="#faq">⑨ 常见疑问</a>
+</div>
+
+<!-- ================= ① ================= -->
+<h2 id="fig3">① 图 3(a) 说了什么:你的理解对,补两个精确化</h2>
+<div class="card">
+  <div class="quote">论文图 3 原文说明:"(a) The BEV perception head <b>fuses voxelized vision encoder features</b> with <b>a feature pyramid of VLM outputs</b>."
+  (BEV 感知头把<b>体素化的视觉编码器特征</b>与 <b>VLM 输出的特征金字塔</b>融合。)</div>
+  <p>对照你的两条通路,理解完全正确,只补两处精确化:</p>
+  <table>
+    <tr><th>你的描述</th><th>精确化</th></tr>
+    <tr><td>原始图像 → Vision Encoder(ViT)→ BEV Transformer</td><td>对。但 ViT 特征不是直接进注意力 —— 它先经 <b>UVTR 深度视图变换</b>变成 3D 体素、再压成 BEV token,<b>加到 BEV query 上</b>作为几何先验(详见 ④)。</td></tr>
+    <tr><td>Vision Encoder → Qwen3.5-4B → BEV Transformer</td><td>对。实际抽取的是 <b>LLM 最后一层的 image-token 隐状态</b>(即 "VLM 输出"),经一个 4 尺度适配器变成特征金字塔,作为 BEV Transformer 交叉注意力的 <b>key/value</b>(详见 ⑤)。</td></tr>
+  </table>
+  <div class="note"><b>为什么是两路?</b>ViT 特征空间分辨率高(16 px/格)但语义浅,适合估深度、撑几何;VLM 输出经过 32 层语言模型,语义强但空间粗(32 px/token)。感知头让前者供"骨架"、后者供"理解",在 BEV Transformer 里汇合。</div>
+  <h3>先说清:896×512 和 03 篇的"720p / 384×416"不是矛盾,是两条流水线</h3>
+  <table>
+    <tr><th></th><th>规划 VLM 流水线(03 篇)</th><th>感知头(本篇)</th></tr>
+    <tr><td>输入帧构成</td><td><b>12 帧</b> = 3 视图(前/左前/右前)× 4 时刻:历史帧 ×9 + 当前帧 ×3</td><td><b>严格单帧</b>:只有当前时刻的环视 6/8 相机,没有历史帧</td></tr>
+    <tr><td>分辨率</td><td>动态:历史帧 384×416(预算 174,080 px)、当前帧 720p 档(demo 704×800,预算 921,600 px)</td><td><b>固定 896×512</b>(训练时的固定相机布局,docs/perception.md 明言更换布局/分辨率不在支持范围)</td></tr>
+    <tr><td>视觉 token</td><td>历史 156/帧、当前 550/帧,一个场景 3054</td><td>每相机 448(28×16),6 相机 2688</td></tr>
+    <tr><td>出处</td><td>scene.py smart_resize + CameraFrame</td><td>docs/perception.md;demo calib.npz 的 1920×1080 标定按 896×512 折算</td></tr>
+  </table>
+  <p class="center" style="font-size:13.5px;color:var(--muted)">本篇通篇用感知流水线的 896×512;再看 03 篇时按上表对照即可,两套数字互不换算。</p>
+</div>
+
+<!-- ================= ② ================= -->
+<h2 id="overview">② 架构总览框图</h2>
+<div class="card">
+  <div class="arch">
+    <div class="arow"><div class="abox ab-img"><b>原始图像 × 6/8 相机</b><small>固定分辨率</small><span class="d">[3, 512, 896]/相机</span></div></div>
+    <div class="aarr">▼</div>
+    <div class="arow"><div class="abox ab-vit"><b>Vision Encoder(ViT 视觉塔)</b><small>24 层<b>串联</b> · patch 16 · 所有 patch 共享权重 · 与 VLM 共享,一次前向两路共用</small><span class="d">56×32 格 × 1024 维(合并前)</span></div></div>
+    <div class="aarr">↙ <span class="lbl">合并前 patch 特征</span> &nbsp;&nbsp; ↘ <span class="lbl">进入 merger(2×2 合并)</span></div>
+    <div class="arow" style="align-items:stretch">
+      <div class="abox ab-uvtr" style="flex:1;max-width:420px"><b>感知流:UVTR 深度视图变换</b>
+        <small>vit_neck 1024→256 → DepthNet 估深度 → 视锥体素池化(3D,保高度)</small>
+        <span class="d">[256, 16, 200, 200]</span>
+      </div>
+      <div class="abox ab-llm" style="flex:1;max-width:420px"><b>语言流:Qwen3.5-4B</b>
+        <small>merger 合并 → 448 token×2560 → 32 层 LLM → 取 image-token 隐状态 → 4 尺度适配</small>
+        <span class="d">金字塔 4×[256, ·, ·]</span>
+      </div>
+    </div>
+    <div class="aarr">
+      ↘ <span class="lbl">压成 BEV token [40000,256],加到 BEV query 上</span>
+      &nbsp;&nbsp; ↙ <span class="lbl">作为 key/value 供交叉注意力采样</span>
+    </div>
+    <div class="arow"><div class="abox ab-bev"><b>BEV Transformer(BEVFormer 编码器 × 6 层)</b><small>BEV query 200×200×256 + UVTR 先验;时间自注意力 + 空间交叉注意力 + FFN</small><span class="d">bev_embed [40000, 256]</span></div></div>
+    <div class="aarr">↙ <span class="lbl">检测解码</span> <span class="lbl">占用融合</span> <span class="lbl">建图裁剪</span></div>
+    <div class="arow" style="align-items:stretch">
+      <div class="abox ab-out" style="flex:1"><b>3D 检测</b><small>900 query → 6 层解码器</small><span class="d">≤300 框 · 7 类</span></div>
+      <div class="abox ab-out" style="flex:1"><b>占用栅格</b><small>BEV 重排 + UVTR 体积融合 → 3D U-Net</small><span class="d">[10, 200, 200, 16]</span></div>
+      <div class="abox ab-out" style="flex:1"><b>BEV 建图</b><small>裁 60×30 m → resnet18 U-Net</small><span class="d">[6, 200, 400] @0.15 m</span></div>
+    </div>
+  </div>
+  <div class="legend" style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;font-size:13px;color:#5b6472;margin-top:6px">
+    <span>橙框 = 感知流(几何)</span><span>紫框 = 语言流(语义)</span><span>蓝框 = 汇合与输出</span>
+  </div>
+</div>
+
+<!-- ================= ③ ================= -->
+<h2 id="dims">③ 全链路维数地图</h2>
+<div class="card">
+  <p>从一张 896×512 的相机图,到三个输出,每一步的张量形状(单帧、B=1;N = 相机数):</p>
+  <table>
+    <tr><th>#</th><th>阶段</th><th>张量形状</th><th>说明</th></tr>
+    <tr><td>1</td><td>输入图像</td><td class="mono">[N, 3, 512, 896]</td><td>固定 896×512(原图如 1920×1080 缩放入模,缩放已折进 lidar2img;docs/perception.md)</td></tr>
+    <tr><td>2</td><td>ViT patch 化</td><td class="mono">[N, 56×32, 1024]</td><td>16 px patch;24 层<b>串联</b>视觉塔(全部 patch 共享同一套权重),合并前 hidden 1024</td></tr>
+    <tr><td>3a</td><td>语言流 · merger</td><td class="mono">[N, 448, 2560]</td><td>2×2 合并(1024×4 → 2560),28×16 token 网格</td></tr>
+    <tr><td>3b</td><td>语言流 · LLM</td><td class="mono">[N, 28, 16, 2560]</td><td>32 层 Qwen3.5-4B;取最后一层隐状态(image-token 位置,过 final norm)</td></tr>
+    <tr><td>3c</td><td>语言流 · 金字塔</td><td class="mono">[256,112,64] + [256,56,32] + [256,28,16] + [256,14,8]</td><td>SimpleFPN ×4/×2/×1/×0.5,供交叉注意力多尺度采样</td></tr>
+    <tr><td>4a</td><td>感知流 · 通道适配</td><td class="mono">[N·256, 32, 56]</td><td>vit_neck 恒等 1024→256(scale_factors=(1.0,),无金字塔)</td></tr>
+    <tr><td>4b</td><td>感知流 · 深度分布</td><td class="mono">[N·118, 32, 56]</td><td>DepthNet(3 残差块 + ASPP)→ softmax</td></tr>
+    <tr><td>4c</td><td>感知流 · 体素体积</td><td class="mono">[N, 256, 16, 200, 200]</td><td>视锥 56×32×118 反投影散射 + 3×Conv3d;ego 系 102.4×102.4×10.4 m</td></tr>
+    <tr><td>4d</td><td>感知流 · BEV token</td><td class="mono">[40000, 256]</td><td>16 层拼进通道([4096,200,200])→ 1×1 卷积压回 256 → 展平</td></tr>
+    <tr><td>5</td><td><b>融合①</b> query 级</td><td class="mono">[40000, 256]</td><td>可学习 BEV embedding <b>+ UVTR token</b>(heads.py:bev_queries + uvtr_bev_feat)</td></tr>
+    <tr><td>6</td><td>BEV Transformer</td><td class="mono">[40000, 256]</td><td>6 层 ×(时间自注意力 → 空间交叉注意力 → FFN);输出即 bev_embed</td></tr>
+    <tr><td>7a</td><td>检测头</td><td class="mono">query [900, 512] → ≤300 框</td><td>6 层 DETR 式解码器;cls 7 类,回归 code_size 10</td></tr>
+    <tr><td>7b</td><td>占用头</td><td class="mono">[10, 200, 200, 16]</td><td>BEV embedding 重排成 16 层 3D,与 UVTR 体积 concat 融合 → 3D U-Net → 10 类线性头</td></tr>
+    <tr><td>7c</td><td>建图头</td><td class="mono">[6, 200, 400]</td><td>从 bev_embed 裁 60×30 m(0.15 m/格)→ resnet18 U-Net,6 类</td></tr>
+  </table>
+</div>
+
+<!-- ================= ④ ================= -->
+<h2 id="uvtr">④ 感知流:UVTR 做了什么</h2>
+<div class="card">
+  <p>这一路回答"<b>东西在哪</b>"。三步(细节见 04/05 篇,这里只摆架构角色):</p>
+  <table>
+    <tr><th>步骤</th><th>机制</th><th>维数变化</th><th>给后续留下什么</th></tr>
+    <tr><td>① 估深度</td><td>DepthNet(3×残差块 + ASPP):每格输出 118 档深度概率,<b>无深度监督</b></td><td class="mono">[256,32,56] → [118,32,56]</td><td>方向 + 距离的可能性</td></tr>
+    <tr><td>② 撒进 3D</td><td>视锥格网(56×32×118 地址表)+ fused kernel 散射累加:D × F 沿射线入座</td><td class="mono">→ [256, 200, 200, 16]</td><td><b>保高度的 3D 几何特征</b>(ego 系)</td></tr>
+    <tr><td>③ 兵分两路</td><td>出路一:16 层拼通道 + 1×1 卷积压成 BEV token;<b>加</b>到 BEV Transformer 的 query 上。出路二:体积原样留给占用分支做 concat 融合</td><td class="mono">[256,16,200,200] → [40000,256];体积另存</td><td>几何先验 + 高度证据</td></tr>
+  </table>
+  <div class="good"><b>为什么 query 要加它?</b>可学习的 BEV embedding 初始是"无知识的白纸";加上 UVTR token 后,每个 BEV 格自带"该看哪个相机、看哪块图像"的几何暗示,注意力收敛更快更准。这是图 3 说的 "voxelized vision encoder features" 的归宿。</div>
+</div>
+
+<!-- ================= ⑤ ================= -->
+<h2 id="llm">⑤ 语言流:VLM 特征金字塔怎么来</h2>
+<div class="card">
+  <p>这一路回答"<b>东西是什么</b>"。同一个 ViT 前向的 patch 特征,经 merger 走完整个 VLM,再被抽回来:</p>
+  <div class="note">
+    <b>抽取方式(代码实证):</b>感知模型跑一次完整 VLM 前向(output_hidden_states=True),取<b>最后一层隐状态</b>过 final norm,再按 image-token 位置切片、reshape 回 <span class="mono">[N, 28, 16, 2560]</span> 网格(modeling_perception.py)。感知流水线只有当前环视帧(没有历史帧),切片只保留当前相机的 token。
+  </div>
+  <p>2560 维的语义特征对像素级采样太粗(一格 32×32 px),于是 SimpleFPN 适配器做两件事:<b>降通道</b>(2560 → 256)和<b>造金字塔</b>(×4/×2/×1/×0.5 四个尺度)。远处的物体在图里只占几格 —— 在 112×64 的细尺度上正好采得到;近处大物体在 14×8 的粗尺度上一步看全。</p>
+  <table>
+    <tr><th>尺度</th><th>形状</th><th>一格对应</th><th>擅长</th></tr>
+    <tr><td>×4</td><td class="mono">[256, 112, 64]</td><td>8 px</td><td>远处小物体</td></tr>
+    <tr><td>×2</td><td class="mono">[256, 56, 32]</td><td>16 px</td><td>中景</td></tr>
+    <tr><td>×1</td><td class="mono">[256, 28, 16]</td><td>32 px(token 原生)</td><td>常规</td></tr>
+    <tr><td>×0.5</td><td class="mono">[256, 14, 8]</td><td>64 px</td><td>近处大物体 / 全局语境</td></tr>
+  </table>
+  <div class="good"><b>为什么用 LLM 输出而不是 ViT 输出做语义?</b>image-token 隐状态已经吸收了整段多模态上下文(视野序列、导航指令、历史轨迹的注意力)—— 它是"理解过"的特征。这正是图 3 说的 "feature pyramid of <b>VLM outputs</b>",而不是 vision encoder outputs。</div>
+</div>
+
+<!-- ================= ⑥ ================= -->
+<h2 id="bev">⑥ BEV Transformer 做了什么</h2>
+<div class="card">
+  <p>它是两路的<b>汇合点</b>:输入是"加了 UVTR 几何先验的 BEV query"(40000×256)和"VLM 特征金字塔"(4 尺度 key/value),输出是统一的 BEV 表征 bev_embed [40000, 256]。编码器共 <b>6 层</b>,每层三步:</p>
+  <table>
+    <tr><th>层内步骤</th><th>机制</th><th>关键参数(代码核对)</th></tr>
+    <tr>
+      <td>① 时间自注意力</td>
+      <td>BEV 格之间互看,平滑邻近格的特征。原版 BEVFormer 在此融合上一帧 BEV(时序);本感知头<b>严格单帧</b>,prev_bev 为空,退化为普通 BEV 自注意力(docs/perception.md 明说与评测一致)</td>
+      <td>8 头 × 256 维;参考点 2D</td>
+    </tr>
+    <tr>
+      <td>② 空间交叉注意力<br>(核心)</td>
+      <td>每个 BEV 格在 z 向立起 <b>4 个 3D 参考点</b>(柱内 4 层),经 ego2lidar → lidar2img 投影到每台相机 —— <b>投影出界的相机直接 mask 掉</b>(只看得到它的相机,即论文 Ω(p) 的注意力版),再在 4 尺度金字塔上做<b>可变形采样</b>:每处学一组偏移 + 权重,加权取回 VLM 语义</td>
+      <td>8 头;4 尺度 × 每头 8 点;采样点由网络预测(非固定网格)</td>
+    </tr>
+    <tr>
+      <td>③ FFN</td>
+      <td>逐格两层前馈网络,消化采样来的信息</td>
+      <td>256 → 512 → 256,Dropout 0.1</td>
+    </tr>
+  </table>
+
+  <h3>一图看懂:①②③ 各自从哪里进场面</h3>
+  <svg viewBox="0 0 900 660" width="100%" style="max-width:900px">
+    <defs>
+      <marker id="aB" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#4f46e5"/></marker>
+      <marker id="aP" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#a78bfa"/></marker>
+    </defs>
+    <text x="45" y="76" font-size="10.5" fill="#94a3b8">BEV 网格 200×200,示意 6×6 格;每格一个 256 维向量</text>
+    <!-- ① embedding -->
+    <rect x="45" y="90" width="120" height="120" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+    <path d="M65,90V210M85,90V210M105,90V210M125,90V210M145,90V210M45,110H165M45,130H165M45,150H165M45,170H165M45,190H165" stroke="#93c5fd" stroke-width="0.8" fill="none"/>
+    <text x="185" y="160" text-anchor="middle" font-size="26" fill="#334155">＋</text>
+    <!-- ② UVTR token -->
+    <rect x="205" y="90" width="120" height="120" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+    <path d="M225,90V210M245,90V210M265,90V210M285,90V210M305,90V210M205,110H325M205,130H325M205,150H325M205,170H325M205,190H325" stroke="#fdba74" stroke-width="0.8" fill="none"/>
+    <rect x="225" y="170" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="245" y="150" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="265" y="130" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="285" y="110" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="245" y="110" width="20" height="20" fill="#fbbf24" opacity="0.9"/>
+    <text x="345" y="160" text-anchor="middle" font-size="26" fill="#334155">＝</text>
+    <!-- 初始 query -->
+    <rect x="365" y="90" width="120" height="120" fill="#dbeafe" stroke="#4f46e5" stroke-width="1.5"/>
+    <path d="M385,90V210M405,90V210M425,90V210M445,90V210M465,90V210M365,110H485M365,130H485M365,150H485M365,170H485M365,190H485" stroke="#a5b4fc" stroke-width="0.8" fill="none"/>
+    <rect x="385" y="170" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="405" y="150" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="425" y="130" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="445" y="110" width="20" height="20" fill="#34d399" opacity="0.9"/>
+    <rect x="405" y="110" width="20" height="20" fill="#fbbf24" opacity="0.9"/>
+    <text x="105" y="228" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">① 可学习 embedding</text>
+    <text x="105" y="245" text-anchor="middle" font-size="10.5" fill="#64748b">[40000, 256] · query 本体(可训练)</text>
+    <text x="265" y="228" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">② UVTR token(几何先验)</text>
+    <text x="265" y="245" text-anchor="middle" font-size="10.5" fill="#64748b">[40000, 256] · 同构,按格相加</text>
+    <text x="425" y="228" text-anchor="middle" font-size="12" font-weight="bold" fill="#1f2430">带几何暗示的初始 query</text>
+    <text x="425" y="245" text-anchor="middle" font-size="10.5" fill="#64748b">同格融合:蓝底 + ②的内容</text>
+    <!-- ③ pyramid -->
+    <text x="725" y="80" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#1f2430">③ Qwen3.5-4B 金字塔(K/V)</text>
+    <rect x="640" y="92" width="170" height="38" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.3"/>
+    <text x="725" y="115" text-anchor="middle" font-size="10.5" fill="#5b21b6">[256, 112, 64] · ×4</text>
+    <rect x="683" y="140" width="84" height="30" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.3"/>
+    <text x="725" y="159" text-anchor="middle" font-size="9.5" fill="#5b21b6">[256, 56, 32] ×2</text>
+    <rect x="701" y="180" width="44" height="24" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.3"/>
+    <text x="753" y="196" font-size="9.5" fill="#5b21b6">[28,16] ×1</text>
+    <rect x="712" y="214" width="22" height="16" fill="#ede9fe" stroke="#a78bfa" stroke-width="1.3"/>
+    <text x="740" y="226" font-size="9.5" fill="#5b21b6">[14,8] ×0.5</text>
+    <text x="725" y="252" text-anchor="middle" font-size="11.5" fill="#6d28d9">K/V:交叉注意力取语义的源</text>
+    <!-- into transformer -->
+    <line x1="425" y1="256" x2="425" y2="326" stroke="#4f46e5" stroke-width="2" marker-end="url(#aB)"/>
+    <text x="437" y="266" font-size="10.5" fill="#64748b">初始 query 进 6 层</text>
+    <rect x="90" y="330" width="460" height="100" rx="10" fill="#eef2ff" stroke="#4f46e5" stroke-width="2"/>
+    <text x="320" y="360" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#1f2430">BEV Transformer —— BEVFormer 编码器 × 6 层</text>
+    <text x="320" y="383" text-anchor="middle" font-size="12" fill="#1f2430">每层:时间自注意力 → 空间交叉注意力 → FFN</text>
+    <text x="320" y="404" text-anchor="middle" font-size="11" fill="#64748b">query 只由 ①+② 构成;K/V 只被采样,不会改写 query</text>
+    <!-- deformable sampling arrows -->
+    <line x1="550" y1="345" x2="660" y2="132" stroke="#a78bfa" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#aP)"/>
+    <line x1="550" y1="390" x2="716" y2="234" stroke="#a78bfa" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#aP)"/>
+    <text x="562" y="430" font-size="10.5" fill="#6d28d9">空间交叉注意力:采样位置/权重由 query 预测</text>
+    <text x="562" y="446" font-size="10.5" fill="#6d28d9">(② UVTR 几何先验在此起效)</text>
+    <!-- output -->
+    <line x1="320" y1="430" x2="320" y2="464" stroke="#4f46e5" stroke-width="2" marker-end="url(#aB)"/>
+    <rect x="260" y="470" width="120" height="120" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+    <path d="M280,470V590M300,470V590M320,470V590M340,470V590M260,490H380M260,510H380M260,530H380M260,550H380M260,570H380" stroke="#6ee7b7" stroke-width="0.8" fill="none"/>
+    <rect x="320" y="470" width="20" height="20" fill="#34d399" opacity="0.85"/>
+    <rect x="300" y="490" width="20" height="20" fill="#34d399" opacity="0.85"/>
+    <rect x="340" y="490" width="20" height="20" fill="#34d399" opacity="0.85"/>
+    <rect x="280" y="510" width="20" height="20" fill="#fbbf24" opacity="0.85"/>
+    <text x="320" y="610" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#1f2430">bev_embed [40000, 256]</text>
+    <text x="320" y="627" text-anchor="middle" font-size="11" fill="#64748b">→ 3D 检测 · 占用 · BEV 建图</text>
+    <!-- legend -->
+    <g font-size="11" fill="#5b6472">
+      <rect x="45" y="637" width="14" height="12" fill="#dbeafe" stroke="#93c5fd"/><text x="64" y="647">可学习本体</text>
+      <rect x="175" y="637" width="14" height="12" fill="#fff7ed" stroke="#f97316"/><text x="194" y="647">UVTR 几何先验</text>
+      <rect x="325" y="637" width="14" height="12" fill="#ecfdf5" stroke="#059669"/><text x="344" y="647">融合后的 query / bev_embed</text>
+      <rect x="545" y="637" width="14" height="12" fill="#ede9fe" stroke="#a78bfa"/><text x="564" y="647">VLM 金字塔 K/V</text>
+    </g>
+  </svg>
+  <div class="note"><b>与 UVTR 的分工一句话:</b>UVTR 是"查表式"几何搬运 —— 按深度概率把特征搬到该在的体素,快而准,但每个体素只见过自己那一台相机的局部信息;BEV Transformer 是"注意力式"语义汇合 —— 每个 BEV 格主动向所有有效相机的多尺度 VLM 特征提问,把语义、多视角、多尺度一次融齐。<b>几何先验从 UVTR 来,语义证据从 VLM 来,最后谁说了算由注意力权重决定。</b></div>
+  <div class="good"><b>为什么单帧还要叫"时间"自注意力?</b>训练好的权重是在时序设置下学的(结构带 num_bev_queue=2 的队列接口);单帧推理时队列退化为当前帧自己(stack([query, query])),输出与评测路径严格一致 —— 结构保留是为了权重兼容。</div>
+</div>
+
+<!-- ================= ⑦ ================= -->
+<h2 id="heads">⑦ 三个输出头:同一份 bev_embed 的三种读法</h2>
+<div class="card">
+  <h3>7a · 3D 检测(900 个 query 问 BEV 要答案)</h3>
+  <p>可学习 object query [900, 512](拆成内容 + 位置两半),位置半经 Linear(256→3)+sigmoid 变成 ego 系 3D 参考点;6 层 DETR 式解码器在 bev_embed 上迭代精修;每层接分类分支(<b>7 类</b>)与回归分支(code_size=<b>10</b>:位置 + 尺寸 + 朝向 + 速度);NMSFreeCoder 按类去重,最多输出 <b>300 框</b>。训练用论文式 (4):每层 2·focal + 0.75·ℓ₁ 求和。</p>
+  <h3>7b · 占用栅格(两路特征的物理融合)</h3>
+  <p>bev_embed 的 256 通道被重排成 16 通道 × 16 层高的 3D 体积 [16, 16, 200, 200],重采样到占用网格(nuScenes 80×80×6.4 m / nuPlan 100×100×8 m,均 200×200×16);UVTR 体素体积同样经 Conv3d(256→16)重采样后与之 <b>concat(32)→ Conv3d 压回 16</b> 残差融合 → 3D U-Net 细化(16→32)→ 线性头出 <b>10 类</b>(7 类障碍物 + 可行驶区域/背景/空)。训练用式 (5):100·focal + MonoScene 几何/语义亲和 + Lovász(FlashOcc 风格)。</p>
+  <div class="good">这正是"保留高度"的兑现处:BEV embedding 的高度维只是通道重排的产物,而 <b>UVTR 体积的高度是真 3D 几何</b> —— 占用的"哪一层有东西"主要由它提供。</div>
+  <h3>7c · BEV 建图(裁一块,单独分割)</h3>
+  <p>BevFeatureSlicer 从 bev_embed 裁出车周 60 m × 30 m(0.15 m/格 → 400×200),MapSegEncode(resnet18 干 + U-Net 上采样)出 <b>6 类</b>栅格。训练 100·focal + Lovász。</p>
+</div>
+
+<!-- ================= ⑧ ================= -->
+<h2 id="division">⑧ 分工总结:每个模块一句话</h2>
+<div class="card">
+  <table>
+    <tr><th>模块</th><th>职责(一句话)</th><th>输入 → 输出</th></tr>
+    <tr><td>Vision Encoder(ViT)</td><td>把像素变成统一的视觉特征,供两路共用</td><td class="mono">[3,512,896] → [56×32, 1024]</td></tr>
+    <tr><td>merger + Qwen3.5-4B</td><td>给视觉特征注入多模态语义理解</td><td class="mono">[448, 4096] → [28×16, 2560]</td></tr>
+    <tr><td>SimpleFPN 适配器(语言流)</td><td>把 VLM 输出调制成 4 尺度 256 维采样源</td><td class="mono">[28×16,2560] → 4×[256,·,·]</td></tr>
+    <tr><td><b>UVTR(深度视图变换)</b></td><td><b>按预测深度把 ViT 特征撒进 3D,提供几何先验与高度证据</b></td><td class="mono">[256,32,56]+D → [256,16,200,200] → [40000,256]</td></tr>
+    <tr><td><b>BEV Transformer</b></td><td><b>以 BEV query 为载体,用可变形交叉注意力把多相机、多尺度 VLM 语义融进 200×200 鸟瞰格</b></td><td class="mono">[40000,256] + 金字塔 → [40000,256]</td></tr>
+    <tr><td>三个头</td><td>同一份 BEV 表征的三种读法</td><td class="mono">→ 300 框 / [10,200,200,16] / [6,200,400]</td></tr>
+  </table>
+  <div class="good"><b>对照图 3 原文收尾:</b>"fuses <b>voxelized vision encoder features</b>(= UVTR 产物,给 query 与占用)with <b>a feature pyramid of VLM outputs</b>(= 交叉注意力的 key/value)" —— 融合动作有二:检测路的 query 相加、占用路的 concat 卷积。图上没画出来的维数,全在 ③ 的表里。</div>
+</div>
+
+<!-- ================= ⑨ ================= -->
+<h2 id="faq">⑨ 常见疑问</h2>
+<div class="qa"><b class="tag">Q1:</b> 感知头会改变 VLM 吗?<br>
+<b>A:</b> 不会。ViT 和 LLM 的权重原封不动(推理时甚至开着 no_grad 跑前向),感知头只通过 hook "旁听"两处特征 —— 合并前的 patch、LLM 末层隐状态。这正是论文强调的 "without changing the VLM architecture";训练阶段 1 冻结 ViT+VLM、只训感知头。</div>
+
+<div class="qa"><b class="tag">Q2:</b> 两路能不能只用一路?<br>
+<b>A:</b> 架构上可以,精度上吃亏:只用 UVTR,几何对但语义浅(分不清锥桶和施工牌的细微类别);只用 VLM 金字塔,交叉注意力要自己摸索 2D→3D 对应,且占用没有真高度证据。两路并用的消融逻辑就是图 3 把两者画成并联的原因。</div>
+
+<div class="qa"><b class="tag">Q3:</b> BEV Transformer 和 UVTR 是不是功能重复(都在做 2D→3D)?<br>
+<b>A:</b> 机制互补而非重复。UVTR 用<b>确定性几何</b>(深度分布 + 标定)搬运,产出带强几何先验的 BEV token;BEV Transformer 用<b>学习到的注意力</b>采样,决定"这个鸟瞰格的语义最终听几台相机、几个尺度的"。前者给初值和高度,后者做全局语义表决。</div>
+
+<div class="qa"><b class="tag">Q4:</b> 为什么检测融合用"加法",占用融合用"concat+卷积"?<br>
+<b>A:</b> 加在 query 上是最轻的先验注入:让 BEV 格自带几何暗示,但不过度约束注意力;占用则<b>必须</b>逐体素保留两份高度证据再融合,concat+Conv3d 让网络自己学配比 —— 高度信息经不起"加法折叠"。</div>
+
+<div class="qa"><b class="tag">Q5:</b> 单帧推理,时序注意力白带了吗?<br>
+<b>A:</b> 结构是训练时定下的,推理单帧时它退化为普通自注意力(官方文档明说与评测路径一致)。保留结构是为了严格复用训练好的权重;若未来恢复多帧输入,无需改结构即可启用时序。</div>
+
+<div class="qa"><b class="tag">Q6:</b> ViT 的 24 层是并联还是串联?每个 patch 一个 ViT 吗?<br>
+<b>A:</b> <b>串联。</b>第 1 层输出是第 2 层输入,依次到第 24 层 —— "depth = 24" 即层数(与 LLM 的 32 层同理),推理时一次前向顺序跑完,层间没有循环。同时<b>所有 patch 共享同一个 ViT</b>:56×32 = 1792 个 patch 拼成序列过同一套权重,层内注意力让每个 patch 互相看见 —— 不存在"每个 patch 一个网络"。</div>
+
+<div class="qa"><b class="tag">Q7:</b> 896×512 是当前帧吗?和历史帧呢?<br>
+<b>A:</b> 感知头是<b>严格单帧模型,没有历史帧</b> —— 896×512 是"当前时刻环视 6/8 台相机"各自固定的输入分辨率(感知权重训练时的固定布局)。历史帧/当前帧之分属于 03 篇的<b>规划流水线</b>(12 帧动态分辨率:历史 384×416、当前 720p 档)。两套数字互不换算,对照表见 ① 节。</div>
+
+<div class="qa"><b class="tag">Q8:</b> 规划 VLM 只用前向 3 视图,后向相机的内容没进"那个 VLM",BEVFormer 的后向格子岂不是没有 K/V?<br>
+<b>A:</b> 两条流水线不能混:BEVFormer 的 K/V 来自<b>感知路自己的 VLM 前向</b> —— 那次前向吃的是<b>全部 6/8 个相机</b>(896×512),后向相机的隐状态同样变成金字塔 K/V;空间交叉注意力的投影 mask 再保证每个 BEV 格只从看得见它的相机采样(后向格子采后向 K/V)。"只用前向 3 视图"是<b>规划路</b>的事,它的输出(语言/轨迹)根本不进 BEVFormer。</div>
+
+<footer>
+  依据:论文 arXiv:2609.00111 图 3 原文说明与式 (4)(5);QwenLM/Qwen-Drive-1.0 仓库 src/qwen_drive_perception/(modeling_perception.py 两路抽取与融合、heads.py BEVFormerHead、perception_transformer.py 占用融合、bev_encoder.py BEVFormerEncoder/BEVFormerLayer、attention.py 三种注意力、fpn.py SimpleFPN)、configuration_perception.py、docs/perception.md。所有维数与参数均经代码核对。姊妹篇:04_view_transform.html(深度视图变换全流程)、05_uvtr_frustum.html(UVTR vs LSS 对比)。
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BEV 感知头 · 基于深度的视图变换(Depth-based View Transform)详解</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #064e3b 0%, #059669 55%, #10b981 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 27px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 12px; }
+  h2 {
+    font-size: 21px; margin: 42px 0 6px; padding-left: 12px;
+    border-left: 5px solid var(--green);
+  }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  .pill {
+    display: inline-block; border-radius: 999px; padding: 1px 12px; font-size: 12.5px;
+    font-weight: 600; margin: 0 4px;
+  }
+  .pill.blue { background: var(--accent-soft); color: var(--accent); }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+  .pill.orange { background: var(--orange-soft); color: var(--orange); }
+  .pill.purple { background: var(--purple-soft); color: var(--purple); }
+  .pill.red { background: var(--red-soft); color: var(--red); }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .bad {
+    border-left: 4px solid var(--red); background: var(--red-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .formula {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 14px 18px; text-align: center; font-size: 17px; margin: 14px auto;
+    font-family: Consolas, "Cambria Math", serif; max-width: 640px; letter-spacing: 1px;
+  }
+  .formula i { color: #fbbf24; font-style: italic; }
+  .formula b { color: #7dd3fc; font-weight: 600; }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--green); text-decoration: none; }
+  .toc a:hover { text-decoration: none; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+  /* 垂直流程图(vflow) */
+  .vflow { display: flex; flex-direction: column; align-items: center; margin: 16px 0 4px; }
+  .vf-box {
+    background: var(--card); border: 1.5px solid #6ee7b7; border-radius: 10px;
+    padding: 8px 16px; text-align: center; min-width: 340px; max-width: 700px;
+    box-shadow: 0 1px 4px rgba(5,150,105,.10); font-size: 14px;
+  }
+  .vf-box .vf-sub { font-size: 12.5px; color: var(--muted); }
+  .vf-dim {
+    display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+    border-radius: 6px; padding: 2px 10px; margin-top: 6px;
+  }
+  .vf-arrow { display: flex; flex-direction: column; align-items: center; padding: 3px 0; }
+  .vf-arrow .lbl {
+    background: var(--orange-soft); color: var(--orange); border: 1px solid #fcd34d;
+    font-size: 12px; border-radius: 999px; padding: 1px 12px; margin: 2px 0; text-align: center;
+  }
+  .vf-arrow .down { color: #94a3b8; font-size: 16px; line-height: 1; }
+  .vf-nest {
+    border: 1.5px dashed var(--purple); background: #faf8ff;
+    border-radius: 10px; padding: 10px 14px; max-width: 760px; width: 100%;
+  }
+  .vf-nest h5 { margin: 0 0 4px; color: var(--purple); font-size: 13.5px; text-align: center; }
+  /* 并联分支(ASPP) */
+  .par { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 10px 0; width: 100%; }
+  .par .br {
+    flex: 1 1 108px; max-width: 150px; background: var(--card); border: 1.5px solid;
+    border-radius: 10px; padding: 8px 6px; text-align: center; font-size: 12.5px;
+  }
+  .par .br b { display: block; font-size: 13px; }
+  .par .br small { color: var(--muted); font-size: 11.5px; line-height: 1.45; display: block; }
+  .par .br.c1 { border-color: #3b82f6; background: #eff6ff; }
+  .par .br.c2 { border-color: #10b981; background: #ecfdf5; }
+  .par .br.c3 { border-color: #f59e0b; background: #fffbeb; }
+  .par .br.c4 { border-color: #ef4444; background: #fef2f2; }
+  .par .br.c5 { border-color: #7c3aed; background: #f5f3ff; }
+  /* 符号卡片 */
+  .syms { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+  @media (max-width: 760px) { .syms { grid-template-columns: 1fr; } }
+  .sym { border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 14px; background: var(--card); }
+  .sym .sname { font-family: Consolas, "Cambria Math", serif; font-size: 15px; font-weight: 700; }
+  .sym .sname.blue { color: var(--accent); } .sym .sname.green { color: var(--green); }
+  .sym .sname.orange { color: var(--orange); } .sym .sname.purple { color: var(--purple); }
+  .sym .sname.red { color: var(--red); } .sym .sname.teal { color: #0d9488; }
+  .sym p { font-size: 13.5px; margin: 4px 0 0; }
+  .center { text-align: center; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+  svg text { font-family: inherit; }
+  .qa { background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px 22px; margin: 14px 0; }
+  .qa b.tag { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>BEV 感知头 · 基于深度的视图变换</h1>
+  <p>论文原文:深度网络预测逐像素深度分布 D,把单尺度图像特征 F 沿相机射线"撒"进 3D 体积 —— 公式 (2)</p>
+  <p class="sub">依据:论文 §BEV Perception Head(Eq. 2)+ 官方仓库 src/qwen_drive_perception/view_transform.py(UVTR 实现)、configuration_perception.py、docs/perception.md,所有数字均经代码核对。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#why">① 为什么需要这一步</a> ·
+  <a href="#overview">② 全流程总览</a> ·
+  <a href="#depthnet">③ 深度网络 DepthNet</a> ·
+  <a href="#formula">④ 公式逐项拆解</a> ·
+  <a href="#example">⑤ 一个体素的完整例子</a> ·
+  <a href="#scatter">⑥ 代码怎么做:反向撒格子</a> ·
+  <a href="#output">⑦ 输出:保留高度的 3D 体积</a> ·
+  <a href="#numbers">⑧ 数字速查表</a> ·
+  <a href="#faq">⑨ 常见疑问</a>
+</div>
+
+<!-- ================= ① 为什么 ================= -->
+<h2 id="why">① 为什么需要这一步:相机是 2D 的,驾驶需要 3D</h2>
+<div class="card">
+  <p>环视相机拍到的图像是<b>二维的</b>,但占用栅格、3D 检测、轨迹规划都发生在<b>三维空间</b>里。中间隔着一道鸿沟:<b>一个像素不知道自己离车多远</b>。同一格特征,可能是 3 m 外的锥桶,也可能是 40 m 外的卡车。</p>
+  <svg viewBox="0 0 860 330" width="100%" style="max-width:860px">
+    <!-- road -->
+    <rect x="0" y="270" width="860" height="60" fill="#e2e8f0"/>
+    <!-- camera -->
+    <rect x="18" y="140" width="52" height="34" rx="6" fill="#1f2430"/>
+    <circle cx="44" cy="157" r="9" fill="#93c5fd"/>
+    <text x="44" y="130" text-anchor="middle" font-size="13" fill="#1f2430">相机(自车)</text>
+    <!-- image plane strip -->
+    <rect x="92" y="120" width="10" height="74" rx="2" fill="#334155"/>
+    <text x="97" y="108" text-anchor="middle" font-size="12" fill="#5b6472">图像平面</text>
+    <!-- ray -->
+    <line x1="102" y1="157" x2="820" y2="157" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 5"/>
+    <!-- depth ticks -->
+    <g font-size="11.5" fill="#5b6472">
+      <line x1="180" y1="150" x2="180" y2="164" stroke="#94a3b8" stroke-width="2"/><text x="180" y="182" text-anchor="middle">1 m</text>
+      <line x1="330" y1="150" x2="330" y2="164" stroke="#94a3b8" stroke-width="2"/><text x="330" y="182" text-anchor="middle">5 m</text>
+      <line x1="470" y1="150" x2="470" y2="164" stroke="#94a3b8" stroke-width="2"/><text x="470" y="182" text-anchor="middle">11 m</text>
+      <line x1="610" y1="150" x2="610" y2="164" stroke="#94a3b8" stroke-width="2"/><text x="610" y="182" text-anchor="middle">25 m</text>
+      <line x1="800" y1="150" x2="800" y2="164" stroke="#94a3b8" stroke-width="2"/><text x="800" y="182" text-anchor="middle">60 m</text>
+    </g>
+    <!-- car at 11m -->
+    <g>
+      <rect x="430" y="88" width="86" height="44" rx="8" fill="#3b82f6"/>
+      <rect x="443" y="96" width="38" height="18" rx="4" fill="#bfdbfe"/>
+      <circle cx="448" cy="134" r="7" fill="#1f2430"/><circle cx="498" cy="134" r="7" fill="#1f2430"/>
+      <text x="473" y="76" text-anchor="middle" font-size="12.5" fill="#1f2430">真实物体:轿车 @ 11.2 m</text>
+    </g>
+    <!-- feature copies along ray with probability bars -->
+    <g>
+      <rect x="216" y="140" width="20" height="6" rx="2" fill="#f59e0b"/>
+      <text x="226" y="134" text-anchor="middle" font-size="10.5" fill="#d97706">0.02</text>
+      <rect x="296" y="132" width="20" height="14" rx="2" fill="#f59e0b"/>
+      <text x="306" y="126" text-anchor="middle" font-size="10.5" fill="#d97706">0.06</text>
+      <rect x="386" y="118" width="20" height="28" rx="2" fill="#f59e0b"/>
+      <text x="396" y="112" text-anchor="middle" font-size="10.5" fill="#d97706">0.14</text>
+      <rect x="466" y="96" width="20" height="50" rx="2" fill="#059669"/>
+      <text x="476" y="90" text-anchor="middle" font-size="11" font-weight="bold" fill="#059669">0.62</text>
+      <rect x="556" y="136" width="20" height="10" rx="2" fill="#f59e0b"/>
+      <text x="566" y="130" text-anchor="middle" font-size="10.5" fill="#d97706">0.09</text>
+      <rect x="686" y="142" width="20" height="4" rx="2" fill="#f59e0b"/>
+      <text x="696" y="136" text-anchor="middle" font-size="10.5" fill="#d97706">0.01</text>
+    </g>
+    <text x="430" y="222" text-anchor="middle" font-size="13.5" fill="#1f2430">
+      网络不猜"一个距离",而是给整条射线上的 118 个深度档各配一个概率 D(总和 = 1)
+    </text>
+    <text x="430" y="246" text-anchor="middle" font-size="13.5" fill="#1f2430">
+      特征 F 按 D 加权撒到射线上 —— 概率大的深度分到多,概率小的分到少
+    </text>
+  </svg>
+  <div class="legend">
+    <span><span class="sw" style="background:#059669"></span>分对位置的权重(撞上真物体)</span>
+    <span><span class="sw" style="background:#f59e0b"></span>撒偏的权重(落在空气里,后续学习压低)</span>
+  </div>
+  <div class="good"><b>一句话:</b>这就是 "depth-based view transform"(深度视图变换)。学术源流:Philion &amp; Fidler, 2020(Lift-Splat-Shoot,思想源头)与 Li et al., 2022c(UVTR,本仓库采用的实现);本仓库用的是 UVTR 风格的视锥 + 体素池化实现,详见 05 篇对比。</div>
+</div>
+
+<!-- ================= ② 总览 ================= -->
+<h2 id="overview">② 全流程总览:从图像特征到 3D 体积</h2>
+<div class="card">
+  <p>下面每一步的维数都来自仓库真实配置(896×512 固定输入,embed_dim = 256):</p>
+  <div class="vflow">
+    <div class="vf-box"><b>F<sub>v</sub> 单尺度图像特征</b><br><span class="vf-sub">ViT 视觉塔输出的 patch 特征(<b>合并前</b>的细格),经恒等适配层 vit_neck 调成 256 通道 —— 论文强调 "single-scale … without a feature pyramid",没有多尺度金字塔</span><br><span class="vf-dim">[B×N, 256, 32, 56]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">DepthNet:估深度</span></div>
+    <div class="vf-box"><b>3 × 残差块 + ASPP(空洞空间金字塔)</b><br><span class="vf-sub">对每个特征格输出 118 个深度分数(logits)</span><br><span class="vf-dim">[B×N, 118, 32, 56]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">softmax(沿 118 个深度档)</span></div>
+    <div class="vf-box"><b>深度分布 D</b><br><span class="vf-sub">每个格子上,118 档深度的概率分布(1.0 – 60.0 m,每 0.5 m 一档)。<b>没有任何深度标签监督</b></span><br><span class="vf-dim">[B×N, 118, 32, 56],每格 118 个数,和为 1</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">体素池化 voxel_pool_depth(CUDA 核):按 D 把 F 沿射线撒进 3D</span></div>
+    <div class="vf-box"><b>3D 特征体积 V(自车坐标系)</b><br><span class="vf-sub">覆盖自车周围 102.4 m × 102.4 m × 10.4 m;<b>保留了高度维</b> → 供占用预测用</span><br><span class="vf-dim">[B, 256, 16, 200, 200]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">3 × Conv3d 平滑 → 交给 BEV 编码器 / 占用细化器</span></div>
+    <div class="vf-box"><b>下游:3D 检测 · 占用栅格 · BEV 建图</b><br><span class="vf-sub">一次前向同时输出三类感知结果(docs/perception.md)</span></div>
+  </div>
+</div>
+
+<!-- ================= ③ DepthNet ================= -->
+<h2 id="depthnet">③ 深度网络 DepthNet:残差块 + 空洞空间金字塔</h2>
+<div class="card">
+  <p>输入是 256 通道、56×32 格的特征图;输出是在同一空间格上展开成 <b>118 个深度档</b>的分数。内部结构:</p>
+  <div class="vflow">
+    <div class="vf-box" style="border-color:#93c5fd"><b>reduce 3×3 卷积</b><br><span class="vf-sub">通道保持 256,GroupNorm + ReLU</span><br><span class="vf-dim">[B×N, 256, 32, 56]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span></div>
+    <div class="vf-box"><b>残差块 × 3(BasicBlock)</b><br><span class="vf-sub">每个块:两层 3×3 卷积 + 跳跃相加,细化特征</span><br><span class="vf-dim">[B×N, 256, 32, 56]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span></div>
+    <div class="vf-nest">
+      <h5>ASPP 空洞空间金字塔 —— 5 条并联分支,感受野由小到大</h5>
+      <div class="par">
+        <div class="br c1"><b>1×1 卷积</b><small>膨胀率 1<br>看"这一点"</small></div>
+        <div class="br c2"><b>3×3 卷积</b><small>膨胀率 6<br>看近处一圈</small></div>
+        <div class="br c3"><b>3×3 卷积</b><small>膨胀率 12<br>看中景</small></div>
+        <div class="br c4"><b>3×3 卷积</b><small>膨胀率 18<br>看远景大范围</small></div>
+        <div class="br c5"><b>全局平均池化</b><small>整张图缩成 1 格<br>看全局语境</small></div>
+      </div>
+      <p class="center" style="font-size:12.5px;color:#5b6472;margin:4px 0">5 路各出 96 通道 → 拼接 480 通道 → 1×1 卷积压回 256 通道</p>
+    </div>
+    <div class="vf-arrow"><span class="down">▼</span></div>
+    <div class="vf-box"><b>1×1 卷积 → 118 通道</b><br><span class="vf-sub">每个空间格输出 118 个深度分数</span><br><span class="vf-dim">[B×N, 118, 32, 56]</span></div>
+  </div>
+  <p><b>为什么需要多尺度感受野?</b> 估计深度本质是"看上下文猜距离":近处物体在图里占很多格,远处物体只占一两格。小感受野够判断近处,大感受野才能利用远处物体的尺寸、与地面的接触关系等线索 —— ASPP 用不同膨胀率的空洞卷积一次性把四种视野都铺好。</p>
+  <div class="note"><b>关键事实 —— 无深度监督:</b>整个训练里<b>没有激光雷达深度标签</b>去直接教 D(仓库中不存在任何深度损失项)。D 完全靠下游 3D 检测 / 占用 / 建图损失<b>间接</b>学出来:深度撒错了 → 特征落到错误位置 → 检测头预测变差 → 梯度回头修正深度分布。这正是论文说的 "without depth supervision"。</div>
+</div>
+
+<!-- ================= ④ 公式 ================= -->
+<h2 id="formula">④ 公式 (2) 逐项拆解</h2>
+<div class="card">
+  <div class="formula">V(<i>p</i>) = <b>Σ</b><sub><i>i</i> ∈ Ω(<i>p</i>)</sub>&nbsp; <i>D<sub>i</sub></i>(<i>u<sub>i</sub></i>, <i>v<sub>i</sub></i>, <i>d<sub>i</sub></i>) · <i>F</i><sup><i>i</i></sup><sub>v</sub>(<i>u<sub>i</sub></i>, <i>v<sub>i</sub></i>)</div>
+  <div class="syms">
+    <div class="sym"><span class="sname purple">V(p)</span><p>输出的 3D 体积在体素 <span class="mono">p</span> 处的特征(256 维)。整个 V 就是所有体素各自做一次这个求和。</p></div>
+    <div class="sym"><span class="sname red">p · Ω(p)</span><p><span class="mono">p</span> 是感知范围内一个体素中心(自车前后左右各 51.2 m,高 −5.0 ~ 5.4 m);<span class="mono">Ω(p)</span> 是<b>能看到 p 的相机集合</b> —— 环视 6 个(nuScenes)或 8 个(nuPlan/OpenScene),通常只有 1~3 个相机的视野罩得住同一个体素。</p></div>
+    <div class="sym"><span class="sname green">P<sup>i</sup> → (u<sub>i</sub>, v<sub>i</sub>)</span><p>用第 <span class="mono">i</span> 个相机的标定矩阵把 <span class="mono">p</span> 投影到那张图像上,得到像素坐标;按 16 px 一格,换算成"落在第几行第几列的特征格"。(代码里折叠成一条 4×4 的 <span class="mono">lidar2img</span> 矩阵。)</p></div>
+    <div class="sym"><span class="sname orange">d<sub>i</sub></span><p>体素 <span class="mono">p</span> 离第 <span class="mono">i</span> 个相机多远,对应 118 档深度里的哪一档(每档 0.5 m)。</p></div>
+    <div class="sym"><span class="sname blue">D<sub>i</sub>(u<sub>i</sub>,v<sub>i</sub>,d<sub>i</sub>)</span><p><b>权重</b>:该相机图像上那一格预测出的深度分布里,<span class="mono">d<sub>i</sub></span> 这一档的概率 —— 一个 0~1 的标量。含义:"这个像素认为物体出现在 p 那个距离上的把握"。</p></div>
+    <div class="sym"><span class="sname teal">F<sub>v</sub><sup>i</sup>(u<sub>i</sub>,v<sub>i</sub>)</span><p><b>内容</b>:该相机图像上那格的 256 维特征(长什么样、是什么东西的信息)。</p></div>
+  </div>
+  <div class="good"><b>直觉:</b>体素 p 的特征 = 把每个"看得到它"的相机在图像上对应位置的特征<b>按深度把握加权借过来</b>再相加。近处概率高 → 多借;概率低 → 少借。</div>
+</div>
+
+<!-- ================= ⑤ 例子 ================= -->
+<h2 id="example">⑤ 一个体素的完整例子</h2>
+<div class="card">
+  <p>取自车左前方一个体素 <span class="mono">p</span> = (前方 10.2 m, 左侧 5.1 m, 高 1.3 m),看它怎么被"填上":</p>
+  <svg viewBox="0 0 860 400" width="100%" style="max-width:860px">
+    <!-- top-down view -->
+    <rect x="0" y="0" width="560" height="400" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="280" y="26" text-anchor="middle" font-size="14.5" font-weight="bold" fill="#1f2430">俯视图:哪些相机看得到 p?→ Ω(p)</text>
+    <!-- perception range -->
+    <rect x="80" y="60" width="400" height="330" fill="none" stroke="#cbd5e1" stroke-dasharray="5 4"/>
+    <g font-size="11" fill="#94a3b8">
+      <text x="280" y="52" text-anchor="middle">感知范围 102.4 m × 102.4 m</text>
+    </g>
+    <!-- camera FOV wedges (6 cams, front = ±35°, front-left = 20°~90°) -->
+    <g opacity="0.85">
+      <path d="M280,290 L142,93 L418,93 Z" fill="#93c5fd" opacity="0.45"/>
+      <path d="M280,290 L194,55 L40,282 Z" fill="#6ee7b7" opacity="0.5"/>
+      <path d="M280,290 L366,55 L520,282 Z" fill="#cbd5e1" opacity="0.5"/>
+      <path d="M280,290 L40,282 L150,360 Z" fill="#cbd5e1" opacity="0.5"/>
+      <path d="M280,290 L150,360 L410,360 Z" fill="#cbd5e1" opacity="0.5"/>
+      <path d="M280,290 L410,360 L520,282 Z" fill="#cbd5e1" opacity="0.5"/>
+    </g>
+    <g font-size="11.5" fill="#334155">
+      <text x="280" y="112" text-anchor="middle" font-weight="bold" fill="#1d4ed8">前视</text>
+      <text x="157" y="204" text-anchor="middle" font-weight="bold" fill="#047857">左前视</text>
+      <text x="403" y="204" text-anchor="middle" fill="#64748b">右前视</text>
+      <text x="167" y="350" text-anchor="middle" fill="#64748b">左后视</text>
+      <text x="280" y="356" text-anchor="middle" fill="#64748b">后视</text>
+      <text x="393" y="350" text-anchor="middle" fill="#64748b">右后视</text>
+    </g>
+    <!-- ego -->
+    <rect x="264" y="274" width="32" height="52" rx="7" fill="#1f2430"/>
+    <rect x="272" y="282" width="16" height="14" rx="3" fill="#93c5fd"/>
+    <text x="280" y="342" text-anchor="middle" font-size="12" fill="#1f2430">自车</text>
+    <!-- voxel p -->
+    <line x1="280" y1="290" x2="204" y2="138" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <circle cx="204" cy="138" r="9" fill="#dc2626"/>
+    <circle cx="204" cy="138" r="14" fill="none" stroke="#dc2626" opacity="0.4"/>
+    <text x="220" y="130" font-size="12.5" font-weight="bold" fill="#dc2626">体素 p(前10.2m, 左5.1m, 高1.3m)</text>
+    <!-- right column: steps -->
+    <g font-size="13" fill="#1f2430">
+      <text x="588" y="42" font-size="14.5" font-weight="bold">逐步计算</text>
+      <text x="588" y="76">① p 落在 <tspan fill="#1d4ed8" font-weight="bold">前视</tspan> 和 <tspan fill="#047857" font-weight="bold">左前视</tspan></text>
+      <text x="604" y="98">的视野交叠区 → Ω(p) = {前视, 左前视}</text>
+      <text x="588" y="132">② 前视:标定矩阵投影 → 落到图像</text>
+      <text x="604" y="154">第 20 行第 30 列那格(16px 一格)</text>
+      <text x="588" y="188">③ p 离前视 ≈ 11.4 m → 第 20 档深度</text>
+      <text x="604" y="210">(1.0 + 20 × 0.5 = 11.0~11.5 m)</text>
+      <text x="588" y="244">④ 查该格深度分布 D:第 20 档概率</text>
+      <text x="604" y="266">= <tspan fill="#059669" font-weight="bold">0.62</tspan>;左前视同算得 <tspan fill="#059669" font-weight="bold">0.18</tspan></text>
+      <text x="588" y="300">⑤ 加权求和:</text>
+      <text x="604" y="326" font-family="Consolas,monospace" font-size="12.5">V(p) = 0.62·F<tspan font-size="9" dy="3">前视</tspan><tspan dy="-3">(u,v)</tspan> + 0.18·F<tspan font-size="9" dy="3">左前</tspan><tspan dy="-3">(u,v)</tspan></text>
+      <text x="604" y="352" fill="#5b6472" font-size="12">(其余相机投不进 p,不参与求和)</text>
+    </g>
+  </svg>
+  <div class="good"><b>这就是论文那句话的含义:</b>"This operation distributes image features along camera rays according to the predicted depth probabilities" —— 每格特征不是放到一个点上,而是按 D 在 118 个深度档上各放一份加权副本;真实物体的深度档自然拿到大头。</div>
+</div>
+
+<!-- ================= ⑥ scatter ================= -->
+<h2 id="scatter">⑥ 代码怎么做:把"体素找相机"反过来,变成"格子找体素"</h2>
+<div class="card">
+  <p>论文按<b>体素</b>叙述(每个体素去各相机查询),但逐体素投影太慢。代码(UVTR 风格)把方向反过来:预先铺好一张<b>视锥网格</b>,把每个视锥格子<b>反投影</b>进 3D,直接命中它该去的体素,再由 GPU 核并行累加。两种方向在数学上完全等价 —— 累加起来就是公式 (2) 的 Σ。</p>
+  <div class="vflow">
+    <div class="vf-box" style="border-color:#93c5fd"><b>预生成视锥网格(每相机一张,推理时复用)</b><br><span class="vf-sub">56 列 × 32 行 × 118 档 = 211,456 格;每格代表"图像上这一格、深度在这一档"的候选 3D 点</span><br><span class="vf-dim">56 × 32 × 118(步长 16px, 16px, 0.5m)</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">每个格子 × inv(lidar2img) 反投影 → 相机系 → lidar2ego → 自车坐标系</span></div>
+    <div class="vf-box"><b>得到每个格子的 3D 坐标 → 换算体素编号</b><br><span class="vf-sub">减去感知范围原点、除以体素尺寸、取整:0.512 × 0.512 × 0.65 m 一格</span><br><span class="vf-dim">(x, y, z) ∈ [0,200) × [0,200) × [0,16)</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">出界格子打上 mask 直接丢弃(落在感知范围外的)</span></div>
+    <div class="vf-box"><b>voxel_pool_depth(CUDA 核)按编号散射累加</b><br><span class="vf-sub">命中的体素:V[该格] += D(概率) × F(特征)。多个格子命中同一体素就自动累加 —— 公式的 Σ 由硬件完成;没被任何格子命中的体素保持全 0(空)</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">按时间帧求和 → 3 × Conv3d(3×3×3) + BN + ReLU 平滑填充</span></div>
+    <div class="vf-box"><b>成品 3D 体积 V</b><br><span class="vf-dim">[B, 256, 16, 200, 200]</span></div>
+  </div>
+  <table>
+    <tr><th>视角</th><th>循环单位</th><th>特点</th></tr>
+    <tr><td>论文叙述(gather)</td><td>逐体素:去 6~8 个相机各查一次</td><td>直觉清晰,但要处理"投影落在外面"的相机</td></tr>
+    <tr><td>代码实现(scatter)</td><td>逐视锥格子:反投影一次、直接入座</td><td>GPU 并行友好,出界格子 mask 掉即可;相机数无关</td></tr>
+  </table>
+</div>
+
+<!-- ================= ⑦ 输出 ================= -->
+<h2 id="output">⑦ 输出:一个保留了高度的 3D 体积</h2>
+<div class="card">
+  <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+    <div>
+      <svg viewBox="0 0 420 300" width="100%">
+        <!-- isometric voxel volume -->
+        <g>
+          <!-- top face -->
+          <polygon points="60,120 230,60 330,100 160,160" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
+          <!-- grid lines top -->
+          <g stroke="#059669" stroke-width="0.5" opacity="0.45">
+            <line x1="102" y1="105" x2="202" y2="145"/><line x1="145" y1="90" x2="245" y2="130"/><line x1="188" y1="75" x2="288" y2="115"/>
+            <line x1="88" y1="133" x2="260" y2="73"/><line x1="117" y1="146" x2="289" y2="86"/>
+          </g>
+          <!-- front-left face -->
+          <polygon points="60,120 160,160 160,260 60,220" fill="#a7f3d0" stroke="#059669" stroke-width="1.5"/>
+          <g stroke="#059669" stroke-width="0.5" opacity="0.5">
+            <line x1="60" y1="145" x2="160" y2="185"/><line x1="60" y1="170" x2="160" y2="210"/><line x1="60" y1="195" x2="160" y2="235"/>
+          </g>
+          <!-- front-right face -->
+          <polygon points="160,160 330,100 330,200 160,260" fill="#6ee7b7" stroke="#059669" stroke-width="1.5"/>
+          <g stroke="#059669" stroke-width="0.5" opacity="0.5">
+            <line x1="160" y1="185" x2="330" y2="125"/><line x1="160" y1="210" x2="330" y2="150"/><line x1="160" y1="235" x2="330" y2="175"/>
+          </g>
+        </g>
+        <g font-size="12.5" fill="#1f2430">
+          <text x="243" y="52" text-anchor="middle">顶面 200 × 200 格(0.512 m 一格)</text>
+          <text x="376" y="160" text-anchor="middle" font-size="12" fill="#047857">高 16 层</text>
+          <text x="376" y="178" text-anchor="middle" font-size="12" fill="#047857">0.65 m × 16</text>
+          <text x="376" y="196" text-anchor="middle" font-size="12" fill="#047857">= 10.4 m</text>
+          <text x="210" y="286" text-anchor="middle" font-size="13">自车居中:前后左右各 51.2 m,高 −5.0 ~ 5.4 m</text>
+        </g>
+      </svg>
+      <p class="center mono" style="font-size:13px">V = [B, 256, 16, 200, 200]</p>
+    </div>
+    <div>
+      <p><b>为什么强调"保留高度"?</b> 论文原文:"The resulting volume V retains the height dimension for occupancy prediction." BEV 俯视图把高度压掉了,分不清"悬在 3 m 高的树枝"和"路面上的石头";占用预测恰恰需要知道<b>每一层高度上有没有东西</b> —— 所以体积不压扁,留足 16 层。</p>
+      <div class="vflow">
+        <div class="vf-box" style="border-color:#93c5fd"><b>3D 体积 V</b><br><span class="vf-dim">[B, 256, 16, 200, 200]</span></div>
+        <div class="vf-arrow"><span class="down">▼</span></div>
+        <div class="vf-nest" style="max-width:420px">
+          <h5>两条出路</h5>
+          <p style="font-size:13px;margin:4px 0"><span class="pill purple">压扁投影</span> 16 层拼进通道 → 1×1 卷积压回 256 维 → 200×200 的 <b>BEV token</b>,交给 BEVFormer 编码器 → 3D 检测(最多 300 框)+ BEV 建图(60 m × 30 m)</p>
+          <p style="font-size:13px;margin:4px 0"><span class="pill green">保留 3D</span> 经占用细化器(3D U-Net)→ <b>占用栅格</b> 200 × 200 × 16,10 类(7 类障碍物 + 可行驶区域 / 背景 / 空)</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= ⑧ 数字表 ================= -->
+<h2 id="numbers">⑧ 数字速查表(全部取自仓库代码)</h2>
+<div class="card">
+  <table>
+    <tr><th>项目</th><th>值</th><th>出处</th></tr>
+    <tr><td>感知输入分辨率(固定)</td><td>896 × 512(6 相机 nuScenes / 8 相机 nuPlan)</td><td>docs/perception.md</td></tr>
+    <tr><td>特征格</td><td>56 × 32 格,每格 16 px;单尺度,无金字塔</td><td>frustum_size (16,16,·)、vit_neck scale_factors=(1.0,)</td></tr>
+    <tr><td>特征通道 C</td><td>256(ViT 的 1024 维经恒等适配压到 256)</td><td>embed_dim = 256</td></tr>
+    <tr><td>深度档数 N<sub>d</sub></td><td><b>118</b> 档,1.0 – 60.0 m,每 0.5 m 一档</td><td>depth_dim = (60 − 1) / 0.5 = 118</td></tr>
+    <tr><td>视锥格子</td><td>56 × 32 × 118 = 211,456 格 / 相机</td><td>frustum_range (0,0,1.0)→(896,512,60.0)</td></tr>
+    <tr><td>ASPP 分支</td><td>膨胀率 1 / 6 / 12 / 18 + 全局池化,各 96 通道</td><td>ASPP(dilations=[1,6,12,18])</td></tr>
+    <tr><td>体素网格</td><td>200 × 200 × 16;体素 0.512 × 0.512 × 0.65 m</td><td>det_voxel_size、occ_pillar_h = 16</td></tr>
+    <tr><td>感知范围</td><td>102.4 × 102.4 × 10.4 m(x,y ∈ ±51.2 m,z ∈ −5.0 ~ 5.4 m)</td><td>DET_PC_RANGE</td></tr>
+    <tr><td>3D 平滑</td><td>3 × Conv3d(256→256, 3×3×3) + BN + ReLU</td><td>feat_encoding()</td></tr>
+    <tr><td>深度监督</td><td><b>无</b>(仅靠下游损失间接学习)</td><td>全仓库无深度损失项;论文 "without depth supervision"</td></tr>
+  </table>
+</div>
+
+<!-- ================= ⑨ FAQ ================= -->
+<h2 id="faq">⑨ 常见疑问</h2>
+<div class="qa"><b class="tag">Q1:</b> 论文说 "without a feature pyramid",为什么不用多尺度特征?<br>
+<b>A:</b> 传统检测头依赖 FPN 多尺度金字塔;这里走深度 lift 路线的 ViT 流只有一份特征(适配层是恒等,<span class="mono">scale_factors=(1.0,)</span>),深度信息由 DepthNet 自己估。多尺度适配(4 个尺度)留给 LLM 特征流,两者在 BEV 编码器里再融合。</div>
+
+<div class="qa"><b class="tag">Q2:</b> 没有深度标签,D 怎么可能学得准?<br>
+<b>A:</b> 间接监督。深度撒错 → 特征叠到错误位置 → 检测/占用预测变差 → 损失反传时同时修正 D。实践中这类自学深度分布往往在物体真实距离附近出现尖峰,因为只有撒对了、检测头才好用。</div>
+
+<div class="qa"><b class="tag">Q3:</b> 论文说"体素投影到图像",代码为什么是"视锥反投影"?<br>
+<b>A:</b> 同一个对应关系的两种遍历方向。逐体素 gather 要对每个体素遍历相机、处理投影出界;逐格子 scatter 每格只算一次反投影,GPU 并行高效,出界格子 mask 掉即可。累加语义相同,结果一致。</div>
+
+<div class="qa"><b class="tag">Q4:</b> 这里的特征和之前分析的 VLM 视觉 token 是同一批吗?<br>
+<b>A:</b> 出自同一次 ViT 前向,但取的位置不同:感知头通过 hook 在 <b>2×2 合并之前</b>取 patch 特征,所以是 56 × 32 的细格(对齐 16 px patch);而进 LLM 的视觉 token 是合并后的 28 × 16(每 token 32×32 px,见 03 篇)。细格保留了更高的空间精度,适合逐格估深度。</div>
+
+<div class="qa"><b class="tag">Q5:</b> 一个体素会混进几个相机的特征?冲突吗?<br>
+<b>A:</b> Ω(p) 通常含 1~3 个相机(视野交叠区)。不冲突 —— 每个相机只在自己图像范围内贡献一项加权特征,求和即融合多视角证据;视野外的相机根本不参与。</div>
+
+<footer>
+  依据:论文 arXiv:2609.00111 §BEV Perception Head(Eq. 2);QwenLM/Qwen-Drive-1.0 仓库 src/qwen_drive_perception/view_transform.py(DepthNet、Uni3DVoxelPoolDepth)、configuration_perception.py、modeling_perception.py、docs/perception.md。所有维数与常量均经代码核对。
+</footer>
+
+</div>
+</body>
+</html>

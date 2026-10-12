@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UVTR vs LSS:两种深度视图变换的对比</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #7c2d12 0%, #ea580c 55%, #f59e0b 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 27px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 12px; }
+  h2 { font-size: 21px; margin: 42px 0 6px; padding-left: 12px; border-left: 5px solid #ea580c; }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  .vf-dim {
+    display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+    border-radius: 6px; padding: 2px 10px; margin-top: 6px;
+  }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .toc { font-size: 14px; }
+  .toc a { color: #c2410c; text-decoration: none; }
+  .toc a:hover { text-decoration: none; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .center { text-align: center; }
+  svg text { font-family: inherit; }
+  .qa { background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px 22px; margin: 14px 0; }
+  .qa b.tag { color: var(--accent); }
+  /* 对比双栏 */
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  @media (max-width: 800px) { .vs { grid-template-columns: 1fr; } }
+  .vs-box { border-radius: 12px; padding: 16px 20px; height: 100%; }
+  .vs-box.a { background: #eff6ff; border: 1.5px solid #93c5fd; }
+  .vs-box.b { background: #fff7ed; border: 1.5px solid #fdba74; }
+  .vs-box h4 { margin: 0 0 6px; font-size: 16px; }
+  .vs-box p { font-size: 13.5px; margin: 4px 0; }
+  .vs-box .vf-dim { margin-top: 2px; }
+  /* 垂直流程图(vflow) */
+  .vflow { display: flex; flex-direction: column; align-items: center; margin: 16px 0 4px; }
+  .vf-box {
+    background: var(--card); border: 1.5px solid #fdba74; border-radius: 10px;
+    padding: 8px 16px; text-align: center; min-width: 340px; max-width: 700px;
+    box-shadow: 0 1px 4px rgba(234,88,12,.10); font-size: 14px;
+  }
+  .vf-box .vf-sub { font-size: 12.5px; color: var(--muted); }
+  .vf-arrow { display: flex; flex-direction: column; align-items: center; padding: 3px 0; }
+  .vf-arrow .lbl {
+    background: var(--orange-soft); color: var(--orange); border: 1px solid #fcd34d;
+    font-size: 12px; border-radius: 999px; padding: 1px 12px; margin: 2px 0; text-align: center;
+  }
+  .vf-arrow .down { color: #94a3b8; font-size: 16px; line-height: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>UVTR vs LSS:深度视图变换的两条路线</h1>
+  <p>同一个思想 —— "用预测的深度把图像特征撒进 3D" —— 两种不同的工程化:一个直接拍扁成 BEV,一个先建 3D 体素再作打算</p>
+  <p class="sub">依据:论文引用原文(Li et al., 2022c; Philion &amp; Fidler, 2020)+ 官方仓库 src/qwen_drive_perception/view_transform.py;对比维度均结合本仓库实现核对。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#intro">① 先对齐引用:论文引的到底是谁</a> ·
+  <a href="#common">② 共同的思想</a> ·
+  <a href="#lss">③ LSS:Lift → Splat → Shoot</a> ·
+  <a href="#uvtr">④ UVTR:视锥格网 + 体素池化</a> ·
+  <a href="#diff">⑤ 核心差异对比</a> ·
+  <a href="#memory">⑥ 内存账:外积的代价</a> ·
+  <a href="#why">⑦ 本仓库为什么选 UVTR 路线</a> ·
+  <a href="#faq">⑧ 常见疑问</a>
+</div>
+
+<!-- ================= ① ================= -->
+<h2 id="intro">① 先对齐引用:论文引的到底是谁</h2>
+<div class="card">
+  <p>论文原文写的是:"a depth-based view transform (<b>Li et al., 2022c</b>; <b>Philion &amp; Fidler, 2020</b>)"。查参考文献页:</p>
+  <table>
+    <tr><th>引用</th><th>真实论文</th><th>一句话</th></tr>
+    <tr><td><b>Philion &amp; Fidler, 2020</b></td><td><b>LSS</b> — Lift, Splat, Shoot(ECCV 2020)</td><td>这个思想的<b>开山之作</b>:外积提升 + 散射拍扁成 BEV</td></tr>
+    <tr><td><b>Li et al., 2022c</b></td><td><b>UVTR</b> — Unifying Voxel-based Representation with Transformer(NeurIPS 2022,Yanwei Li 等)</td><td><b>本仓库的实现蓝本</b>:深度预测 + 视锥体素池化,保留 3D 体素</td></tr>
+  </table>
+  <div class="note"><b>对照物说明:</b>这一对引用常常被记反 —— LSS 是 Philion &amp; Fidler 2020,<b>不是</b> Li;UVTR 是 Li et al. 2022c。仓库文件 view_transform.py 的 docstring 也自我声明:"UVTR view transform: depth prediction and voxel pooling",实现类叫 <span class="mono">Uni3DVoxelPoolDepth</span>("Uni3D" 正是 UVTR 里的模块名)。另外还有第三条路线 CaDDN(Li et al., 2021,分类深度 + 直接 BEV、<b>带</b>深度监督),本论文没引它,因为这里没有深度监督。</div>
+</div>
+
+<!-- ================= ② ================= -->
+<h2 id="common">② 共同的思想:同一家族的同一副骨架</h2>
+<div class="card">
+  <p>在分岔之前,两者走的是完全相同的四步 —— 这就是"深度提升(depth lift)家族"的共同骨架:</p>
+  <div class="vflow">
+    <div class="vf-box" style="border-color:#93c5fd"><b>图像特征 F</b><br><span class="vf-sub">每个像素格有一份内容向量:"这里长什么样"</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">深度网络:给每个像素格预测一个深度分布 D(118 档,和为 1,无深度标签监督)</span></div>
+    <div class="vf-box"><b>深度分布 D</b><br><span class="vf-sub">"这个东西在每个距离上的可能性" —— 方向有了,距离还悬着</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">按 D 把 F 撒到 3D:概率大的深度多放、概率小的少放</span></div>
+    <div class="vf-box"><b>散在 3D 空间里的加权特征点云</b><br><span class="vf-sub">两篇文章从这里开始分道扬镳:这些点堆到哪、怎么堆,决定了后面的一切</span></div>
+  </div>
+  <div class="good"><b>一句话记住分水岭:</b>LSS 把点<b>拍扁</b>进 2D 鸟瞰格(pillar,高度当场丢掉);UVTR 把点<b>码放</b>进 3D 体素格(高度保留)。其余几乎所有差异都是这一个选择的连锁反应。</div>
+</div>
+
+<!-- ================= ③ LSS ================= -->
+<h2 id="lss">③ LSS:Lift → Splat → Shoot</h2>
+<div class="card">
+  <p>名字就是它的三个步骤(第三步与感知无关,见 FAQ):</p>
+  <div class="vflow">
+    <div class="vf-box" style="border-color:#93c5fd"><b>输入:图像特征 + 深度分布</b><br><span class="vf-dim">F: [C=256, H=32, W=56] · D: [118, 32, 56]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">LIFT:每个像素做"深度分布 × 特征向量"的外积</span></div>
+    <div class="vf-box"><b>外积张量:每个像素生成 118 个带权 3D 点</b><br><span class="vf-sub">点 (u, v, d) 的特征 = D(u,v,d) × F(u,v) —— 深度概率直接乘进特征里;经相机内参/外参投影成 ego 系点云</span><br><span class="vf-dim">[118 × 32 × 56, C=256] / 相机 ≈ 5413 万元素</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">SPLAT:六相机点云汇总,按 ego 平面栅格求和池化(pillar)</span></div>
+    <div class="vf-box"><b>BEV 特征图:高度在这一步被压掉</b><br><span class="vf-sub">每个 BEV 格 = 落进它头顶"柱子"的所有点的特征和</span><br><span class="vf-dim">[C=256, H, W](2D)</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">SHOOT:BEV 特征喂给规划器(原论文的任务端,与本感知头无关)</span></div>
+  </div>
+  <p><b>要点:</b>LSS 的 Splat 是"柱状求和" —— 不管点在 3 m 高还是 10 m 高,只要平面位置相同就堆进同一个格。对它原论文的任务(鸟瞰语义分割 + 端到端规划)这够用;但对"这个格子里<b>哪个高度</b>有东西"的问题,信息在 Splat 那一步已经永久丢失了。</p>
+</div>
+
+<!-- ================= ④ UVTR ================= -->
+<h2 id="uvtr">④ UVTR:视锥格网 + 体素池化(本仓库的实现)</h2>
+<div class="card">
+  <p>同样的输入,UVTR 换了两件工具:<b>预生成的视锥地址表</b>代替逐点投影,<b>3D 体素散射</b>代替 2D pillar 求和:</p>
+  <div class="vflow">
+    <div class="vf-box" style="border-color:#93c5fd"><b>输入:同样的 F 和 D</b><br><span class="vf-dim">F: [C=256, H=32, W=56] · D: [118, 32, 56]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">查视锥地址表:56×32×118 = 211,456 格,每格预存"我该去 ego 体素网的哪个 (x,y,z)"</span></div>
+    <div class="vf-box"><b>fused CUDA 核散射累加</b><br><span class="vf-sub">kernel 按 (u,v) 取特征、按 d 取<b>DepthNet 已预测好的概率</b>(只取用,不再计算),乘完直接加进体素 —— 全程<b>不构造</b>外积中间张量。X、Y、Z 是体素索引,C 是通道数</span><br><span class="vf-dim">V: [C=256, X=200, Y=200, Z=16](3D!)</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">3 × Conv3d 平滑 → 一份体积,两条出路</span></div>
+    <div class="vf-box"><b>出路 1:压成 BEV token</b><br><span class="vf-sub">16 层拼进通道 → [4096, 200, 200](高度折叠进通道)→ 1×1 卷积 = 对每个 BEV 格做一次 4096→256 的全连接 → [256, 200, 200] → 展平;作为几何先验加到 BEVFormer 的 BEV query 上</span><br><span class="vf-dim">[40000, 256]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">出路 2:同一份体积进占用分支</span></div>
+    <div class="vf-box"><b>出路 2:3D 体素直接喂占用预测</b><br><span class="vf-sub">同一份 V:经 Conv3d(256→16)、重采样到占用网格,与 BEV 支路 concat → 3D U-Net 细化 → 200×200×16、10 类 —— 没有高度信息这条路就走不通</span><br><span class="vf-dim">[10, 200, 200, 16]</span></div>
+  </div>
+  <p style="font-size:14px;margin-top:16px"><b>把"fused kernel 现取现乘"画出来</b>(格子取 demo 前视标定核实过的例子:第 27 列、第 14 行、第 20 档,即 u=432 px、v=224 px、d=11.0 m;概率 0.62 为示意):</p>
+  <svg viewBox="0 0 860 452" width="100%" style="max-width:860px">
+    <defs>
+      <marker id="karr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker>
+      <marker id="garr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#059669"/></marker>
+      <marker id="tarr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#14b8a6"/></marker>
+    </defs>
+    <text x="30" y="36" font-size="13" font-weight="bold" fill="#1f2430">① 特征图 F [256, 32, 56]</text>
+    <rect x="30" y="48" width="180" height="120" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <g stroke="#93c5fd" stroke-width="1">
+      <line x1="60" y1="48" x2="60" y2="168"/><line x1="90" y1="48" x2="90" y2="168"/><line x1="120" y1="48" x2="120" y2="168"/><line x1="150" y1="48" x2="150" y2="168"/><line x1="180" y1="48" x2="180" y2="168"/>
+      <line x1="30" y1="78" x2="210" y2="78"/><line x1="30" y1="108" x2="210" y2="108"/><line x1="30" y1="138" x2="210" y2="138"/>
+    </g>
+    <rect x="120" y="78" width="30" height="30" fill="#f59e0b" opacity="0.9"/>
+    <text x="30" y="188" font-size="11.5" fill="#5b6472">按格 (u=27, v=14) 抽出 256 维向量</text>
+    <text x="30" y="240" font-size="13" font-weight="bold" fill="#1f2430">② 深度分布 D [118, 32, 56]</text>
+    <g stroke="#f59e0b" fill="#fffbeb">
+      <rect x="30" y="252" width="80" height="15" rx="3"/>
+      <rect x="30" y="272" width="80" height="15" rx="3"/>
+      <rect x="30" y="292" width="80" height="15" rx="3" fill="#f59e0b"/>
+      <rect x="30" y="312" width="80" height="15" rx="3"/>
+      <rect x="30" y="332" width="80" height="15" rx="3"/>
+    </g>
+    <text x="118" y="304" font-size="11.5" font-weight="bold" fill="#d97706">0.62(示意)</text>
+    <text x="30" y="368" font-size="11.5" fill="#5b6472">按 (d=20, v=14, u=27) 抽出 1 个标量 ——</text>
+    <text x="30" y="384" font-size="11.5" fill="#5b6472">概率是 DepthNet 早就预测好的,kernel 只取用</text>
+    <rect x="30" y="396" width="400" height="48" rx="8" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.5"/>
+    <text x="42" y="415" font-size="12.5" font-weight="bold" fill="#0f766e">③ 视锥地址表(预生成常量)</text>
+    <text x="42" y="435" font-size="12" fill="#334155" font-family="Consolas,monospace">(u,v,d) = (432, 224, 11.0 m) → 体素 (124, 100, 10)</text>
+    <circle cx="430" cy="118" r="17" fill="#fff" stroke="#ea580c" stroke-width="2"/>
+    <text x="430" y="126" text-anchor="middle" font-size="20" fill="#ea580c">×</text>
+    <line x1="212" y1="103" x2="408" y2="114" stroke="#64748b" stroke-width="1.5" marker-end="url(#karr)"/>
+    <line x1="115" y1="290" x2="412" y2="126" stroke="#64748b" stroke-width="1.5" marker-end="url(#karr)"/>
+    <line x1="449" y1="114" x2="592" y2="106" stroke="#059669" stroke-width="1.5" marker-end="url(#garr)"/>
+    <text x="523" y="94" text-anchor="middle" font-size="11.5" fill="#059669">0.62 × F = 256 维加权特征</text>
+    <text x="690" y="44" text-anchor="middle" font-size="13" font-weight="bold" fill="#1f2430">④ 散射累加进体素体积 V</text>
+    <polygon points="600,88 690,58 780,88 690,118" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2"/>
+    <polygon points="600,88 690,118 690,188 600,158" fill="#e2e8f0" stroke="#64748b" stroke-width="1.2"/>
+    <polygon points="690,118 780,88 780,158 690,188" fill="#cbd5e1" stroke="#64748b" stroke-width="1.2"/>
+    <polygon points="700,136 736,123 736,149 700,162" fill="#059669" opacity="0.9"/>
+    <text x="690" y="212" text-anchor="middle" font-size="12.5" fill="#1f2430">V[124, 100, 10] += 0.62 × F</text>
+    <text x="690" y="231" text-anchor="middle" font-size="11.5" fill="#5b6472">[256, 200, 200, 16] —— 仍是 3D</text>
+    <text x="690" y="249" text-anchor="middle" font-size="11.5" fill="#5b6472">X/Y/Z 是体素索引;C = 256 通道挂在每个体素上</text>
+    <polyline points="432,420 845,420 845,146 788,146" fill="none" stroke="#14b8a6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#tarr)"/>
+    <text x="620" y="412" text-anchor="middle" font-size="11.5" fill="#0f766e">查地址:该格子去体素 (124,100,10) 入座</text>
+  </svg>
+</div>
+
+<!-- ================= ⑤ 对比表 ================= -->
+<h2 id="diff">⑤ 核心差异对比</h2>
+<div class="card">
+  <table>
+    <tr><th style="width:16%">维度</th><th style="width:38%">LSS(Lift-Splat-Shoot)</th><th>UVTR(本仓库实现)</th></tr>
+    <tr><td><b>散点方式</b></td><td>外积:每像素先造出 118 份带权特征,再各自投影</td><td>查表散射:视锥格子预存地址,kernel 现取现乘直接入座</td></tr>
+    <tr><td><b>堆放目标</b></td><td>2D pillar 格:平面位置相同就堆一起</td><td>3D 体素格:平面 + 高度都对上才堆一起</td></tr>
+    <tr><td><b>输出空间</b></td><td><b>BEV 特征图</b>(2D,C×H×W)</td><td><b>3D 体素体积</b>(C×200×200×16),之后可再压成 BEV</td></tr>
+    <tr><td><b>高度信息</b></td><td>Splat 一步<b>永久丢失</b></td><td><b>保留</b> → 占用预测、3D 尺寸回归都有依据</td></tr>
+    <tr><td><b>中间张量</b></td><td>外积张量 ≈ 5413 万元素/相机(原文定义性机制,内存瓶颈)</td><td>无:仅 64 万个体素的累加缓冲(fused kernel)</td></tr>
+    <tr><td><b>多相机融合</b></td><td>六相机点云先汇总再 splat</td><td>各相机各自散射进同一体素网,同格自动累加(Σ 天然完成)</td></tr>
+    <tr><td><b>后续网络</b></td><td>BEV 卷积网(分割/检测头)</td><td>不限定;本仓库接 <b>BEVFormer 注意力编码器</b>,与 VLM 特征金字塔融合</td></tr>
+    <tr><td><b>深度监督</b></td><td>无(端到端间接学)</td><td>无(同 LSS;区别于 CaDDN 的有监督路线)</td></tr>
+  </table>
+  <div class="good"><b>本质差异只有一条:</b>输出空间是 2D 还是 3D。外积 vs 查表、内存多 vs 少、能不能做占用 —— 全是它的下游后果。思想层面两篇是同一个:深度分布 × 图像特征,撒进 3D。</div>
+</div>
+
+<!-- ================= ⑥ 内存 ================= -->
+<h2 id="memory">⑥ 内存账:外积的代价有多大</h2>
+<div class="card">
+  <p>按本仓库的格网规模折算(56×32 格、118 档、C=256),如果照搬 LSS 的外积:</p>
+  <div class="vs">
+    <div class="vs-box a">
+      <h4>经典 LSS:Lift 外积</h4>
+      <p>外积张量 = 1792 格 × 118 档 × 256 维 = <b>5413 万元素 / 相机</b></p>
+      <p>bf16 ≈ <b>103 MB / 相机</b> → 6 相机 ≈ <b>618 MB / 帧</b>(fp32 则 1.2 GB)</p>
+      <p>这只是 Lift 这<b>一步</b>的临时张量,还不含网络权重与激活;相机数、分辨率、深度档数任一增大都线性放大。</p>
+    </div>
+    <div class="vs-box b">
+      <h4>UVTR:视锥查表 + fused kernel</h4>
+      <p>没有外积张量。地址表 211,456 × 3 × 4 B ≈ <b>2.4 MB</b>(常量,所有帧复用)</p>
+      <p>累加目标体素 200×200×16×256 ≈ <b>327 MB</b> —— 这不是额外开销,它就是输出本身</p>
+      <p>kernel 内每个格子"取 F、取 D、乘、加"一次完成,峰值显存只多一份输入。</p>
+    </div>
+  </div>
+  <div class="note"><b>公平起见:</b>后来的 LSS 系实现(包括很多开源复现)也学会了"现乘现累加"的省内存写法 —— 外积未必真的物化。但"外积"是 LSS 原文的定义性机制与最著名瓶颈,而 UVTR 从设计之初就按体素散射组织计算,两者在工程上的这一步差异是实打实的。</div>
+</div>
+
+<!-- ================= ⑦ why ================= -->
+<h2 id="why">⑦ 本仓库为什么选 UVTR 路线</h2>
+<div class="card">
+  <p>结合 Qwen-Drive 感知头的三个任务(3D 检测、占用、建图),选 UVTR 是任务倒逼的:</p>
+  <table>
+    <tr><th>需求</th><th>LSS 路线</th><th>UVTR 路线(本仓库)</th></tr>
+    <tr><td>占用预测要<b>高度</b>(200×200×16、10 类)</td><td>高度已丢,要额外补一条 3D 支路</td><td>体积天生带 16 层高度,<b>直接喂</b> 3D U-Net 占用细化器</td></tr>
+    <tr><td>检测要<b>语义</b>(VLM 的语言特征)</td><td>BEV 卷积网只吃自己 splat 出的特征</td><td>UVTR 体积压成 BEV token 当<b>几何先验</b>,加进 BEVFormer 的 query;VLM 特征金字塔经交叉注意力融进来 —— 语义、几何各管一路</td></tr>
+    <tr><td>8 相机、bf16 推理的<b>显存预算</b></td><td>外积张量随相机数线性膨胀</td><td>无中间大张量,常数级开销</td></tr>
+  </table>
+  <div class="good"><b>一句话总结:</b>论文引用这对组合是在致敬思想的源头(LSS)并注明机制的出处(UVTR);代码落地取的是 UVTR —— 因为只有保住高度,占用这个任务才存在;只有不造外积,8 相机 bf16 才跑得轻。05 旧版讲的"视锥格网"就是 UVTR 路线里那张 2.4 MB 的地址表。</div>
+</div>
+
+<!-- ================= ⑧ FAQ ================= -->
+<h2 id="faq">⑧ 常见疑问</h2>
+<div class="qa"><b class="tag">Q1:</b> LSS 名字里的 Shoot 是什么?<br>
+<b>A:</b> 原论文的三段式:Lift(提升成点云)、Splat(拍扁成 BEV)、Shoot(<b>运动规划器</b>在 BEV 里"打轨迹")。感知文献只沿用前两步,Shoot 属于它自己的任务端 —— 本仓库的规划走的是另一条完全不同的路(Planning Expert 读 VLM 的 KV 缓存)。</div>
+
+<div class="qa"><b class="tag">Q2:</b> 既然实现是 UVTR,论文为什么还要引 LSS?<br>
+<b>A:</b> 引用惯例:"按深度分布把图像特征撒进 3D"这个思想最早由 LSS 确立,是必须致敬的源头;UVTR 则给出本仓库实际采用的具体机制(视锥 + 体素池化)。两篇各答一个问题:谁想的 vs 怎么做的。</div>
+
+<div class="qa"><b class="tag">Q3:</b> CaDDN 站在哪一边?<br>
+<b>A:</b> 第三条路线:同样是分类深度分布,但直接从图像特征渲染 BEV,且<b>用激光雷达深度监督</b>训练深度分支。本仓库没有任何深度监督,所以不属于 CaDDN 路线 —— 这也是论文没引它的原因。</div>
+
+<div class="qa"><b class="tag">Q4:</b> LSS 后来不能也升级成保高度吗?<br>
+<b>A:</b> 可以,把 Splat 的 pillar 求和换成 3D 体素散射即可 —— 但那样它就是 UVTR 了。区别从来不在"能不能",而在原设计的输出空间与配套机制。</div>
+
+<div class="qa"><b class="tag">Q5:</b> 两者精度谁更高?<br>
+<b>A:</b> 没有跨任务的定论,取决于下游任务与实现质量。本仓库的选择逻辑很清楚:要占用(高度)+ 要省显存(8 相机)+ 要接注意力编码器(与 VLM 特征融合)→ UVTR 路线是顺势的选择。</div>
+
+<footer>
+  依据:论文 arXiv:2609.00111 参考文献(Li et al., 2022c = UVTR, NeurIPS 2022;Philion &amp; Fidler, 2020 = LSS, ECCV 2020);QwenLM/Qwen-Drive-1.0 仓库 view_transform.py、ops/__init__.py、heads.py、perception_transformer.py;内存数字按本仓库格网规模(56×32×118、C=256、6 相机)折算。姊妹篇:04_view_transform.html(视图变换全流程)、06_bev_head_architecture.html(图 3 感知头整体架构与维数)。
+</footer>
+
+</div>
+</body>
+</html>

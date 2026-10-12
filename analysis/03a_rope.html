@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoPE 旋转位置编码详解 — 顺序不敏感 × 二维旋转 × 相对位置</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 55%, #db2777 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 27px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .75; margin-top: 12px; }
+  h2 {
+    font-size: 21px; margin: 42px 0 6px; padding-left: 12px;
+    border-left: 5px solid var(--purple);
+  }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  .qa {
+    background: var(--purple-soft); border: 1px solid #ddd6fe; border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0;
+  }
+  .qa b.tag { color: var(--purple); }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .cmt { color: #7dd3fc; }
+  .kwd { color: #fbbf24; }
+  .num { color: #f472b6; }
+  .pill {
+    display: inline-block; border-radius: 999px; padding: 1px 12px; font-size: 12.5px;
+    font-weight: 600; margin: 0 4px;
+  }
+  .pill.blue { background: var(--accent-soft); color: var(--accent); }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+  .pill.orange { background: var(--orange-soft); color: var(--orange); }
+  .pill.purple { background: var(--purple-soft); color: var(--purple); }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .center { text-align: center; }
+  .dim-label { color: var(--muted); font-size: 13px; }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--purple); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .backlink { font-size: 13.5px; margin-bottom: 14px; }
+  .backlink a { color: var(--accent); text-decoration: none; }
+  .backlink a:hover { text-decoration: underline; }
+  /* ---- 交互演示 ---- */
+  .demo-panel {
+    background: #fbfcfe; border: 1.5px dashed #a78bfa; border-radius: 12px;
+    padding: 16px 18px; margin: 14px 0;
+  }
+  .demo-title { font-weight: 700; color: var(--purple); font-size: 14.5px; margin-bottom: 6px; }
+  .btn {
+    display: inline-block; border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+    padding: 7px 14px; border-radius: 8px; background: var(--accent); color: #fff;
+    margin: 2px 6px 2px 0; font-family: inherit;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.green { background: var(--green); }
+  .btn.orange { background: var(--orange); }
+  .btn.gray { background: #64748b; }
+  .btn.purple { background: var(--purple); }
+  .btn.on { outline: 3px solid #c4b5fd; }
+  .ctrl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 8px 0; font-size: 14px; }
+  .ctrl-row label { font-weight: 600; white-space: nowrap; }
+  input[type=range] { vertical-align: middle; }
+  .switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .plane-radio { display: flex; gap: 8px; flex-wrap: wrap; }
+  .plane-radio .pr {
+    background: #fff; border: 1.5px solid var(--border); border-radius: 8px;
+    padding: 4px 10px; cursor: pointer; font-size: 12.5px; font-family: Consolas, monospace;
+  }
+  .plane-radio .pr.sel { border-color: var(--purple); background: var(--purple-soft); color: var(--purple); font-weight: 700; }
+  .readout { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .ro-cell {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 12px; font-size: 13px; min-width: 104px; flex: 0 1 auto;
+  }
+  .ro-cell b { font-family: Consolas, monospace; color: var(--purple); font-size: 13.5px; }
+  .ro-cell.hl { border-color: var(--green); background: var(--green-soft); }
+  .badge-ok {
+    background: var(--green-soft); color: var(--green); border-radius: 999px;
+    padding: 2px 12px; font-size: 12.5px; font-weight: 700; white-space: nowrap;
+  }
+  .badge-diff {
+    background: var(--orange-soft); color: var(--orange); border-radius: 999px;
+    padding: 2px 12px; font-size: 12.5px; font-weight: 700; white-space: nowrap;
+  }
+  .clocks { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+  .clock { text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+  .formula {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; font-family: Consolas, "Courier New", monospace;
+    font-size: 13.5px; margin: 10px 0; overflow-x: auto; line-height: 2;
+  }
+  .formula b { color: var(--purple); }
+  .tokrow { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .tokcol { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .tokchip {
+    background: #334155; color: #fff; border-radius: 8px; padding: 3px 14px;
+    font-size: 16px; font-weight: 700;
+  }
+  .tokchip small { opacity: .65; font-weight: 400; margin-left: 4px; font-size: 11px; }
+  .outnum { font-family: Consolas, monospace; font-size: 10.5px; color: var(--muted); }
+  .cmp-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+  .legend .ln { display: inline-block; width: 18px; height: 0; border-top: 3px solid; vertical-align: 3px; margin-right: 5px; }
+  svg text { font-family: inherit; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <marker id="mkBlue" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L8,3.5 L0,7 Z" fill="#2563eb"></path>
+    </marker>
+    <marker id="mkGreen" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L8,3.5 L0,7 Z" fill="#059669"></path>
+    </marker>
+    <marker id="mkGray" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L8,3.5 L0,7 Z" fill="#94a3b8"></path>
+    </marker>
+  </defs>
+</svg>
+
+<header class="hero">
+  <h1>RoPE 旋转位置编码详解</h1>
+  <p>位置为什么是"转"出来的 —— 顺序不敏感 × 二维旋转 × 只看相对位置</p>
+  <p>解决两个疑问:① 自注意力既然有位置编码,为什么还说它"对顺序不敏感"?② "把 Q/K 向量按位置对应的角度在二维平面内旋转"到底是什么操作?</p>
+  <p class="sub">姊妹篇:<a href="03_vit_process.html" style="color:#fff">03_vit_process.html §⑧ 多模态 RoPE 概览</a> · 依据:RoFormer 论文(arXiv:2104.09864)· 本页所有演示均在浏览器本地实时计算。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#tldr">⓪ 太长不看</a> ·
+  <a href="#q1">① 问题一:顺序不敏感 vs 位置编码</a> ·
+  <a href="#idea">② 核心想法:位置 → 角度</a> ·
+  <a href="#rotate">③ 问题二:二维旋转动画</a> ·
+  <a href="#relative">④ 只剩相对位置:动画 + 证明</a> ·
+  <a href="#code">⑤ 代码实现与数值验证</a> ·
+  <a href="#qwen">⑥ 回到 Qwen-Drive</a> ·
+  <a href="#faq">⑦ 常见疑问 FAQ</a>
+</div>
+
+<!-- ============ ⓪ TLDR ============ -->
+<h2 id="tldr">⓪ 太长不看<span class="en">TL;DR</span></h2>
+<div class="qa">
+  <p><b class="tag">疑问一回答:</b>"自注意力对顺序不敏感"说的是<b>注意力算子本身</b>(不带任何位置编码时的本性)——它把输入当"一袋 token",打乱顺序,每个 token 的输出逐位不变。而"位置编码把位置编进去"说的是<b>打了补丁之后的模型</b>。两句话不矛盾:前者是本性,后者是补丁。特别地,Qwen 系 LLM 的输入端<b>没有任何加性位置编码</b>,RoPE 就是唯一的位置来源——拿掉它,模型真的就成"词袋"了。</p>
+  <p style="margin-bottom:0"><b class="tag">疑问二回答:</b>"在二维平面内旋转"= 把每个头里 Q/K 向量的维度<b>两两配对</b>,每一对坐标 (x₁, x₂) 构成一个抽象的二维平面;"位置对应的角度"= 位置 m × 该平面的转速 θᵢ;然后在这一对维度上执行标准二维旋转公式(只改方向、不改长度),Q、K 都转、V 不转。旋转的复合性(R(a)R(b)=R(a+b))使得打分 q·k 里公共的绝对角度<b>自动抵消,只剩相对距离 n−m</b>。动画见 <a href="#rotate">§③</a>、<a href="#relative">§④</a>,代码见 <a href="#code">§⑤</a>。</p>
+</div>
+
+<!-- ============ ① q1 ============ -->
+<h2 id="q1">① 问题一:自注意力为什么"对顺序不敏感"?有位置编码不就有顺序了吗?<span class="en">permutation invariance</span></h2>
+
+<div class="card">
+  <p>你的疑问点到了关键:<b>这两句话其实都成立,只是说的对象不同</b>——</p>
+  <table>
+    <tr><th>说法</th><th>说的是谁</th><th>含义</th></tr>
+    <tr><td>"自注意力对顺序不敏感"</td><td><b>注意力算子本身</b>(不带位置编码的裸机制)</td><td>把输入 token 打乱,每个 token 的输出向量<b>逐位不变</b>(置换等变)——它把序列当"一袋 token"(bag of tokens),只看内容、不看排列</td></tr>
+    <tr><td>"位置编码把位置编进去了"</td><td><b>加了补丁之后的模型</b></td><td>位置编码(加性 PE 或 RoPE)正是为了<b>打破</b>上面的对称性而存在的——先有"不敏感"这个缺陷,才需要这个补丁</td></tr>
+  </table>
+
+  <h3>为什么裸注意力是"词袋"?一行数学</h3>
+  <p>注意力(单头、省略缩放)的计算:<code>Attention(X) = softmax(X·W<sub>Q</sub>·(X·W<sub>K</sub>)<sup>T</sup>/√d) · X·W<sub>V</sub></code>。注意每个 token 的输出是<b>对全体 token 按内容相似度加权求和</b>——<b>求和不在乎排列顺序</b>。用置换矩阵 P 写就是:</p>
+  <div class="formula">Attention(P·X) = P · Attention(X)&nbsp;&nbsp;&nbsp;<span class="dim-label">← 输出只是跟着 token 挪位置,每个 token 自己的结果一个比特都不变</span></div>
+  <p>后果:没有位置信息时,<b>"我打你"和"你打我"里每个字的输出完全相同</b>——模型彻底无法分辨这两个句子。这就是"对顺序不敏感"的确切含义。</p>
+
+  <h3>浏览器实时验证:一个 3-token 迷你注意力</h3>
+  <p class="dim-label">设定:3 个字、4 维向量;为可读性取 W<sub>Q</sub>=W<sub>K</sub>=W<sub>V</sub>=单位阵并省略 1/√d 缩放(置换等变的结论与矩阵取值无关)。左右两种语序,下面实时算出每个字的注意力输出向量:</p>
+
+  <div class="demo-panel">
+    <div class="ctrl-row">
+      <label>语序 A(固定):</label><span class="tokchip" style="padding:1px 12px">我 打 你</span>
+      <label style="margin-left:14px">语序 B(固定):</label><span class="tokchip" style="padding:1px 12px">你 打 我</span>
+      <label class="switch" style="margin-left:14px"><input type="checkbox" id="peToggle">加上加性位置编码(x<sub>m</sub> + p<sub>m</sub>,模拟经典 Transformer / ViT)</label>
+      <button class="btn gray" id="recompute">重算(换一组随机内容向量)</button>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="demo-title">语序 A:我 打 你</div>
+        <div id="panelA"></div>
+      </div>
+      <div>
+        <div class="demo-title">语序 B:你 打 我</div>
+        <div id="panelB"></div>
+      </div>
+    </div>
+    <div class="cmp-row" id="cmpResult"></div>
+    <p class="center" id="wLine" style="font-size:13px"></p>
+    <p class="center" id="permVerdict" style="font-weight:700; margin-bottom:0"></p>
+  </div>
+
+  <div class="note">
+    <b>解读:</b>关闭位置编码时,同一个字在两种语序下输出<b>逐位相同</b>(注意力权重也相同)——"词袋"实锤;打开位置编码后输出立刻不同——顺序信息被注入了。<b>你的直觉"位置编码已经把位置编进去了"完全正确,但它是对模型的描述;"对顺序不敏感"是对裸算子的描述。</b>
+  </div>
+
+  <h3>那 RoPE 在这件事里扮演什么角色?</h3>
+  <p>位置编码有两大家族,你脑中"把位置加到 embedding 上"的模型对应第一行;Qwen-Drive 的 LLM 用的是第二行:</p>
+  <table>
+    <tr><th></th><th>加性绝对位置编码</th><th>旋转相对位置编码(RoPE)</th></tr>
+    <tr><td>注在哪</td><td>输入端一次性:<code>x<sub>m</sub> + p<sub>m</sub></code>,位置从第 1 层起和内容<b>相加纠缠</b>,经 24/32 层残差与 FFN 逐渐稀释</td><td>每层注意力的 <b>Q、K</b> 上,层内临时施加;<b>V 与残差流始终不含位置</b>,内容与位置彻底解耦</td></tr>
+    <tr><td>打分依赖什么</td><td>展开 q·k 后是绝对位置 i、j 与内容的混合项,不是干净的"相对距离"</td><td><b>只依赖相对位置 n − m</b>(§④ 证明),平移不变、外推友好</td></tr>
+    <tr><td>长度外推</td><td>学习式有硬上限(训练多长就多长);正弦式外推效果一般</td><td>相对性天然友好,还能调 base(NTK/YaRN 等长度扩展方案的基础)</td></tr>
+    <tr><td>谁在用</td><td>原始 Transformer(2017)、经典 ViT(可学习 1D/2D)</td><td>Qwen / LLaMA 等主流解码 LLM;<b>Qwen 的 LLM 输入端没有任何加性 PE,RoPE 是唯一位置来源</b></td></tr>
+  </table>
+
+  <div class="good">
+    <b>所以 03 篇那句话的准确读法是:</b>"自注意力本身对顺序不敏感"= 把 RoPE 拿掉之后,Qwen 的 LLM 里就不剩任何位置信息,此时随便打乱序列,每个 token 的输出都完全一样。RoPE 不是"锦上添花",而是这类模型<b>感知顺序的唯一渠道</b>。
+  </div>
+</div>
+
+<!-- ============ ② idea ============ -->
+<h2 id="idea">② RoPE 的核心想法:把"位置"变成"角度"<span class="en">position → angle</span></h2>
+<div class="card">
+  <p>RoPE(Rotary Position Embedding,旋转位置编码,Su Jianlin 2021)的一句话版本:<b>token 的位置编号 m,被编码成"转角"——位置越靠后,它的 Q/K 向量被转过的角度越大。</b></p>
+  <div class="formula">角度 = 位置 m × 转速 θ &nbsp;&nbsp;&nbsp;⟹&nbsp;&nbsp;&nbsp; 位置 0 转 0°,位置 1 转 θ,位置 2 转 2θ,…… 位置 m 转 mθ</div>
+  <p>关键在"转速 θ"不止一种:每个注意力头的 Q/K 向量有 d 维(如 64 维),被切成 <b>d/2 个"二维平面"</b>,第 i 个平面有自己的转速:</p>
+  <div class="formula">θ<sub>i</sub> = 10000<sup>−2i/d</sup>,&nbsp; i = 0, 1, …, d/2−1&nbsp;&nbsp;&nbsp;<span class="dim-label">(d=8 时恰好是 1、0.1、0.01、0.001 rad/位置)</span></div>
+  <p>这就是<b>多频率</b>设计,和"时/分/秒针"或里程表一个道理:</p>
+  <table>
+    <tr><th>平面</th><th>转速 θᵢ(d=8)</th><th>转一整圈需要</th><th>角色</th></tr>
+    <tr><td>平面 0</td><td>1 rad/位置</td><td>≈ 6.3 个位置</td><td>高频:分辨紧邻的精细距离</td></tr>
+    <tr><td>平面 1</td><td>0.1 rad/位置</td><td>≈ 62.8 个位置</td><td>中频</td></tr>
+    <tr><td>平面 2</td><td>0.01 rad/位置</td><td>≈ 628 个位置</td><td>低频</td></tr>
+    <tr><td>平面 3</td><td>0.001 rad/位置</td><td>≈ 6283 个位置</td><td>极低频:分辨很远的大尺度距离</td></tr>
+  </table>
+  <p class="dim-label">真实模型 d=64(32 个平面),相邻平面转速比 = 10000<sup>−2/64</sup> ≈ 0.75;最慢的平面要约 62,832 个位置才转完一圈,所以在实际序列长度内,"多针组合"的位置读数几乎不会重复。</p>
+  <div class="note"><b>伏笔:</b>角度是<b>可加</b>的——先转 a 再转 b 等于一次转 a+b(旋转的复合性)。这保证了两个 token 各自旋转后在打分里相遇时,<b>共同的绝对角度会抵消,只剩角度差</b>——这是 §④ 的主角。</div>
+</div>
+
+<!-- ============ ③ rotate ============ -->
+<h2 id="rotate">③ 问题二:"把每个 token 的 Q/K 向量按位置对应的角度在二维平面内旋转"是什么操作?<span class="en">2D rotation, animated</span></h2>
+
+<div class="card">
+  <p>这句话拆开是三个动作:<b>配对 → 定角 → 旋转</b>。注意:所谓"二维平面"<b>不是图像空间</b>,而是 Q/K 向量内部<b>每一对坐标张成的抽象平面</b>(横轴 = 第 2i 维,纵轴 = 第 2i+1 维)。</p>
+  <table>
+    <tr><th>动作</th><th>具体含义</th><th>式子</th></tr>
+    <tr><td>① 配对</td><td>把每头的 Q(或 K)向量 d 维两两一组,切成 d/2 个"二维平面",每组就是平面上的一个点 (x₁, x₂)</td><td>(x₁,x₂), (x₃,x₄), …</td></tr>
+    <tr><td>② 定角</td><td>"位置对应的角度":第 i 个平面给位置 m 的 token 分配角度 <b>m × θᵢ</b>(θᵢ 是该平面的转速,见 §②)</td><td>φ = m·θᵢ</td></tr>
+    <tr><td>③ 旋转</td><td>在该平面内按标准二维旋转公式转动这个点——<b>只改方向、不改长度</b>;Q 和 K 都做,V 不做</td><td>x₁′ = x₁cosφ − x₂sinφ<br>x₂′ = x₁sinφ + x₂cosφ</td></tr>
+  </table>
+  <p class="dim-label">每个平面独立转各自的 m·θᵢ,一共 d/2 个平面同时转——等价于用一个块对角旋转矩阵左乘整个 Q/K 向量。</p>
+
+  <h3>动画:亲手转一转(单平面视角)</h3>
+  <p class="dim-label">蓝色箭头 = 某 token 的 Q 向量在平面 i 上的投影;灰色虚箭头 = 位置 0 时的初始方向;橙色弧 = 从初始方向累计转过的角度。选择平面(转速)、拖动位置 m 或点播放。真实模型一个头有 32 个平面,动画只画其中一个。</p>
+
+  <div class="demo-panel">
+    <div class="grid2" style="align-items:center">
+      <div class="center">
+        <svg id="svgB" viewBox="0 0 380 330" style="max-width:390px; width:100%">
+          <line x1="190" y1="8" x2="190" y2="322" stroke="#e2e8f0" stroke-width="1.5"></line>
+          <line x1="12" y1="165" x2="368" y2="165" stroke="#e2e8f0" stroke-width="1.5"></line>
+          <circle cx="190" cy="165" r="112" fill="none" stroke="#e2e8f0" stroke-dasharray="4 4"></circle>
+          <path id="arcB" fill="none" stroke="#d97706" stroke-width="3"></path>
+          <g id="ghostB"><line x1="190" y1="165" x2="288" y2="165" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#mkGray)"></line></g>
+          <g id="arrowB"><line x1="190" y1="165" x2="284" y2="165" stroke="#2563eb" stroke-width="4" marker-end="url(#mkBlue)"></line></g>
+          <circle cx="190" cy="165" r="4.5" fill="#1f2430"></circle>
+          <text id="angLabelB" x="190" y="22" text-anchor="middle" font-size="13" fill="#d97706" font-weight="700"></text>
+        </svg>
+        <div class="legend">
+          <span><span class="ln" style="border-color:#2563eb"></span>Q 在平面 i 上的投影(位置 m)</span>
+          <span><span class="ln" style="border-color:#94a3b8; border-top-style:dashed"></span>初始方向(位置 0)</span>
+          <span><span style="color:#d97706">⟋</span> 累计转角 = m·θᵢ</span>
+        </div>
+      </div>
+      <div>
+        <div class="ctrl-row">
+          <label>平面(转速):</label>
+          <div class="plane-radio" id="planeRadio">
+            <span class="pr sel" data-p="0">平面0<br>θ=1</span>
+            <span class="pr" data-p="1">平面1<br>θ=0.1</span>
+            <span class="pr" data-p="2">平面2<br>θ=0.01</span>
+            <span class="pr" data-p="3">平面3<br>θ=0.001</span>
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <label>位置 m:</label>
+          <input type="range" id="sliderB" min="0" max="40" step="0.5" value="3" style="width:170px">
+          <button class="btn purple" id="playB">▶ 播放</button>
+          <button class="btn gray" id="resetB">↺ 重置</button>
+        </div>
+        <div class="readout">
+          <div class="ro-cell">θ<sub>i</sub> = <b id="roTheta">1</b> rad/位置</div>
+          <div class="ro-cell">m = <b id="roM">3</b></div>
+          <div class="ro-cell">角度 m·θ<sub>i</sub> = <b id="roAng">3.00</b> rad<br><span id="roAngDeg" class="dim-label">= 171.9°</span></div>
+          <div class="ro-cell">圈数 = <b id="roTurns">0.48</b> 圈</div>
+          <div class="ro-cell">旋转后坐标<br><b id="roXY">( , )</b></div>
+        </div>
+        <div class="formula" id="formulaB"></div>
+      </div>
+    </div>
+
+    <p class="center dim-label" style="margin:14px 0 4px">同一位置 m 下,四个平面的转速对比(动画与上图共用同一个 m):</p>
+    <div class="clocks">
+      <div class="clock"><svg id="clk0" viewBox="0 0 84 84" width="84" height="84"></svg><br>平面0 · θ=1<br><b>最快</b></div>
+      <div class="clock"><svg id="clk1" viewBox="0 0 84 84" width="84" height="84"></svg><br>平面1 · θ=0.1</div>
+      <div class="clock"><svg id="clk2" viewBox="0 0 84 84" width="84" height="84"></svg><br>平面2 · θ=0.01</div>
+      <div class="clock"><svg id="clk3" viewBox="0 0 84 84" width="84" height="84"></svg><br>平面3 · θ=0.001<br><b>最慢</b></div>
+    </div>
+    <p class="center dim-label" style="margin:6px 0 0">这就是"时/分/秒针":位置每 +1,每个平面各转各的 θᵢ——快针几步转一圈,慢针几乎不动。</p>
+  </div>
+
+  <div class="good">
+    <b>读图要点:</b>拖动位置 m,箭头方向变、<b>长度不变</b>(旋转不改范数);角度严格 = m×θᵢ,与内容无关——<b>同一个 token 放到不同位置,唯一的变化就是被转的角度不同</b>。切到平面 3 再播放:m 跑到 40,慢针也只挪了一点点——低频平面负责"大尺度距离感"。
+  </div>
+</div>
+
+<!-- ============ ④ relative ============ -->
+<h2 id="relative">④ 为什么旋转之后,打分只剩"相对位置"?<span class="en">relative position, animated &amp; proved</span></h2>
+
+<div class="card">
+  <h3>几何直觉:整体平移 = 刚体转动</h3>
+  <p>注意力的打分是 <b>q·k(内积)</b>。二维平面上,<code>q·k = |q|·|k|·cos(夹角)</code>——只看<b>两根箭头的夹角</b>,不看它们各自朝向绝对坐标几度。位置 m 的 Q 被转了 mθ,位置 n 的 K 被转了 nθ,于是:</p>
+  <ul style="font-size:14.5px">
+    <li>m、n <b>同时 +1</b>(两个 token 一起往后挪):两根箭头<b>一起</b>再转一个 θ —— 整幅图<b>刚体旋转</b>,夹角不变 → <b>打分不变</b>;</li>
+    <li>只有 n +1(相对距离变了):夹角变化 (n−m)θ → 打分变化。</li>
+  </ul>
+  <p>所以"绝对位置去哪了"的答案是:<b>它进了公共的旋转量,在求内积时被减掉了。</b></p>
+
+  <h3>动画:平移不变性,眼见为实</h3>
+  <p class="dim-label">本演示固定 θ = 0.25 rad/位置(便于观察;真实各平面 θᵢ 不同)。蓝箭头 = 位置 m 的 Q,绿箭头 = 位置 n 的 K,橙色弧 = 相对角 (n−m)θ。试试"同步 +1"或"连续同步平移",盯着打分数字——纹丝不动。</p>
+
+  <div class="demo-panel">
+    <div class="grid2" style="align-items:center">
+      <div class="center">
+        <svg id="svgC" viewBox="0 0 380 330" style="max-width:390px; width:100%">
+          <line x1="190" y1="8" x2="190" y2="322" stroke="#e2e8f0" stroke-width="1.5"></line>
+          <line x1="12" y1="165" x2="368" y2="165" stroke="#e2e8f0" stroke-width="1.5"></line>
+          <circle cx="190" cy="165" r="108" fill="none" stroke="#e2e8f0" stroke-dasharray="4 4"></circle>
+          <path id="sectorC" fill="none" stroke="#d97706" stroke-width="4" opacity=".9"></path>
+          <line id="tipLine" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 4"></line>
+          <g id="arrQ"><line x1="190" y1="165" x2="288" y2="165" stroke="#2563eb" stroke-width="4" marker-end="url(#mkBlue)"></line></g>
+          <g id="arrK"><line x1="190" y1="165" x2="258" y2="165" stroke="#059669" stroke-width="4" marker-end="url(#mkGreen)"></line></g>
+          <circle cx="190" cy="165" r="4.5" fill="#1f2430"></circle>
+        </svg>
+        <div class="legend">
+          <span><span class="ln" style="border-color:#2563eb"></span>Q(位置 m,|q|=1.30)</span>
+          <span><span class="ln" style="border-color:#059669"></span>K(位置 n,|k|=0.95)</span>
+          <span><span style="color:#d97706;font-weight:700">◠</span> 相对角 = (n−m)·θ</span>
+        </div>
+      </div>
+      <div>
+        <div class="ctrl-row">
+          <label>m:</label><input type="range" id="sliderM" min="0" max="30" step="1" value="2" style="width:110px">
+          <label>n:</label><input type="range" id="sliderN" min="0" max="30" step="1" value="7" style="width:110px">
+        </div>
+        <div class="ctrl-row">
+          <button class="btn" id="mPlus">m +1</button>
+          <button class="btn green" id="nPlus">n +1</button>
+          <button class="btn orange" id="syncPlus">同步 +1(m、n 一起)</button>
+          <button class="btn purple" id="playC">▶ 连续同步平移</button>
+          <button class="btn gray" id="resetC">↺ 重置</button>
+        </div>
+        <div class="readout">
+          <div class="ro-cell">m = <b id="roM2">2</b>&nbsp;&nbsp;n = <b id="roN2">7</b></div>
+          <div class="ro-cell">Δ = n−m = <b id="roD">5</b></div>
+          <div class="ro-cell">相对角 Δ·θ = <b id="roAngD">1.25</b> rad<br><span id="roAngDdeg" class="dim-label">= 71.6°</span></div>
+          <div class="ro-cell" id="scoreCell">打分 cos(Δθ) = <b id="roScore">0.315</b><br><span id="scoreNote" class="dim-label">内积 = 1.235×cos(Δθ) = 0.3893</span></div>
+        </div>
+        <div id="rigidBadge" class="center" style="margin-top:8px"><span class="badge-ok">同步平移中:整幅图刚体旋转,夹角与打分保持不变 ✓</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>代数证明:两行矩阵</h3>
+  <p>设 R(α) 是二维旋转矩阵。位置 m 的 Q 与位置 n 的 K 在打分前分别被旋转:</p>
+  <div class="formula">
+    q<sub>m</sub> = R(mθ)·q ,&nbsp;&nbsp; k<sub>n</sub> = R(nθ)·k<br>
+    q<sub>m</sub> · k<sub>n</sub> = q<sup>T</sup> R(mθ)<sup>T</sup> R(nθ) k = q<sup>T</sup> R((n−m)θ) k &nbsp;&nbsp;&nbsp;<b>← 只剩 n − m</b><br>
+    <span class="dim-label">用到:R(a)R(b) = R(a+b)(旋转复合),R(a)<sup>T</sup> = R(−a)(逆转)。</span>
+  </div>
+  <p>其中 <code>R(α) = [ [cosα, −sinα], [sinα, cosα] ]</code>——正是 §③ 动画里那个旋转公式写成矩阵的样子。每个平面独立做一遍、再对平面求和,注意力打分就是:</p>
+  <div class="formula">score(m, n) = Σ<sub>i=1..d/2</sub> |q<sub>i</sub>|·|k<sub>i</sub>|·cos((n−m)·θ<sub>i</sub>) &nbsp;&nbsp;&nbsp;<span class="dim-label">——一个只以相对距离 n−m 为自变量的多尺度函数</span></div>
+  <p class="dim-label">可选的复数视角:把 (x₁,x₂) 视为复数 x₁+ix₂,旋转 = 乘以 e<sup>imθ</sup>;则 q<sub>m</sub>·conj(k<sub>n</sub>) = q·conj(k)·e<sup>i(m−n)θ</sup>,取实部即为打分,同样只含 m−n。论文 RoFormer 用的就是这个语言。</p>
+
+  <h3>这个"距离函数"长什么样?</h3>
+  <p>取一个特例(所有平面上 q=k=单位向量,d=32、base=10000),画出打分随相对距离 Δ 的曲线——本页载入时在你的浏览器里现算:</p>
+  <div class="demo-panel center">
+    <svg id="svgD" viewBox="0 0 680 250" style="max-width:680px; width:100%"></svg>
+    <p class="dim-label" style="margin:4px 0 0">横轴:相对距离 Δ(0–128);纵轴:归一化打分 g(Δ) = (2/d)·Σᵢcos(Δθᵢ)。<b>Δ=0 时最大(自己看自己最亮),总体随 Δ 衰减</b>——RoPE 天然带"近处更相关"的局部性先验;同时低频平面保留了长程分辨力,曲线不会一刀切归零。随机 q/k 时均值趋 0、方差随 Δ 收缩,定性结论一致。</p>
+  </div>
+
+  <h3>数值验证(页面载入时实时计算,d=8,随机固定种子)</h3>
+  <p class="dim-label">随机取一对 Q、K,分别在不同 (m, n) 处旋转后求内积。前三行相对距离都是 3,只是把两个 token 整体平移——内积完全一致;第四行 Δ 变成 7,内积立刻不同:</p>
+  <table id="liveTable">
+    <tr><th>m</th><th>n</th><th>Δ = n−m</th><th>旋转后内积 q·k(10 位小数)</th><th>结论</th></tr>
+  </table>
+  <p class="dim-label">换任何种子、任何平移量,结论不变(浮点上误差 &lt; 10⁻¹⁰)。这就是"打分只依赖相对位置"的机器可验证版本。</p>
+</div>
+
+<!-- ============ ⑤ code ============ -->
+<h2 id="code">⑤ 代码实现与逐步验证<span class="en">implementation</span></h2>
+<div class="card">
+  <p>下面按"频率表 → 角度表 → 旋转"三步给出 PyTorch 风格的最小实现(命名与 HF/Qwen 的 <code>apply_rotary_pos_emb</code> 对齐),再给一段可独立跑通的验证脚本:</p>
+
+<pre><code><span class="cmt"># ── 1. 频率表:每个二维平面的"转速" ─────────────────────────────</span>
+<span class="cmt"># head_dim 维向量 → head_dim/2 个旋转组;第 i 组角速度 θ_i = base^(-2i/head_dim)</span>
+<span class="kwd">def</span> <span class="num">build_rope_cache</span>(seq_len, head_dim, base=<span class="num">10000.0</span>):
+    inv_freq = <span class="num">1.0</span> / (base ** (torch.arange(<span class="num">0</span>, head_dim, <span class="num">2</span>).float() / head_dim))
+    t     = torch.arange(seq_len).float()            <span class="cmt"># 位置 m = 0, 1, 2, …, L-1</span>
+    freqs = torch.outer(t, inv_freq)                 <span class="cmt"># 角度表 [L, d/2]:第 m 行 i 列 = m·θ_i</span>
+    emb   = torch.cat((freqs, freqs), dim=-1)        <span class="cmt"># 成对维度复制一份(HF 约定,见下)</span>
+    <span class="kwd">return</span> emb.cos(), emb.sin()                    <span class="cmt"># cos[m, j], sin[m, j]</span>
+
+<span class="cmt"># ── 2. 旋转:把每对维度 (x_j, x_{j+d/2}) 当成二维平面上的点转 m·θ ──</span>
+<span class="kwd">def</span> <span class="num">rotate_half</span>(x):                      <span class="cmt"># x: (B, n_head, L, head_dim)</span>
+    x1, x2 = x.chunk(<span class="num">2</span>, dim=-1)              <span class="cmt"># 前一半、后一半配对</span>
+    <span class="kwd">return</span> torch.cat((-x2, x1), dim=-1)
+
+<span class="kwd">def</span> <span class="num">apply_rope</span>(x, cos, sin):             <span class="cmt"># 只用于 Q 和 K;V 不旋转!</span>
+    <span class="kwd">return</span> x * cos + rotate_half(x) * sin
+<span class="cmt"># 展开(θ = 该平面对位置 m 的角度):
+#   x_j'     = x_j  ·cos(mθ) − x_{j+d/2}·sin(mθ)
+#   x_{j+d/2}' = x_{j+d/2}·cos(mθ) + x_j  ·sin(mθ)      ← 正是二维旋转公式</span>
+
+<span class="cmt"># ── 3. 在注意力里的位置(HF/Qwen 风格)───────────────────────</span>
+<span class="cmt"># q, k: (B, n_head, L, head_dim);cos, sin: (L, head_dim) 按位置对齐后广播</span>
+q, k = apply_rope(q, cos, sin)                      <span class="cmt"># 每层注意力内:QKV 投影之后、打分之前</span>
+attn = (q @ k.transpose(-<span class="num">2</span>, -<span class="num">1</span>)) / math.sqrt(head_dim)
+<span class="cmt"># 因为 K 已含位置,KV 缓存里存的就是旋转后的 K —— 一次旋转,终身复用</span></code></pre>
+
+  <div class="note">
+    <b>两种"配对"约定,数学等价:</b>论文按相邻维度配对 (x₁,x₂)、(x₃,x₄)…;HF/Qwen 实现按前后半配对 (x₁, x<sub>1+d/2</sub>)、(x₂, x<sub>2+d/2</sub>)…,所以代码里你会看到 <code>rotate_half</code> 和 <code>cat(freqs, freqs)</code> 这种写法——只是把"哪些维度组成一个平面"重排了一下,旋转的数学一模一样。读 Qwen 源码遇到 <code>rotate_half</code> 不要懵。
+  </div>
+
+  <h3>独立验证脚本:亲自确认"只依赖相对位置"</h3>
+<pre><code><span class="kwd">import</span> torch, math
+torch.manual_seed(<span class="num">0</span>)
+d   = <span class="num">8</span>
+inv = <span class="num">1.0</span> / (<span class="num">10000</span> ** (torch.arange(<span class="num">0</span>, d, <span class="num">2</span>).float() / d))   <span class="cmt"># θ = [1, 0.1, 0.01, 0.001]</span>
+
+<span class="kwd">def</span> <span class="num">rot</span>(v, m):                        <span class="cmt"># 把 d 维向量 v 的每个平面各转 m·θ_i(相邻配对版)</span>
+    ang = m * inv
+    c, s = ang.cos(), ang.sin()
+    o = torch.empty_like(v)
+    <span class="kwd">for</span> i <span class="kwd">in</span> range(d // <span class="num">2</span>):
+        o[<span class="num">2</span>*i], o[<span class="num">2</span>*i+<span class="num">1</span>] = v[<span class="num">2</span>*i]*c[i] − v[<span class="num">2</span>*i+<span class="num">1</span>]*s[i], \
+                               v[<span class="num">2</span>*i]*s[i] + v[<span class="num">2</span>*i+<span class="num">1</span>]*c[i]
+    <span class="kwd">return</span> o
+
+q, k = torch.randn(d), torch.randn(d)
+print(rot(q, <span class="num">2</span>)  @ rot(k, <span class="num">5</span>))     <span class="cmt"># ← Δ = 3</span>
+print(rot(q, <span class="num">17</span>) @ rot(k, <span class="num">20</span>))    <span class="cmt"># ← Δ = 3,与上一行分毫不差</span>
+print(rot(q, <span class="num">41</span>) @ rot(k, <span class="num">44</span>))    <span class="cmt"># ← Δ = 3,仍然相同(整体平移了 39)</span>
+print(rot(q, <span class="num">2</span>)  @ rot(k, <span class="num">9</span>))     <span class="cmt"># ← Δ = 7,不同了(相对距离变了)</span></code></pre>
+  <p class="dim-label">本页 §④ 末尾的表格就是同一段逻辑(固定种子)在浏览器里算出来的 JS 版,数字可互相印证。</p>
+
+  <div class="good">
+    <b>实现层面的三个要点(面试/读码常考):</b>
+    <ul style="margin:4px 0 0; padding-left:20px; font-size:14px">
+      <li><b>只有 Q、K 被旋转,V 不转</b>——"内容"不掺位置,位置只决定"谁关注谁"(打分),不改变"被搬运的信息"本身;</li>
+      <li><b>每层都重新转一次</b>,但 cos/sin 位置表只算一次、全部层共用(这就是 03 篇说的 <code>_rope_positions</code> 算出 [3, batch, seq_len] 的那张表);</li>
+      <li><b>KV 缓存里存的是已旋转的 K</b>—— causal 解码下 K 每个位置只算一次,Qwen-Drive 的 Planning Expert 直接读缓存,位置信息已经在里面了。</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ ⑥ qwen ============ -->
+<h2 id="qwen">⑥ 回到 Qwen-Drive:同一套旋转,三种"位置轴"<span class="en">2D RoPE &amp; M-RoPE</span></h2>
+<div class="card">
+  <p>RoPE 的"位置 m"不一定是整数序号——<b>任何能算出"位置数值"的东西都能喂给同一套旋转机制</b>。Qwen-Drive 里用了两次,位置结构不同:</p>
+  <table>
+    <tr><th></th><th>ViT 内(第 1 次注意力)</th><th>LLM 内(第 2 次注意力)</th></tr>
+    <tr><td>位置轴</td><td>行 h、列 w(<b>2D RoPE</b>)</td><td>时间 t、行 h、列 w(<b>M-RoPE 多模态 RoPE</b>)</td></tr>
+    <tr><td>旋转组分配</td><td>头维度按行/列两组转速(实现细节以权重为准)</td><td><code>mrope_section = [11, 11, 10]</code>:32 个旋转组 = 11 组跟 t、11 组跟 h、10 组跟 w(共 64 个旋转维/头)</td></tr>
+    <tr><td>位置数值来源</td><td>patch 网格的 (行, 列)</td><td><code>get_rope_index</code> 从 <code>image_grid_thw</code> 算出 [3, B, L] 位置表:视觉 token = (帧号, 行, 列);文本 token = (i, i, i) 三分量相同,退化为一维 RoPE</td></tr>
+    <tr><td>注意力能"读"到什么</td><td>"这两块 patch 隔了几行几列"(纯空间)</td><td>"隔了几帧(时序)+ 隔了几行几列(空间)",Δt 与 Δh/Δw 解耦到不同旋转组,可分别感知、自由组合</td></tr>
+  </table>
+  <p>机制与 §③–§⑤ 完全相同,只是"位置 m"换成了"(t, h, w) 三个分量各自喂给各自的旋转组"。例如帧 0(行 0,列 0)与帧 0(行 0,列 1)的两个 token:t 组、h 组转角相同,w 组差 1×θ → 注意力读到"同一时刻、右邻一格";跨帧同位置则三组都有转差 → "运动信号"。完整的三维位置表、[11,11,10] 分段图和 Planning Expert 的位置衔接,见 <a href="03_vit_process.html#step6">03_vit_process.html §⑧ 的紫框</a>;M-RoPE 的深入拆解(一维盲区对比、交互式 (t,h,w) 分配、按段打分分解、get_rope_index 代码)见 <a href="03b_mrope.html"><b>03b_mrope.html《多模态 RoPE 详解》</b></a>。</p>
+  <div class="good"><b>一张图记住 Qwen-Drive 里的位置:</b>ViT 用 2D 旋转补上"在图内何处";LLM 用 3D 旋转补上"在何时、何处"——而这一切的基础,都是本页那个把位置变成角度的二维旋转。</div>
+</div>
+
+<!-- ============ ⑦ faq ============ -->
+<h2 id="faq">⑦ 常见疑问 FAQ<span class="en">faq</span></h2>
+<div class="card">
+  <h3>Q1:角度转一圈 2π 就回去了,位置多了会不会"撞车"?</h3>
+  <p>单个平面确实周期重复(周期 = 2π/θᵢ),但 32 个平面像"时分秒针"联合计时,联合周期是天文数字;d=64、base=10000 时最慢的平面要约 62,832 个位置才转一圈。更本质地,<b>打分只依赖相对差</b>(§④),绝对角度即使重复,也不影响"相隔多远"的判读。</p>
+
+  <h3>Q2:为什么 base = 10000?</h3>
+  <p>base 决定转速表的<b>下限</b>:最慢 θ = 10000<sup>−(1−2/d)</sup> ≈ 1/10000 rad/位置。base 越大,慢针越慢,可分辨的距离越长、但近距离的精细度下降。长度外推方案(NTK-aware scaling、YaRN)本质就是在推理时放大 base、重新拉开转速表。</p>
+
+  <h3>Q3:为什么不旋转 V?</h3>
+  <p>V 承载"内容",参与加权求和后进入残差流、FFN 和下一层;若旋转它,位置信息会混进内容表示,且每层累积。只转 Q、K 让位置<b>只影响打分</b>(谁该关注谁),内容通路保持干净——这就是 RoPE"内容与位置解耦"的设计。</p>
+
+  <h3>Q4:RoPE 编码的是相对位置,那"绝对位置"信息哪去了?</h3>
+  <p>确实几乎没有了——打分对整体平移不变。语言任务主要依赖相对结构(短语内部距离、句间距离),所以够用;而因果解码的自回归训练方式也让模型在实践中对绝对位置的需求进一步降低。这是设计上的取舍,换来的是外推能力和干净的相对几何。</p>
+
+  <h3>Q5:Qwen 的 LLM 输入端还有别的位置编码吗?</h3>
+  <p>没有。embedding 查表只有内容,RoPE 是唯一位置来源(呼应 §①:拿掉 RoPE 就真成"词袋")。ViT 端同样用 RoPE(2D 版),不用经典 ViT 的可学习加性位置参数。</p>
+</div>
+
+<footer>
+  来源:RoFormer: Enhanced Transformer with Rotary Position Embedding(arXiv:2104.09864,RoPE 原始论文);Qwen2/2.5-VL 系实现的 apply_rotary_pos_emb / rotate_half 惯例;Qwen-Drive 数字(mrope_section [11,11,10]、2D RoPE、[3,B,L] 位置表)沿用姊妹篇 03_vit_process.html §⑧ 并与其 config 出处一致。本页动画与数值演示均为浏览器本地计算,可离线打开。
+</footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var TAU = Math.PI * 2;
+  var DEG = 180 / Math.PI;
+  function $(id) { return document.getElementById(id); }
+  function polar(cx, cy, r, a) { return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; }
+  function arcPath(cx, cy, r, a1, a2) {
+    var d = (a2 - a1) % TAU; if (d < 0) d += TAU;
+    var p1 = polar(cx, cy, r, a1), p2 = polar(cx, cy, r, a1 + d);
+    var large = d > Math.PI ? 1 : 0;
+    return 'M ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2) +
+           ' A ' + r + ' ' + r + ' 0 ' + large + ' 0 ' + p2[0].toFixed(2) + ' ' + p2[1].toFixed(2);
+  }
+  function setRot(el, cx, cy, angRad) {
+    el.setAttribute('transform', 'rotate(' + (-angRad * DEG).toFixed(3) + ' ' + cx + ' ' + cy + ')');
+  }
+  // 固定种子伪随机 + 标准正态
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function randn(rng) {
+    var u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+  }
+
+  /* ================= 演示 A:置换不变性 ================= */
+  var seedA = 7;
+  var TOK = {};
+  function makeTOK() {
+    var rng = mulberry32(seedA);
+    ['我', '打', '你'].forEach(function (w) {
+      TOK[w] = [randn(rng), randn(rng), randn(rng), randn(rng)];
+    });
+  }
+  var PE = [[0.6, 0, 0, 0], [0, 0.6, 0, 0], [0, 0, 0.6, 0]];
+  function dotv(a, b) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+  function softmax(v) {
+    var m = Math.max.apply(null, v);
+    var e = v.map(function (x) { return Math.exp(x - m); });
+    var s = e.reduce(function (a, b) { return a + b; }, 0);
+    return e.map(function (x) { return x / s; });
+  }
+  function attnOrder(order, usePE) {
+    var X = order.map(function (t, i) {
+      return TOK[t].map(function (v, j) { return v + (usePE ? PE[i][j] : 0); });
+    });
+    var outs = [], rows = [];
+    for (var i = 0; i < X.length; i++) {
+      var sc = X.map(function (x) { return dotv(X[i], x); });
+      var w = softmax(sc);
+      rows.push(w);
+      var o = [];
+      for (var d = 0; d < 4; d++) {
+        var acc = 0;
+        for (var j = 0; j < X.length; j++) acc += w[j] * X[j][d];
+        o.push(acc);
+      }
+      outs.push(o);
+    }
+    return { outs: outs, rows: rows };
+  }
+  function drawPanel(pid, order, res) {
+    var html = '<div class="tokrow">';
+    for (var i = 0; i < order.length; i++) {
+      var v = res.outs[i], bars = '';
+      for (var d = 0; d < 4; d++) {
+        var val = v[d];
+        var h = Math.min(42, Math.abs(val) * 34);
+        var y = val >= 0 ? 50 - h : 50;
+        var col = val >= 0 ? '#2563eb' : '#dc2626';
+        bars += '<rect x="' + (14 + d * 26) + '" y="' + y.toFixed(1) + '" width="16" height="' +
+                Math.max(1.5, h).toFixed(1) + '" rx="2" fill="' + col + '"></rect>';
+      }
+      html += '<div class="tokcol">' +
+        '<div class="tokchip">' + order[i] + '<small>@' + i + '</small></div>' +
+        '<svg width="120" height="100" viewBox="0 0 120 100">' +
+        '<line x1="6" y1="50" x2="114" y2="50" stroke="#cbd5e1" stroke-width="1"></line>' + bars + '</svg>' +
+        '<div class="outnum">[' + v.map(function (x) { return x.toFixed(2); }).join(', ') + ']</div></div>';
+    }
+    $(pid).innerHTML = html + '</div>';
+  }
+  function renderPerm() {
+    var orderA = ['我', '打', '你'], orderB = ['你', '打', '我'];
+    var usePE = $('peToggle').checked;
+    var rA = attnOrder(orderA, usePE), rB = attnOrder(orderB, usePE);
+    drawPanel('panelA', orderA, rA);
+    drawPanel('panelB', orderB, rB);
+    var words = ['我', '打', '你'], html = '', allSame = true;
+    words.forEach(function (w) {
+      var ia = orderA.indexOf(w), ib = orderB.indexOf(w);
+      var same = rA.outs[ia].every(function (v, d) { return Math.abs(v - rB.outs[ib][d]) < 1e-9; });
+      if (!same) allSame = false;
+      html += '<span class="' + (same ? 'badge-ok' : 'badge-diff') + '">「' + w + '」的输出:' +
+              (same ? '两种语序完全相同 ✓' : '两种语序不同 ✗') + '</span>';
+    });
+    $('cmpResult').innerHTML = html;
+    var wa = rA.rows[orderA.indexOf('我')], wb = rB.rows[orderB.indexOf('我')];
+    $('wLine').innerHTML = '「我」给出的注意力权重 &nbsp;A(对 我,打,你)= [' +
+      wa.map(function (x) { return x.toFixed(2); }).join(', ') + '] &nbsp;B(对 你,打,我)= [' +
+      wb.map(function (x) { return x.toFixed(2); }).join(', ') + ']';
+    $('permVerdict').innerHTML = usePE
+      ? '<span style="color:var(--orange)">加了位置编码 → 顺序被感知,模型能分辨「我打你」和「你打我」</span>'
+      : '<span style="color:var(--green)">无位置编码 → 每个字的输出逐位相同:注意力把输入当「一袋 token」</span>';
+  }
+  makeTOK();
+  $('peToggle').addEventListener('change', renderPerm);
+  $('recompute').addEventListener('click', function () { seedA += 1; makeTOK(); renderPerm(); });
+  renderPerm();
+
+  /* ================= 演示 B:单平面旋转 ================= */
+  var PLANES = [1, 0.1, 0.01, 0.001];
+  var PHI0 = 35 * Math.PI / 180;
+  var CXB = 190, CYB = 165, RB = 94;
+  var mB = 3, planeB = 0, playingB = false;
+  setRot($('ghostB'), CXB, CYB, PHI0);
+  var clocks = [];
+  for (var ci = 0; ci < 4; ci++) {
+    var sv = $('clk' + ci);
+    var NS = 'http://www.w3.org/2000/svg';
+    var circ = document.createElementNS(NS, 'circle');
+    circ.setAttribute('cx', 42); circ.setAttribute('cy', 42); circ.setAttribute('r', 30);
+    circ.setAttribute('fill', 'none'); circ.setAttribute('stroke', '#e2e8f0');
+    circ.setAttribute('stroke-dasharray', '3 3');
+    sv.appendChild(circ);
+    var ln = document.createElementNS(NS, 'line');
+    ln.setAttribute('x1', 42); ln.setAttribute('y1', 42); ln.setAttribute('x2', 68); ln.setAttribute('y2', 42);
+    ln.setAttribute('stroke', '#2563eb'); ln.setAttribute('stroke-width', 3);
+    ln.setAttribute('marker-end', 'url(#mkBlue)');
+    sv.appendChild(ln);
+    var dotc = document.createElementNS(NS, 'circle');
+    dotc.setAttribute('cx', 42); dotc.setAttribute('cy', 42); dotc.setAttribute('r', 3); dotc.setAttribute('fill', '#1f2430');
+    sv.appendChild(dotc);
+    clocks.push(ln);
+  }
+  function drawB() {
+    var th = PLANES[planeB];
+    var ang = PHI0 + mB * th;
+    setRot($('arrowB'), CXB, CYB, ang);
+    $('arcB').setAttribute('d', arcPath(CXB, CYB, 126, PHI0, ang));
+    // 角度标注放在弧中点外侧
+    var mid = PHI0 + (((mB * th) % TAU) + TAU) % TAU / 2;
+    var lp = polar(CXB, CYB, 143, mid);
+    var t = $('angLabelB');
+    t.setAttribute('x', lp[0].toFixed(1)); t.setAttribute('y', lp[1].toFixed(1));
+    t.textContent = 'm·θ = ' + (mB * th).toFixed(2) + ' rad';
+    // 读数
+    $('roTheta').textContent = th;
+    $('roM').textContent = (+mB).toFixed(1);
+    $('roAng').textContent = (mB * th).toFixed(2);
+    $('roAngDeg').textContent = '= ' + ((mB * th * DEG) % 360).toFixed(1) + '°';
+    $('roTurns').textContent = (mB * th / TAU).toFixed(2);
+    var x1 = Math.cos(PHI0), x2 = Math.sin(PHI0);
+    var c = Math.cos(mB * th), s = Math.sin(mB * th);
+    var x1p = x1 * c - x2 * s, x2p = x1 * s + x2 * c;
+    $('roXY').textContent = '(' + x1p.toFixed(3) + ', ' + x2p.toFixed(3) + ')';
+    $('formulaB').innerHTML =
+      'x₁′ = x₁·cos(mθ) − x₂·sin(mθ) = ' + x1.toFixed(3) + '×' + c.toFixed(3) + ' − ' + x2.toFixed(3) + '×' + s.toFixed(3) +
+      ' = <b>' + x1p.toFixed(3) + '</b><br>' +
+      'x₂′ = x₁·sin(mθ) + x₂·cos(mθ) = ' + x1.toFixed(3) + '×' + s.toFixed(3) + ' + ' + x2.toFixed(3) + '×' + c.toFixed(3) +
+      ' = <b>' + x2p.toFixed(3) + '</b>';
+    for (var i = 0; i < 4; i++) setRot(clocks[i], 42, 42, PHI0 + mB * PLANES[i]);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#planeRadio .pr'), function (el) {
+    el.addEventListener('click', function () {
+      Array.prototype.forEach.call(document.querySelectorAll('#planeRadio .pr'), function (e2) { e2.classList.remove('sel'); });
+      el.classList.add('sel');
+      planeB = +el.getAttribute('data-p');
+      drawB();
+    });
+  });
+  $('sliderB').addEventListener('input', function () {
+    playingB = false; $('playB').textContent = '▶ 播放'; $('playB').classList.remove('on');
+    mB = +this.value; drawB();
+  });
+  $('playB').addEventListener('click', function () {
+    playingB = !playingB;
+    this.textContent = playingB ? '⏸ 暂停' : '▶ 播放';
+    this.classList.toggle('on', playingB);
+    if (playingB && mB >= 40) { mB = 0; $('sliderB').value = 0; }
+  });
+  $('resetB').addEventListener('click', function () {
+    playingB = false; $('playB').textContent = '▶ 播放'; $('playB').classList.remove('on');
+    mB = 3; $('sliderB').value = 3; drawB();
+  });
+
+  /* ================= 演示 C:相对位置 ================= */
+  var TH_C = 0.25, NQ = 1.30, NK = 0.95;
+  var CX = 190, CY = 165;
+  var mC = 2, nC = 7, playingC = false;
+  function drawC() {
+    var aq = mC * TH_C, ak = nC * TH_C, dA = ak - aq;
+    setRot($('arrQ'), CX, CY, aq);
+    setRot($('arrK'), CX, CY, ak);
+    if (Math.abs(dA) > 0.02) {
+      $('sectorC').setAttribute('d', arcPath(CX, CY, 56, aq, ak));
+    } else {
+      $('sectorC').setAttribute('d', '');
+    }
+    var tp1 = polar(CX, CY, 98, aq), tp2 = polar(CX, CY, 70, ak);
+    $('tipLine').setAttribute('x1', tp1[0].toFixed(1)); $('tipLine').setAttribute('y1', tp1[1].toFixed(1));
+    $('tipLine').setAttribute('x2', tp2[0].toFixed(1)); $('tipLine').setAttribute('y2', tp2[1].toFixed(1));
+    var D = nC - mC, dd = D * TH_C, score = Math.cos(dd), inner = NQ * NK * score;
+    $('roM2').textContent = mC; $('roN2').textContent = nC;
+    $('roD').textContent = D;
+    $('roAngD').textContent = dd.toFixed(2);
+    $('roAngDdeg').textContent = '= ' + (dd * DEG).toFixed(1) + '°';
+    $('roScore').textContent = score.toFixed(3);
+    $('scoreNote').textContent = '内积 = ' + (NQ * NK).toFixed(3) + '×cos(Δθ) = ' + inner.toFixed(4);
+    $('sliderM').value = mC; $('sliderN').value = nC;
+    $('scoreCell').classList.toggle('hl', playingC);
+    $('rigidBadge').style.visibility = playingC ? 'visible' : 'hidden';
+  }
+  function clampC(v) { return Math.max(0, Math.min(30, v)); }
+  $('sliderM').addEventListener('input', function () { mC = +this.value; drawC(); });
+  $('sliderN').addEventListener('input', function () { nC = +this.value; drawC(); });
+  $('mPlus').addEventListener('click', function () { mC = clampC(mC + 1); drawC(); });
+  $('nPlus').addEventListener('click', function () { nC = clampC(nC + 1); drawC(); });
+  $('syncPlus').addEventListener('click', function () { mC = clampC(mC + 1); nC = clampC(nC + 1); drawC(); });
+  $('resetC').addEventListener('click', function () {
+    playingC = false; $('playC').textContent = '▶ 连续同步平移'; $('playC').classList.remove('on');
+    mC = 2; nC = 7; drawC();
+  });
+  $('playC').addEventListener('click', function () {
+    playingC = !playingC;
+    this.textContent = playingC ? '⏸ 停止平移' : '▶ 连续同步平移';
+    this.classList.toggle('on', playingC);
+    if (playingC && nC >= 30) { mC = 0; nC = 5; }
+    drawC();
+  });
+
+  /* ================= 主循环 ================= */
+  var last = 0;
+  function tick(ts) {
+    var dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+    if (playingB) {
+      mB = Math.min(40, mB + dt * 2.0);
+      $('sliderB').value = mB;
+      if (mB >= 40) { playingB = false; $('playB').textContent = '▶ 播放'; $('playB').classList.remove('on'); }
+      drawB();
+    }
+    if (playingC) {
+      mC = Math.min(30, mC + dt * 1.2);
+      nC = Math.min(30, nC + dt * 1.2);
+      if (nC >= 30) { playingC = false; $('playC').textContent = '▶ 连续同步平移'; $('playC').classList.remove('on'); }
+      drawC();
+    }
+    requestAnimationFrame(tick);
+  }
+  drawB(); drawC();
+  requestAnimationFrame(tick);
+
+  /* ================= 曲线 D:打分随 Δ 的衰减 ================= */
+  (function () {
+    var sv = $('svgD'), NS = 'http://www.w3.org/2000/svg';
+    var ths = [];
+    for (var i = 0; i < 16; i++) ths.push(Math.pow(10000, -i / 16));
+    function g(dp) {
+      var s = 0;
+      for (var i = 0; i < 16; i++) s += Math.cos(dp * ths[i]);
+      return s / 16;
+    }
+    function el(name, attrs, txt) {
+      var e = document.createElementNS(NS, name);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      if (txt !== undefined) e.textContent = txt;
+      sv.appendChild(e); return e;
+    }
+    var X0 = 44, X1 = 664, Y1 = 30, Y0 = 210, YM = 120;
+    el('line', { x1: X0, y1: Y0, x2: X1, y2: Y0, stroke: '#94a3b8', 'stroke-width': 1 });
+    el('line', { x1: X0, y1: Y1, x2: X0, y2: Y0, stroke: '#94a3b8', 'stroke-width': 1 });
+    el('line', { x1: X0, y1: YM, x2: X1, y2: YM, stroke: '#e2e8f0', 'stroke-dasharray': '4 4' });
+    [1, 0.5, 0, -0.5, -1].forEach(function (v) {
+      var y = YM - v * 90;
+      el('text', { x: X0 - 8, y: y + 4, 'font-size': 11, fill: '#5b6472', 'text-anchor': 'end' }, v.toFixed(1));
+    });
+    for (var dp = 0; dp <= 128; dp += 16) {
+      var x = X0 + dp / 128 * (X1 - X0);
+      el('line', { x1: x, y1: Y0, x2: x, y2: Y0 + 4, stroke: '#94a3b8' });
+      el('text', { x: x, y: Y0 + 18, 'font-size': 11, fill: '#5b6472', 'text-anchor': 'middle' }, dp);
+    }
+    var pts = [];
+    for (var d2 = 0; d2 <= 128; d2 += 0.5) {
+      var xx = X0 + d2 / 128 * (X1 - X0), yy = YM - g(d2) * 90;
+      pts.push(xx.toFixed(1) + ',' + yy.toFixed(1));
+    }
+    el('polyline', { points: pts.join(' '), fill: 'none', stroke: '#7c3aed', 'stroke-width': 2.2 });
+    el('circle', { cx: X0, cy: YM - 90, r: 4, fill: '#7c3aed' });
+    el('text', { x: X0 + 10, y: YM - 96, 'font-size': 12, fill: '#7c3aed', 'font-weight': 700 }, 'Δ=0 → 1(自己看自己)');
+    el('text', { x: X1 - 6, y: Y1 + 14, 'font-size': 12, fill: '#5b6472', 'text-anchor': 'end' }, '相对距离 Δ →');
+    el('text', { x: 10, y: 14, 'font-size': 12, fill: '#5b6472' }, 'g(Δ)');
+  })();
+
+  /* ================= 数值验证表 E ================= */
+  (function () {
+    var rng = mulberry32(42);
+    var q8 = [], k8 = [];
+    for (var i = 0; i < 8; i++) { q8.push(randn(rng)); k8.push(randn(rng)); }
+    var TH8 = [1, 0.1, 0.01, 0.001];
+    function rotVec(v, m) {
+      var out = new Array(v.length);
+      for (var p = 0; p < v.length / 2; p++) {
+        var c = Math.cos(m * TH8[p]), s = Math.sin(m * TH8[p]);
+        var a = v[2 * p], b = v[2 * p + 1];
+        out[2 * p] = a * c - b * s;
+        out[2 * p + 1] = a * s + b * c;
+      }
+      return out;
+    }
+    function score(m, n) {
+      var rq = rotVec(q8, m), rk = rotVec(k8, n), s = 0;
+      for (var i = 0; i < 8; i++) s += rq[i] * rk[i];
+      return s;
+    }
+    var ref = score(2, 5);
+    var rows = [[2, 5], [17, 20], [41, 44], [2, 9]];
+    var tb = $('liveTable');
+    rows.forEach(function (r, idx) {
+      var sc = score(r[0], r[1]);
+      var same = Math.abs(sc - ref) < 1e-9;
+      var tr = document.createElement('tr');
+      var badge = idx === 0
+        ? '<span class="badge-ok">基准(Δ=3)</span>'
+        : (same ? '<span class="badge-ok">与基准完全一致 ✓</span>' : '<span class="badge-diff">不同(Δ 变了)✗</span>');
+      tr.innerHTML = '<td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + (r[1] - r[0]) +
+                     '</td><td class="mono">' + sc.toFixed(10) + '</td><td>' + badge + '</td>';
+      tb.appendChild(tr);
+    });
+  })();
+})();
+</script>
+</body>
+</html>
