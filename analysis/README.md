@@ -4,6 +4,7 @@
 
 | 笔记 | 内容 |
 | --- | --- |
+| [00_overall_architecture.html](00_overall_architecture.html) | 整体框架图 · 精简版(配 [PNG](00_overall_architecture.png)):论文图 2 的极简展开 —— 观测图像 → Vision Encoder → Qwen3.5-4B(文本回复 / F_m 隐状态 / K·V 缓存三路输出)→ BEV 感知头(3D 检测 · 占据 · 地图)与规划专家(流匹配轨迹);框图只留模块名与数据流,已逐模块对照代码校验(浏览器打开) |
 | [01_prompt_inputs.md](01_prompt_inputs.md) | 图2 中观测图像对应的 prompt 里到底输入了什么(文本模板逐段拆解 + ChatML 序列结构) |
 | [02_image_tokens_vit.md](02_image_tokens_vit.md) | 图像尺寸(320p/720p 策略)、一个 token 对应多大像素、ViT 编码全流程(patch 化 → 维度 → 空间合并 → 进入 LLM) |
 | [03_vit_process.html](03_vit_process.html) | 可视化详解:patch 16×16 与 token 32×32 的区别、ViT 编码六步全流程(含交互式 patch/合并演示图,浏览器打开) |
@@ -14,8 +15,7 @@
 | [05_uvtr_frustum.html](05_uvtr_frustum.html) | 可视化详解:UVTR vs LSS 两种深度视图变换的对比 —— Lift/Splat/Shoot 与视锥体素池化、外积内存账、输出空间 2D/3D 之别、本仓库为何选 UVTR(浏览器打开) |
 | [06_bev_head_architecture.html](06_bev_head_architecture.html) | 可视化详解:图 3(a) BEV 感知头全架构 —— ViT→UVTR/LLM 两路的维数地图、BEV Transformer(6 层注意力)与 UVTR 的分工、检测/占用/建图三头(浏览器打开) |
 | [07_image_journey.html](07_image_journey.html) | 可视化详解:一张图像的旅程 —— 当前/历史帧进 VLM、同帧 896×512 进感知路、ViT 前后尺寸、UVTR 前后(图像平面→视锥→3D 体素)、BEV Transformer 的 embedding/query/K·V,Qwen3.5-4B 为黑盒(浏览器打开) |
-| [08_overall_architecture.html](08_overall_architecture.html) | 整体框架图(配 [PNG](08_overall_architecture.png)):论文图 2 的展开版 —— 输入四类 → Vision Encoder(Fᵥ/图像 token 双输出)→ Qwen3.5-4B(F_m 隐状态 + 8 份 K/V 缓存 + Response 三出口)→ BEV 感知头(几何/语义双流·BEV Transformer·检测/占据/地图三头)与规划专家(7 路 token 融合·32 层联合注意力 DiT·流匹配 10 步 Euler)→ 三种输出;每个模块悬停可看对应源码文件,已逐模块对照代码校验(浏览器打开) |
-| [09_linear_attention.html](09_linear_attention.html) | 可视化详解:线性注意力机制 —— 从 O(N²) Softmax 到 O(N) 递归。标准注意力的成本账、结合律与核函数替换(数字实算演示)、RNN 视角与三种计算排布、KV Cache vs 固定状态显存计算器(Qwen3.5-4B 真实几何)、变体谱系(Linear Transformer/Performer/RetNet/RWKV/Mamba/GLA/DeltaNet/GDN)、与标准注意力逐项对比、精确回忆命门与 Delta Rule 状态热图步进器,以及 Qwen3.5 "1×GQA+3×GDN" 混合的动机(规划专家的 8 份缓存为何恰来自 GQA 层)(浏览器打开) |
+| [09_linear_attention.html](09_linear_attention.html) | 可视化详解:线性注意力机制 —— 从 O(N²) Softmax 到 O(N) 递归。标准注意力的成本账(softmax 三步逐行拆解:打分→exp→归一化→加权求和,配 NumPy 代码与逐步实算演示、β 锐度滑杆)、结合律与核函数替换(数字实算演示)、RNN 视角与三种计算排布、KV Cache vs 固定状态显存计算器(Qwen3.5-4B 真实几何)、变体谱系(Linear Transformer/Performer/RetNet/RWKV/Mamba/GLA/DeltaNet/GDN)、与标准注意力逐项对比、精确回忆命门与 Delta Rule 状态热图步进器,以及 Qwen3.5 "1×GQA+3×GDN" 混合的动机(规划专家的 8 份缓存为何恰来自 GQA 层)(浏览器打开) |
 
 代码位置速查:
 

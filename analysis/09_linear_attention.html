@@ -123,6 +123,20 @@
   footer { margin-top: 46px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 14px; }
   .kbd { border: 1px solid var(--border); border-bottom-width: 2.5px; border-radius: 5px; padding: 0 6px; font-size: 12.5px; background: #fff; }
   sup, sub { line-height: 0; }
+  .codeblock {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 16px 20px; margin: 14px auto; max-width: 780px;
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    line-height: 1.65; overflow-x: auto; text-align: left; white-space: pre;
+  }
+  .codeblock .cm { color: #86efac; }
+  .codeblock .kw { color: #c4b5fd; }
+  .codeblock .fn { color: #93c5fd; }
+  .barrow { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 13px; }
+  .barlab { width: 38px; text-align: right; font-family: Consolas, monospace; color: var(--muted); flex: none; }
+  .barwrap { flex: 1; max-width: 430px; background: #eef2f7; border-radius: 4px; height: 18px; overflow: hidden; }
+  .bar { height: 100%; border-radius: 4px; transition: width .25s ease; }
+  .barval { width: 68px; font-family: Consolas, monospace; color: var(--muted); font-size: 12.5px; flex: none; }
 </style>
 </head>
 <body>
@@ -132,7 +146,7 @@
   <h1>线性注意力机制详解 —— 从 O(N²) Softmax 到 O(N) 递归</h1>
   <p>标准(Softmax)注意力 vs 线性注意力:核心思想、计算等价变换、RNN 视角、主要变体、能力差异</p>
   <p>以及 Qwen3.5 里 <span class="pill purple" style="background:rgba(255,255,255,.18);color:#fff">1×GQA + 3×GDN</span> 中 GDN(Gated DeltaNet)到底是什么、为什么要这样混合</p>
-  <p class="sub">Qwen-Drive 结构剖析笔记 09 · 关联:[08 整体框架图](08_overall_architecture.html) · [03b M-RoPE](03b_mrope.html) · 论文 arXiv:2609.00111 图 3(b)</p>
+  <p class="sub">Qwen-Drive 结构剖析笔记 09 · 关联:[00 整体框架图](00_overall_architecture.html) · [03b M-RoPE](03b_mrope.html) · 论文 arXiv:2609.00111 图 3(b)</p>
 </header>
 
 <div class="card toc">
@@ -160,6 +174,54 @@
   Attention(<span class="hl">Q</span>, <span class="hl2">K</span>, <span class="hl3">V</span>) = softmax( <span class="hl">Q</span> <span class="hl2">K</span><sup>T</sup> / √d ) · <span class="hl3">V</span>
 </div>
 <p>直观理解:第 <code>t</code> 个 token 拿自己的 <code>q<sub>t</sub></code> 去和**所有历史** <code>k<sub>1..t</sub></code> 逐一打分,分数经过 softmax 变成一组"精确分配"的权重,再加权求和所有 <code>v</code>。它本质上是一个<strong>精确的、内容寻址的键值数据库</strong>:任意一个历史 token 只要 key 够独特,就能被无损地检索回来。</p>
+
+<h3>逐行拆解:对一个查询,softmax 到底算了哪三步</h3>
+<p>把第 <code>t</code> 行(第 t 个查询)单独拎出来,一次注意力检索是严格的三步 —— 演示 1 用 N=4、d=3 的<strong>真实数字</strong>把每一步都算给你看:</p>
+<div class="formula">
+  ① 打分 &nbsp;&nbsp; s<sub>t,i</sub> = <span class="hl">q</span><sub>t</sub> · <span class="hl2">k</span><sub>i</sub> / √d &nbsp;&nbsp;&nbsp; (i = 1…N,一个查询得 N 个分数)
+  <br>
+  ② 归一化 &nbsp; a<sub>t,i</sub> = <span class="hl">exp</span>(s<sub>t,i</sub>) / Σ<sub>j=1…N</sub> <span class="hl">exp</span>(s<sub>t,j</sub>)
+  <br>
+  ③ 加权求和 &nbsp; y<sub>t</sub> = Σ<sub>i=1…N</sub> a<sub>t,i</sub> <span class="hl3">v</span><sub>i</sub>
+  <br><small>①③ 各要扫一遍 N×N(合计 O(N²·d) 次乘加);② 逐元素 exp + 逐行求和也是 O(N²)。三步全都离不开那个 N×N 的中间量 —— "贵"就贵在这里</small>
+</div>
+<p>对应到代码就是 10 行 NumPy(单头、无 batch,注释里的 ①②③ 与上式一一对应,可直接跑):</p>
+<div class="codeblock"><span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">softmax_attention</span>(Q, K, V):
+    <span class="cm"># Q, K, V 形状都是 (N, d):单头、无 batch,与上面公式一一对应</span>
+    d = Q.shape[-1]
+    <span class="cm"># ① 打分:S 是 (N, N) —— N² 个分数,平方账从这里开始</span>
+    S = Q @ K.T / np.<span class="fn">sqrt</span>(d)
+    <span class="cm"># 数值稳定:每行减去最大值,防止 exp 上溢,不改变 softmax 结果</span>
+    S = S - S.<span class="fn">max</span>(axis=-1, keepdims=<span class="kw">True</span>)
+    <span class="cm"># ② 逐元素 exp:大分数被指数级放大,小分数趋于 0</span>
+    E = np.<span class="fn">exp</span>(S)
+    <span class="cm"># ③ 逐行归一化:每行除以自己的行和,权重和恰为 1</span>
+    A = E / E.<span class="fn">sum</span>(axis=-1, keepdims=<span class="kw">True</span>)
+    <span class="cm"># ④ 加权求和:每个输出行都是全部历史的凸组合 —— 又扫一遍 N×N</span>
+    <span class="kw">return</span> A @ V</div>
+
+<div class="demo">
+  <h4>🧮 演示 1 · softmax 内部:打分 → exp → 归一化 → 加权求和(数字全部真实计算)</h4>
+  <div class="ctrl">
+    <span>查询行 t:</span>
+    <button id="ds-t0" class="active">q₀</button>
+    <button id="ds-t1">q₁</button>
+    <button id="ds-t2">q₂</button>
+    <button id="ds-t3">q₃</button>
+    <button id="ds-next">下一步 →</button>
+    <button id="ds-prev">← 上一步</button>
+    <button id="ds-auto">▶/⏸ 自动</button>
+    <label style="margin-left:6px">缩放 β = <input type="range" id="ds-beta" min="0.2" max="4" step="any" value="0.5774" style="width:150px"> <span class="mono" id="ds-betaval">0.577</span>(标准注意力取 1/√d)</label>
+  </div>
+  <div class="stepdesc" id="ds-desc"></div>
+  <div class="stepbox" id="ds-stage"></div>
+  <div id="ds-bars" style="max-width:560px;margin:6px auto 0"></div>
+  <p class="readout" id="ds-bars-readout" style="text-align:center"></p>
+  <p class="readout">选中一个查询行后逐步播放,观察第 t 行如何从"N 个原始分数"变成"一组和为 1 的权重"再到"加权输出"。<strong>拖大 β:权重迅速向最像的那个键集中成尖峰</strong> —— 这就是 exp 带来的精确检索;把 β 调到最小,分布摊平成近乎均匀的"平均脸" —— 那恰是 §2 线性注意力去掉 exp 之后的世界。而无论 β 多小,打分和加权都要让每个查询扫过全部 N 个历史:O(N²) 躲不掉。</p>
+</div>
+
 <h3>成本:问题全在 softmax 上</h3>
 <p>先算 <code>QK<sup>T</sup></code> 得到 <code>N × N</code> 的分数矩阵,再对它逐行做 softmax,然后乘 <code>V</code>:</p>
 <table>
@@ -169,12 +231,12 @@
   <tr><td>推理状态(KV Cache)</td><td><code>O(N·L·h·d<sub>h</sub>)</code></td><td>每层都要缓存全部历史的 K、V;序列越长缓存越大</td></tr>
   <tr><td>推理每 token 计算量</td><td><code>O(N·d)</code>/层</td><td>生成长度走到 N 时,每个新 token 都要和全部历史打一遍分</td></tr>
 </table>
-<p><strong>注意 softmax 的角色有两个:</strong>① 归一化(每行权重和为 1,构成凸组合);② 非线性化(<code>exp</code> 让"最像的键"吃掉几乎全部权重,产生尖峰式的精确检索)。这两个好处都有代价:<code>exp</code> 把"打分"和"加权求和"两个步骤<strong>焊死在一起</strong>,你无法先对历史做任何形式的"汇总压缩",只能对每个查询都把历史从头比一遍。</p>
+<p><strong>注意 softmax 的角色有两个:</strong>① 归一化(每行权重和为 1,构成凸组合);② 非线性化(<code>exp</code> 让"最像的键"吃掉几乎全部权重,产生尖峰式的精确检索)。这两个好处都有代价:<code>exp</code> 把"打分"和"加权求和"两个步骤<strong>焊死在一起</strong>,你无法先对历史做任何形式的"汇总压缩",只能对每个查询都把历史从头比一遍。(演示 1 的 β 滑杆可视化的正是角色 ②:β 越大分布越尖;β→0 时退化成均匀平均。)</p>
 <div class="note"><strong>GQA 也是省 KV Cache 的,但省的不是这份钱:</strong>标准注意力里 16 个 Q 头共享 4 组 KV 头(Grouped-Query Attention),KV cache 直接 ÷4——但打分仍然是 O(N²),每个 token 仍要读全部历史。GQA 是"把缓存变薄",线性注意力是"把缓存变成固定大小"。</div>
 </div>
 
 <div class="demo">
-  <h4>📊 演示 1 · 复杂度对比:O(N²·d) vs O(N·d²)</h4>
+  <h4>📊 演示 2 · 复杂度对比:O(N²·d) vs O(N·d²)</h4>
   <div class="ctrl">
     <button class="active" id="d1-mode-flops">训练计算量(FLOPs / 层)</button>
     <button id="d1-mode-mem">推理状态显存(整模型)</button>
@@ -206,7 +268,7 @@
 </ul>
 
 <div class="demo">
-  <h4>🧮 演示 2 · 结合律:中间产物是 N×N 还是 d×d?</h4>
+  <h4>🧮 演示 3 · 结合律:中间产物是 N×N 还是 d×d?</h4>
   <p class="readout">取 N = 4 个 token、d = 3 维的小例子,<strong>数字全部真实计算</strong>。切换两条计算路径,体会"先比后加"与"先加后查"的区别:</p>
   <div class="ctrl">
     <button class="active" id="d2-btn-a">路径 A:(QK<sup>T</sup>)V —— 先打分</button>
@@ -244,7 +306,7 @@
 <div class="card">
 <p>用 Qwen3.5-4B 的真实几何(L = 32 层,h<sub>kv</sub> = 4 KV 头,d<sub>h</sub> = 256,FP16)算一笔账:</p>
 <div class="demo">
-  <h4>🧮 演示 3 · 推理状态显存计算器</h4>
+  <h4>🧮 演示 4 · 推理状态显存计算器</h4>
   <div class="ctrl">
     <label>上下文长度 N = <input type="number" id="d3-n" value="32768" min="256" step="256" style="width:110px"> token</label>
     <label>层数 L = <input type="number" id="d3-l" value="32" min="1" style="width:60px"></label>
@@ -343,7 +405,7 @@
 </ul>
 
 <div class="demo">
-  <h4>🔥 演示 4 · 状态更新可视化:累加 vs Delta Rule(GDN)</h4>
+  <h4>🔥 演示 5 · 状态更新可视化:累加 vs Delta Rule(GDN)</h4>
   <p class="readout">8×8 外部记忆 S 的热图。序列里同一个 key(同一行)会<strong>反复出现</strong>,每次携带不同的 value。观察两种写入方式的差别:累加模式把新旧 value <strong>越叠越亮直至糊死</strong>;Delta 模式(α=0.92, β=1.0)则<strong>覆盖旧值、遗忘久远记忆</strong>,始终保留"最新记录"。</p>
   <div class="ctrl">
     <button id="d4-mode-cum" class="active">累加:标准线性注意力</button>
@@ -364,7 +426,7 @@
 <h2 id="s8">8. 回到 Qwen3.5:为什么是 1×GQA + 3×GDN 的混合<span class="en">Back to Qwen3.5</span></h2>
 
 <div class="card">
-<p>现在可以完整解读<a href="08_overall_architecture.html">整体框架图</a>里语言模型那一行 <strong>“(1×GQA 全注意力 + 3×GDN 线性注意力)×8 组”</strong>:</p>
+<p>现在可以完整解读<a href="00_overall_architecture.html">整体框架图</a>里语言模型那一行 <strong>“(1×GQA 全注意力 + 3×GDN 线性注意力)×8 组”</strong>:</p>
 <table>
   <tr><th></th><th>1× GQA 全注意力层(每 4 层 1 个,共 8 个)</th><th>3× GDN 线性注意力层(共 24 个)</th></tr>
   <tr><td>角色</td><td><strong>精确检索锚点</strong>:无损访问任意历史 token</td><td><strong>长程记忆流</strong>:以固定状态廉价地携带全局上下文</td></tr>
@@ -415,12 +477,92 @@
 
 <footer>
   Qwen-Drive-1.0 结构剖析笔记 09 · 线性注意力与 GDN · 本页所有交互为原生 JavaScript + Canvas,可离线打开 ·
-  相关:[03b_mrope.html](03b_mrope.html) · [06_bev_head_architecture.html](06_bev_head_architecture.html) · [08_overall_architecture.html](08_overall_architecture.html)
+  相关:[03b_mrope.html](03b_mrope.html) · [06_bev_head_architecture.html](06_bev_head_architecture.html) · [00_overall_architecture.html](00_overall_architecture.html)
 </footer>
 </div>
 
 <script>
-// ============ 演示1:复杂度曲线 ============
+// ============ 演示1:softmax 内部逐步拆解 ============
+(function(){
+  // 与演示 3(结合律)同一套 Q、K、V:N=4, d=3
+  const Q=[[1,0,2],[0,1,1],[2,1,0],[1,1,1]];
+  const K=[[1,1,0],[0,1,1],[1,0,1],[2,0,1]];
+  const V=[[1,2,0],[0,1,2],[2,0,1],[1,1,0]];
+  const D=3, STEPS=5, SUB='₀₁₂₃';
+  let t=0, step=0, beta=1/Math.sqrt(3), timer=null;
+  const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
+  const raw=Q.map(q=>K.map(k=>dot(q,k)));   // 4×4 原始点积(未缩放)
+  const fnum=x=>Math.abs(x)>=1000?x.toExponential(2):x.toFixed(2);
+  const mat=(M,cls,hl)=>`<table class="mat">${M.map((r,i)=>'<tr>'+r.map(x=>`<td class="${cls&&i===hl?cls:''}">${typeof x==='string'?x:fnum(x)}</td>`).join('')+'</tr>').join('')}</table>`;
+  const lab=s=>`<span class="mono" style="font-size:12.5px">${s}</span>`;
+  function calc(){
+    const S=raw.map(r=>r.map(x=>x*beta));
+    const mx=S.map(r=>Math.max(...r));                    // 行最大值:数值稳定(见代码块注释)
+    const E=S.map((r,i)=>r.map(x=>Math.exp(x-mx[i])));
+    const sum=E.map(r=>r.reduce((a,b)=>a+b,0));
+    const A=E.map((r,i)=>r.map(x=>x/sum[i]));
+    const Y=A.map(r=>{ const y=[0,0,0]; r.forEach((a,j)=>{ for(let d=0;d<D;d++) y[d]+=a*V[j][d]; }); return y; });
+    return {S,E,A,Y,sum};
+  }
+  function bars(c){
+    const box=document.getElementById('ds-bars'), rd=document.getElementById('ds-bars-readout');
+    if(step===0){ box.innerHTML=''; rd.textContent=''; return; }
+    const vals= step===1? c.S[t] : step===2? c.E[t] : c.A[t];
+    const title= step===1? `第 ${t} 行的分数 s` : step===2? `第 ${t} 行 exp 之后` : `第 ${t} 行的权重 a(凸组合)`;
+    const color= step===1? '#2563eb' : step===2? '#d97706' : '#059669';
+    const mx=Math.max(...vals,1e-12);
+    let html=`<div style="font-size:13px;color:#5b6472;margin:2px 0 4px">${title}:</div>`;
+    vals.forEach((v,i)=>{
+      html+=`<div class="barrow"><span class="barlab">k${SUB[i]}</span><div class="barwrap"><div class="bar" style="width:${Math.max(v/mx*100,1.5)}%;background:${color}"></div></div><span class="barval">${fnum(v)}</span></div>`;
+    });
+    box.innerHTML=html;
+    const s=vals.reduce((a,b)=>a+b,0);
+    rd.textContent= step<3? `行和 = ${fnum(s)}(此时还不是权重)` : `行和 = ${s.toFixed(3)} ✓ 归一化完成`;
+  }
+  function render(){
+    const c=calc(), st=document.getElementById('ds-stage'), ds=document.getElementById('ds-desc');
+    let html='', desc='';
+    if(step===0){
+      html=lab('Q (4×3)')+mat(Q)+lab('K (4×3)')+mat(K)+lab('V (4×3)')+mat(V);
+      desc=`素材:N = 4 个 token、d = 3 维(与演示 3 是同一套数据)。跟踪第 <b>t = ${t}</b> 个 token:它的查询 q${SUB[t]} = [${Q[t].join(', ')}] 要检索全部 4 条历史。`;
+    } else if(step===1){
+      html=lab('S = QKᵀ·β (4×4)')+mat(c.S,'hot',t)+lab('V (4×3)')+mat(V);
+      desc=`① 打分:q${SUB[t]} 与每个 k 点积再乘 β → s${SUB[t]} = [${c.S[t].map(x=>fnum(x)).join(', ')}]。N 个查询 × N 个键 = <b>N² 个分数</b> —— 第一笔平方账。`;
+    } else if(step===2){
+      html=lab('E = exp(S) (4×4)')+mat(c.E,'hot',t);
+      desc=`② 逐元素 exp(实现时先减去行最大值防溢出,不改变结果):e${SUB[t]} = [${c.E[t].map(x=>fnum(x)).join(', ')}]。大分数被指数级放大、小分数趋于 0 —— "最像的键"开始抢权重。`;
+    } else if(step===3){
+      html=lab('A:每行除以行和 (4×4)')+mat(c.A,'hot',t);
+      desc=`③ 逐行归一化:第 ${t} 行 ÷ ${fnum(c.sum[t])} → a${SUB[t]} = [${c.A[t].map(x=>x.toFixed(3)).join(', ')}],和恰为 1 —— 一组凸组合权重。`;
+    } else {
+      html=lab(`a${SUB[t]} (1×4)`)+mat([c.A[t]],'hot',0)+lab('V (4×3)')+mat(V)+lab(`y${SUB[t]} (1×3)`)+mat([c.Y[t]],'hot2',0);
+      desc=`④ 加权求和:y${SUB[t]} = ${c.A[t].map((a,i)=>`${a.toFixed(2)}·[${V[i].join(',')}]`).join(' + ')} = <b>[${c.Y[t].map(x=>x.toFixed(2)).join(', ')}]</b>。每个输出 token 都要扫一遍全部 N 条历史 → 全体合计 O(N²·d) —— 这就是"贵"。`;
+    }
+    st.innerHTML=html; ds.innerHTML=desc; bars(c);
+  }
+  function stopAuto(){ if(timer){ clearInterval(timer); timer=null; document.getElementById('ds-auto').textContent='▶/⏸ 自动'; } }
+  document.getElementById('ds-next').onclick=()=>{ stopAuto(); step=(step+1)%STEPS; render(); };
+  document.getElementById('ds-prev').onclick=()=>{ stopAuto(); step=(step+STEPS-1)%STEPS; render(); };
+  document.getElementById('ds-auto').onclick=()=>{
+    if(timer){ stopAuto(); return; }
+    document.getElementById('ds-auto').textContent='⏸ 暂停';
+    timer=setInterval(()=>{ step=(step+1)%STEPS; render(); },1600);
+  };
+  const tbtns=['ds-t0','ds-t1','ds-t2','ds-t3'];
+  tbtns.forEach((id,i)=>document.getElementById(id).onclick=()=>{
+    t=i; stopAuto();
+    tbtns.forEach((x,j)=>document.getElementById(x).classList.toggle('active',j===i));
+    render();
+  });
+  document.getElementById('ds-beta').oninput=e=>{
+    beta=+e.target.value; stopAuto();
+    document.getElementById('ds-betaval').textContent=beta.toFixed(3);
+    render();
+  };
+  render();
+})();
+
+// ============ 演示2:复杂度曲线 ============
 (function(){
   const cv = document.getElementById('d1-canvas'), ctx = cv.getContext('2d');
   const L=32, HKV=4, DH=256, D=2560, BYTES=2;
@@ -481,7 +623,7 @@
   draw();
 })();
 
-// ============ 演示2:结合律 ============
+// ============ 演示3:结合律 ============
 (function(){
   // Q,K,V: N=4, d=3
   const Q=[[1,0,2],[0,1,1],[2,1,0],[1,1,1]];
@@ -529,7 +671,7 @@
   render();
 })();
 
-// ============ 演示3:显存计算器 ============
+// ============ 演示4:显存计算器 ============
 (function(){
   const cv=document.getElementById('d3-canvas'), ctx=cv.getContext('2d');
   const fmtMem=x=>{ if(x>=1024**4) return (x/1024**4).toFixed(2)+' TiB'; if(x>=1024**3) return (x/1024**3).toFixed(2)+' GiB'; if(x>=1024**2) return (x/1024**2).toFixed(1)+' MiB'; return (x/1024).toFixed(0)+' KiB'; };
@@ -561,7 +703,7 @@
   draw();
 })();
 
-// ============ 演示4:Delta Rule 热图 ============
+// ============ 演示5:Delta Rule 热图 ============
 (function(){
   const cv=document.getElementById('d4-canvas'), ctx=cv.getContext('2d');
   const D=8, ALPHA=0.92;
