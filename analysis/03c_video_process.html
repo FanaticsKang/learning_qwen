@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如果输入是视频文件?—— expand(-1,2,-1,-1) 的另一条路</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #065f46 0%, #059669 45%, #0ea5e9 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 27px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .sub { font-size: 13px; opacity: .75; margin-top: 12px; }
+  h2 {
+    font-size: 21px; margin: 42px 0 6px; padding-left: 12px;
+    border-left: 5px solid var(--green);
+  }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  .qa {
+    background: var(--green-soft); border: 1px solid #a7f3d0; border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0;
+  }
+  .qa b.tag { color: var(--green); }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13.5px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .cmt { color: #7dd3fc; }
+  .kwd { color: #fbbf24; }
+  .num { color: #f472b6; }
+  .pill {
+    display: inline-block; border-radius: 999px; padding: 1px 12px; font-size: 12.5px;
+    font-weight: 600; margin: 0 4px;
+  }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+  .pill.blue  { background: var(--accent-soft); color: var(--accent); }
+  .pill.orange { background: var(--orange-soft); color: var(--orange); }
+  .pill.purple { background: var(--purple-soft); color: var(--purple); }
+  .pill.red { background: var(--red-soft); color: var(--red); }
+  .center { text-align: center; }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .warn {
+    border-left: 4px solid var(--red); background: var(--red-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .dim-label { color: var(--muted); font-size: 13px; }
+  .big-num { font-size: 26px; font-weight: 700; color: var(--green); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .vs-box { border-radius: 12px; padding: 16px 20px; height: 100%; }
+  .vs-box.img { background: var(--accent-soft); border: 1.5px solid #93c5fd; }
+  .vs-box.vid { background: var(--green-soft); border: 1.5px solid #6ee7b7; }
+  .vs-box h4 { margin: 0 0 6px; font-size: 16px; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+  /* 垂直流程图 */
+  .vflow { display: flex; flex-direction: column; align-items: center; margin: 16px 0 4px; }
+  .vf-box {
+    background: var(--card); border: 1.5px solid #6ee7b7; border-radius: 10px;
+    padding: 8px 16px; text-align: center; min-width: 320px; max-width: 680px;
+    box-shadow: 0 1px 4px rgba(5,150,105,.10); font-size: 14px;
+  }
+  .vf-box .vf-sub { font-size: 12.5px; color: var(--muted); }
+  .vf-dim {
+    display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+    border-radius: 6px; padding: 2px 10px; margin-top: 6px;
+  }
+  .vf-arrow { display: flex; flex-direction: column; align-items: center; padding: 3px 0; }
+  .vf-arrow .lbl {
+    background: var(--orange-soft); color: var(--orange); border: 1px solid #fcd34d;
+    font-size: 12px; border-radius: 999px; padding: 1px 12px; margin: 2px 0; text-align: center;
+  }
+  .vf-arrow .down { color: #94a3b8; font-size: 16px; line-height: 1; }
+  .vf-nest {
+    border: 1.5px dashed var(--purple); background: #faf8ff;
+    border-radius: 10px; padding: 10px 14px; max-width: 720px; width: 100%;
+  }
+  .vf-nest h5 { margin: 0 0 4px; color: var(--purple); font-size: 13.5px; text-align: center; }
+  .toc { font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  /* ── 交互演示:胶片采样器 ── */
+  .filmstrip {
+    display: flex; flex-wrap: wrap; gap: 1px; padding: 6px;
+    background: #1e293b; border-radius: 8px; margin: 12px 0 4px;
+  }
+  .fcell { width: 9px; height: 22px; border-radius: 1.5px; background: #475569; }
+  .fcell.picked { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
+  .fcell.current { background: #dc2626; }
+  .ctrl {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; margin: 10px 0; font-size: 14px;
+  }
+  .ctrl input[type=range] { flex: 1 1 200px; accent-color: var(--green); }
+  .stat { font-family: Consolas, "Courier New", monospace; font-size: 13px; }
+  .stat b { color: var(--green); font-size: 15px; }
+  /* ── 交互演示:两帧 tube ── */
+  .tube-wrap { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; align-items: flex-start; margin: 12px 0; }
+  .tube-frame { text-align: center; }
+  .tube-frame .cap { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .tube-grid {
+    display: grid; gap: 2px; background: #cbd5e1; border: 3px solid;
+    border-radius: 6px; width: max-content; margin: 0 auto;
+  }
+  .tube-grid.f0 { border-color: #3b82f6; }
+  .tube-grid.f1 { border-color: #10b981; }
+  .tcell { width: 24px; height: 24px; border-radius: 2px; cursor: pointer; position: relative; transition: transform .12s; }
+  .tcell:hover { transform: scale(1.2); z-index: 3; }
+  .tcell.sel { outline: 3px solid var(--red); outline-offset: -1px; transform: scale(1.18); z-index: 4; }
+  .tube-info {
+    max-width: 420px; min-width: 260px; background: #fffbeb; border: 1.5px solid #fcd34d;
+    border-radius: 10px; padding: 12px 16px; font-size: 13.5px; align-self: center;
+  }
+  .tube-info .dim {
+    display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, "Courier New", monospace; border-radius: 6px;
+    padding: 2px 10px; margin: 6px 0; font-size: 12.5px;
+  }
+  button.btn {
+    background: var(--green); color: #fff; border: none; border-radius: 8px;
+    padding: 6px 16px; font-size: 13.5px; cursor: pointer; font-family: inherit;
+  }
+  button.btn.off { background: #94a3b8; }
+  /* ── 1536 维解剖条 ── */
+  .vecbar { display: flex; gap: 3px; height: 52px; margin: 12px 0 6px; }
+  .vseg {
+    flex: 1; border-radius: 5px; cursor: pointer; color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 11.5px; line-height: 1.3; text-shadow: 0 1px 2px rgba(0,0,0,.4);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .vseg:hover { transform: translateY(-3px); }
+  .vseg.sel { transform: translateY(-3px); box-shadow: 0 0 0 2.5px var(--ink), 0 4px 10px rgba(0,0,0,.25); }
+  .vseg b { font-size: 12.5px; }
+  .anatomy-info {
+    background: #f8fafc; border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; font-size: 13.5px; margin: 10px 0; min-height: 66px;
+  }
+  .anatomy-info .mono { background: #eef1f6; }
+  .judge-wrong { color: var(--red); font-weight: 700; }
+  .judge-right { color: var(--green); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>如果输入是视频文件?<span style="font-weight:normal">—— <code style="background:none;color:#fff">unsqueeze(1).expand(-1, 2, -1, -1)</code> 的"另一条路"</h1>
+  <p>03 篇讲到:单帧图像被复制成 2 份凑齐时间维。那如果直接喂一段 mp4,这套流水线会怎么走?</p>
+  <p class="sub">依据:Qwen2-VL 论文(arXiv:2409.12191)、Qwen2.5-VL 技术报告(arXiv:2502.13923)、Qwen3-VL 模型卡、官方预处理库 qwen-vl-utils 源码、transformers 源码,以及 Qwen-Drive-1.0 仓库本身。原文摘录见 <b>reference/</b> 文件夹。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#qa">① 一句话回答</a> ·
+  <a href="#compare">② 图像路径 vs 视频路径对照表</a> ·
+  <a href="#pipeline">③ 视频全流程(六步)</a> ·
+  <a href="#sampler">④ 交互:帧采样器</a> ·
+  <a href="#tube">⑤ 交互:两帧 tube 打包</a> ·
+  <a href="#rope">⑥ 时间维 RoPE 的变化</a> ·
+  <a href="#numbers">⑦ 数字实例:10s 视频多少 token</a> ·
+  <a href="#why">⑧ 那 Qwen-Drive 为什么不用视频输入?</a> ·
+  <a href="#faq">⑨ FAQ</a> ·
+  <a href="#refs">⑩ 参考资料</a>
+</div>
+
+<!-- ============ ① QA ============ -->
+<h2 id="qa">① 一句话回答<span class="en">TL;DR</span></h2>
+<div class="qa">
+  <p><b class="tag">那行代码是"视频 ViT 的单帧退化用法"。</b>Qwen-VL 系的 ViT 用 <b>3D tube patch</b>(ViViT 式):每个输入向量覆盖<b>相邻 2 帧</b> × 16×16 像素 × 3 通道(<code>temporal_patch_size = 2</code>)。输入视频文件时,时间维不需要复制——<b>由真实采样的相邻两帧填满</b>,每 2 帧打包成 1 个时间步:</p>
+  <ul style="margin:6px 0; padding-left:20px;">
+    <li><b>解码采样</b>:mp4 → 按 <b>2 fps</b>(默认)均匀抽帧,帧数夹在 [4, 768] 且<b>必须取偶数</b>(凑时间步);</li>
+    <li><b>统一 resize</b>:整段视频所有帧缩到同一分辨率,像素预算按帧数摊销;</li>
+    <li><b>grid 变了</b>:<code>image_grid_thw=(1, rows, cols)</code> → <code>video_grid_thw=(nframes/2, rows, cols)</code>;</li>
+    <li><b>RoPE 时间轴活了</b>:图像路径 t 全 0(同一时刻),视频路径 t 按<b>绝对时间</b>递增(每步 = 真实秒数 × tokens_per_second)。</li>
+  </ul>
+  <p style="margin-bottom:0">之后的路完全一样:同样的 16×16 patch 化(每个 patch 向量仍是 1536 维)、同一个 24 层 ViT、同样的 2×2 空间合并与 Projector——<b>视频和图像共用同一套权重,唯一区别是 T 维那"2 份"从"同一帧的复制品"变成"相隔 0.5 秒的两个真实瞬间"</b>,运动信息就藏在两帧的像素差里。</p>
+</div>
+
+<div class="good">
+<b>论文原句背书</b>(Qwen2-VL §2.2,见 reference/01):"we integrated 3D convolutions with a <b>depth of two</b> to process video inputs, allowing the model to handle <b>3D tubes instead of 2D patches</b> … <b>For consistency, each image is treated as two identical frames.</b>" —— 先有视频设计,"图像复制成两帧"是为了与之对齐;Qwen-Drive 的 <code>expand(-1, 2, -1, -1)</code> 正是这句的实现。
+</div>
+
+<!-- ============ ② 对照表 ============ -->
+<h2 id="compare">② 图像路径 vs 视频路径:逐环节对照<span class="en">side by side</span></h2>
+<div class="card">
+  <div class="grid2">
+    <div class="vs-box img">
+      <h4>🖼️ 图像路径(03 篇,scene.py)</h4>
+      <ul style="margin:6px 0 0; padding-left:20px; font-size:13.5px;">
+        <li>输入:单帧 PIL Image(×12 帧,3 视图 × 4 时刻)</li>
+        <li>解码:不需要,帧就是输入</li>
+        <li>采样:无</li>
+        <li>Resize:<b>每帧独立</b>(历史 320p 档 / 当前 720p 档)</li>
+        <li>时间维:<code>expand</code> <b>复制同一帧</b> ×2</li>
+        <li>grid:<code>(1, rows, cols)</code></li>
+        <li>RoPE t:帧内恒定(步长 0)</li>
+      </ul>
+    </div>
+    <div class="vs-box vid">
+      <h4>🎬 视频路径(qwen_vl_utils + transformers)</h4>
+      <ul style="margin:6px 0 0; padding-left:20px; font-size:13.5px;">
+        <li>输入:mp4 / avi / URL / 帧列表</li>
+        <li>解码:torchcodec → decord → torchvision 自动择优</li>
+        <li>采样:<b>2 fps</b> 默认,夹在 [4, 768],取偶数</li>
+        <li>Resize:<b>整段统一</b>一个 (H,W),预算按帧摊销</li>
+        <li>时间维:<b>真实相邻 2 帧</b>打包(tube)</li>
+        <li>grid:<code>(nframes/2, rows, cols)</code></li>
+        <li>RoPE t:<b>绝对时间</b>递增</li>
+      </ul>
+    </div>
+  </div>
+  <table style="margin-top:16px">
+    <tr><th style="width:130px">环节</th><th>图像(scene.py,03 篇)</th><th>视频(官方通路)</th></tr>
+    <tr><td><b>解码</b></td><td>无</td><td><code>decord/torchcodec/torchvision</code> 解出 (T, C, H, W)</td></tr>
+    <tr><td><b>抽帧</b></td><td>无(帧序列由上游给)</td><td><code>nframes = 总帧数/源fps × fps</code>,<code>linspace</code> 等间隔取样</td></tr>
+    <tr><td><b>Resize</b></td><td>逐帧、逐档(320p/720p)</td><td>一次 resize 整段(所有帧同尺寸,否则无法拼 batch)</td></tr>
+    <tr><td><b>时间维 = 2</b></td><td><code>unsqueeze(1).expand(-1,2,-1,-1)</code> 复制</td><td>reshape 时相邻两帧自然配对,无需复制</td></tr>
+    <tr><td><b>patch 向量</b></td><td colspan="2" class="center"><b>完全相同:</b>(3 通道 × 2 时刻 × 16 × 16)展平 = 1536 维</td></tr>
+    <tr><td><b>ViT / 合并 / 投影</b></td><td colspan="2" class="center"><b>完全同一套权重与代码</b>(24 层 ViT → 2×2 合并 → Projector)</td></tr>
+    <tr><td><b>位置编码</b></td><td>image_grid_thw 的 t=1 → 时间号恒定</td><td>video_grid_thw 的 t=nframes/2 → 时间号随绝对时间递增</td></tr>
+  </table>
+  <div class="note">
+  <b>关键洞察:</b>视频输入时 <code>expand</code> 这行代码<b>不是被改掉,而是根本不需要</b>——它的存在恰恰是为了让"没有时间维的图像"能塞进"为视频设计的形状"。(3, 2, H, W) 这个中间形状,图像路径靠复制凑出来,视频路径靠解码自然得到,后面的 <code>reshape/permute</code> 是同一套代码。
+  </div>
+</div>
+
+<!-- ============ ③ pipeline ============ -->
+<h2 id="pipeline">③ 视频全流程:一段 mp4 的六步旅程<span class="en">video pipeline</span></h2>
+<div class="card">
+  <p>以 <b>一段 10 秒、30 fps、1920×1080 的行车记录视频</b>为例(全部默认参数;下标维度按 Qwen-Drive 基座的 patch=16 / merge=2 / factor=32 换算,官方库默认按 patch=14 写,逻辑完全一致):</p>
+
+  <div class="vflow">
+    <div class="vf-box"><b>mp4 文件</b><div class="vf-sub">H.264 编码,30 fps,10 s</div><div class="vf-dim">300 帧 @ 1920×1080</div></div>
+    <div class="vf-arrow"><span class="lbl">Step 1 解码:torchcodec(首选)→ decord → torchvision 兜底,整段解成帧</span><span class="down">↓</span></div>
+    <div class="vf-box">全量帧张量<div class="vf-dim">(300, 3, 1080, 1920)&nbsp;&nbsp;(T, C, H, W)</div><div class="vf-sub">可用 video_start / video_end 只解其中一段</div></div>
+    <div class="vf-arrow"><span class="lbl">Step 2 采样:smart_nframes —— nframes = 300/30×2fps = 20,夹 [4,768] 且取偶</span><span class="down">↓</span></div>
+    <div class="vf-box">等间隔抽帧(idx = linspace(0, 299, 20).round())<div class="vf-dim">(20, 3, 1080, 1920)</div><div class="vf-sub">每 15 帧取 1 帧,采样后等效帧率 2 fps;20 为偶数 → 正好 10 个时间步</div></div>
+    <div class="vf-arrow"><span class="lbl">Step 3 统一 Resize:整段一个尺寸;每帧预算 = min(768 token 上限, 总预算÷帧数×2)</span><span class="down">↓</span></div>
+    <div class="vf-box">全部 20 帧缩到同一分辨率(1080p ≈ 2.07M px → 预算 786,432 px)<div class="vf-dim">(20, 3, 640, 1184)</div><div class="vf-sub">1184×640 = 757,760 px ≈ 740 token/帧 ≤ 768 ✓;吸附到 32 的倍数</div></div>
+    <div class="vf-arrow"><span class="lbl">Step 4 3D patch 化(tube):相邻两帧在 reshape 里自然配对 —— 图像路径的 expand 在这里"被满足"</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>时空 patch 序列</b><div class="vf-dim">(7400, 1536)</div><div class="vf-sub">每个 patch = (3 通道 × <b>2 帧</b> × 16 × 16) 展平,与图像路径同维!grid: video_grid_thw = (10, 40, 74)</div></div>
+    <div class="vf-arrow"><span class="lbl">Step 5 ViT 编码:与 03 篇完全同一套 —— Patch Embedding → 24 层(部分层窗口注意力,成本随帧数线性)→ 输出</span><span class="down">↓</span></div>
+    <div class="vf-box">上下文化 patch 向量(数量不变)<div class="vf-dim">(7400, D<sub>VIT</sub>)</div><div class="vf-sub">自注意力天然跨帧:同位置 patch 看得到"自己 0.5s 前的样子"</div></div>
+    <div class="vf-arrow"><span class="lbl">Step 6 2×2 空间合并 → Projector → 进入 LLM(时间轴交给 M-RoPE)</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>视频 token</b><div class="vf-dim">(1850, D<sub>LLM</sub>)</div><div class="vf-sub">= 10 时间步 × 20 行 × 37 列;M-RoPE 时间位置随真实时间递增(见 ⑥)</div></div>
+  </div>
+
+  <div class="good">
+  <b>注意第 4 步:</b>图像路径里需要 <code>expand</code> 手工补的 (C, 2, H, W),视频路径在第 1 步解码后就天然是 (T≥2, C, H, W)。第 4 步的 reshape 把 <b>frame[2k] 与 frame[2k+1]</b> 配成第 k 个时间步——这就是"两帧打包"的全部机制,没有任何额外网络。
+  </div>
+</div>
+
+<!-- ============ ④ sampler ============ -->
+<h2 id="sampler">④ 交互:帧采样器(smart_nframes)<span class="en">drag the fps slider</span></h2>
+<div class="card">
+  <p>同一段视频(<b>10 s @ 30 fps = 300 帧</b>)。拖动滑块改变采样帧率,看官方算法怎么决定"取哪几帧":</p>
+  <div class="ctrl">
+    <span><b>采样 fps:</b> <span class="stat" id="fpsVal">2.0</span>(默认 2.0)</span>
+    <input type="range" id="fpsSlider" min="0.5" max="8" step="0.5" value="2">
+    <button class="btn" id="playBtn">▶ 自动扫描</button>
+  </div>
+  <div class="filmstrip" id="strip"></div>
+  <div class="legend" style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px">
+    <span><span style="display:inline-block;width:12px;height:12px;background:#475569;border-radius:2px;vertical-align:-1px"></span> 未选中的原始帧</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border-radius:2px;vertical-align:-1px"></span> 被采样进模型的帧</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:2px;vertical-align:-1px"></span> 当前扫描帧(与前一采样帧配成 1 个时间步)</span>
+  </div>
+  <pre id="samplerCode"></pre>
+  <div class="note">
+  <b>为什么帧数必须是偶数?</b> <code>temporal_patch_size = 2</code>:两帧才是一个时间步,奇数帧会让最后一个时间步缺一帧。官方在两处强制取偶:用户传 <code>nframes</code> 时 <code>round_by_factor(nframes, 2)</code>;fps 模式 <code>floor_by_factor(nframes, 2)</code>。把滑块拖到 <b>0.5</b> 可看到:算出 5 帧 → 先被下限 4 <code>min_frames</code> 兜住 → 4 帧(偶)。
+  </div>
+</div>
+
+<!-- ============ ⑤ tube ============ -->
+<h2 id="tube">⑤ 交互:两帧 tube 打包 —— "×2" 里装的是什么<span class="en">3D tube patch</span></h2>
+<div class="card">
+  <p>采样出的帧<b>按顺序两两配对</b>:第 0、1 帧配成时间步 0,第 2、3 帧配成时间步 1……同一个 (行, 列) patch 位置上,两帧的像素被<strong>拼进同一个 1536 维向量</strong>。点击下方网格任意 patch(默认自动扫描),看它如何"跨界":</p>
+  <div class="tube-wrap">
+    <div class="tube-frame">
+      <div class="cap">帧 <b>2k</b>(时间步内第 1 帧)<span class="pill blue" style="margin-left:6px">t 时刻</span></div>
+      <div class="tube-grid f0" id="tube0"></div>
+    </div>
+    <div class="tube-frame">
+      <div class="cap">帧 <b>2k+1</b>(时间步内第 2 帧)<span class="pill green" style="margin-left:6px">t + 0.5s</span></div>
+      <div class="tube-grid f1" id="tube1"></div>
+    </div>
+    <div class="tube-info" id="tubeInfo"></div>
+  </div>
+  <table>
+    <tr><th></th><th>图像路径(03 篇)</th><th>视频路径</th></tr>
+    <tr><td>两帧的内容</td><td><b>同一帧复制 2 份</b>(零拷贝视图,像素差 = 0)</td><td><b>相隔 0.5 s 的真实两帧</b>(默认 2 fps)</td></tr>
+    <tr><td>1536 维里的"×2"</td><td>纯形式,无新信息——只为形状对齐、复用权重</td><td><b>运动信号</b>:同位置 patch 的像素差 = 0.5 s 内物体的位移</td></tr>
+    <tr><td>ViT 能"看见"什么</td><td>单幅静态图(注意力全在空间上)</td><td>空间 + <b>短时运动</b>(注意力可跨时间步关联)</td></tr>
+  </table>
+  <div class="note">
+  这正是 ViViT 的 "tube" embedding(Qwen2-VL 引用的 Arnold/Carreira 3D 卷积):<b>时间深度 = 2</b> 的 3D 卷积核一次扫两帧。视频信息不增序列长度(2 帧只出 1 份 patch),代价是时间分辨率减半——这也是官方选 2 fps 采样(而非更高)后,每步仍有 0.5 s 间隔可覆盖的原因。
+  </div>
+
+  <h3>1536 维的内部解剖:这 1536 个数字到底怎么排?<span class="en">verified with numpy</span></h3>
+  <p>一个自然的猜测是"前 768 维 = 帧 2k 的 RGB、后 768 维 = 帧 2k+1 的 RGB"。<span class="judge-wrong">✗ 不对——通道维在最外层。</span><code>scene.py</code> 的 <code>permute(1,3,6,4,7,<b>0,2</b>,5,8)</code> 把每个 patch 向量内部的顺序固定为 <b>(通道 → 时刻 → 行 → 列)</b>,所以是 <b>6 段 256 维</b>(点击色块看每段装什么):</p>
+  <div class="vecbar" id="vecbar"></div>
+  <div class="legend" style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:4px">
+    <span><span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:2px;vertical-align:-1px"></span> 深 = 帧 2k</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#f87171;border-radius:2px;vertical-align:-1px"></span> 浅 = 帧 2k+1</span>
+    <span>每段 256 维 = patch 内 16×16 像素,行主序扫描 (0,0)→(0,15)→…→(15,15)</span>
+  </div>
+  <div class="anatomy-info" id="anatomyInfo"></div>
+  <pre><code><span class="cmt"># 每一维的下标公式(numpy 按 scene.py 的 reshape+permute 复算验证)</span>
+dim(c, t, i, j) = ((c × 2 + t) × 16 + i) × 16 + j
+                = 通道c × 512 + 时刻t × 256 + 行i × 16 + 列j      <span class="cmt"># c∈{R,G,B}, t∈{帧2k, 帧2k+1}</span>
+
+<span class="cmt"># 验证锚点(dim → 内容):</span>
+<span class="cmt">#   0    → R·帧2k·(0,0)      255  → R·帧2k·(15,15)</span>
+<span class="cmt">#   256  → R·帧2k+1·(0,0)    511  → R·帧2k+1·(15,15)</span>
+<span class="cmt">#   512  → G·帧2k·(0,0)      767  → G·帧2k·(15,15)   ← 第 768 维已是 G 通道!</span>
+<span class="cmt">#   1024 → B·帧2k·(0,0)      1535 → B·帧2k+1·(15,15)</span>
+
+<span class="cmt"># 出处:scene.py:241-252 —— reshape 后 permute(1,3,6,4,7,0,2,5,8),</span>
+<span class="cmt"># 每 patch 向量的轴顺序 = (块行, 块列, 合并行, 合并列, C, T, 行, 列),展平时 C 最外、T 次之</span></code></pre>
+  <div class="note">
+  <b>回到开头的猜测:</b><span class="judge-wrong">✗ "前 768 = 帧 2k 的完整 RGB"不成立</span>——前 768 维其实是 <b>R·帧2k(0–255)+ R·帧2k+1(256–511)+ G·帧2k(512–767)</b>,到第 768 维已经切进 G 通道的帧 2k+1 了。<span class="judge-right">✓ 猜对的部分</span>:时间确实以 <b>256 维的块</b>为单位分开、不逐像素交错,且在每段通道内<b>帧 2k 永远排在帧 2k+1 前面</b>。所以"两帧在向量里是分离的两半"只在<b>单个通道内</b>成立(512 维再对半);整体上是 R/G/B 三大段,每段内再分两帧。
+  </div>
+</div>
+
+<!-- ============ ⑥ rope ============ -->
+<h2 id="rope">⑥ 时间维 RoPE:图像"冻结",视频"流淌"<span class="en">temporal position ids</span></h2>
+<div class="card">
+  <p>进 LLM 后,视觉 token 的 M-RoPE 三维位置 (t, h, w) 中,时间维 t 的算法在两个分支完全不同(transformers <code>get_rope_index</code>,摘录见 reference/03):</p>
+  <pre><code><span class="cmt"># 同一段公式,只差一个系数</span>
+time_tensor = arange(grid_t) × second_per_grid_t × tokens_per_second
+
+<span class="cmt"># 图像分支:grid_t = 1, second_per_grid_t = 0     → t 全 0:帧内所有 token = 同一时刻</span>
+<span class="cmt"># 视频分支:grid_t = 帧数/2,second_per_grid_t = temporal_patch_size / fps(秒)</span>
+<span class="cmt">#           例:2帧/步 ÷ 2fps = 1.0 s/步;tokens_per_second = 25(vision config)</span></code></pre>
+  <h3>同一序列里的时间号长什么样(10 帧 → 5 个时间步,每步 4 个合并 token)</h3>
+  <table>
+    <tr><th>token</th><th>图像路径 t</th><th>视频路径 t(fps=2 → 步长 1s × 25)</th><th>读法</th></tr>
+    <tr><td>帧0 的 (行0,列0~1)</td><td>0, 0</td><td><b>0, 0</b></td><td rowspan="2">图像:5 帧 t 全部恒 0 → "都是同一时刻"</td></tr>
+    <tr><td>帧2、帧4 的对应 token</td><td>0, 0</td><td>视频:属于步 1、2 → <b>25, 50</b></td></tr>
+    <tr><td>步 0 vs 步 3 的 token</td><td>Δt = <b>0</b>(分不出先后!)</td><td>Δt = <b>75</b> = 3 s × 25</td><td>视频:注意力直接读出"隔了 3 秒"</td></tr>
+    <tr><td>fps=1 的视频,同两 token</td><td>Δt = 0</td><td>Δt = <b>150</b> = 3 步 × 2s/步 × 25</td><td>换 fps 后 Δt 按<b>真实秒数</b>缩放 → 不同采样率语义一致</td></tr>
+  </table>
+  <div class="good">
+  <b>这就是 Qwen2.5-VL 说的"绝对时间对齐"</b>(reference/02):时间号的<b>间隔</b> = 真实秒数间隔 × tokens_per_second。模型从 Δt 就能读出事件节奏("这车 3 秒挪了一个车位"),不管视频按几 fps 采样。Qwen2-VL 的旧做法(t = 帧序号)分不清"2fps 取 4 帧"和"1fps 取 4 帧"哪个时间跨度更长。Qwen3-VL 又进一步用<b>文本-时间戳对齐</b>训练模型把事件锚到秒级时间戳,并用 Interleaved-MRoPE 给时间轴分更多频率段以支持长视频(见 05 篇 reference)。
+  </div>
+  <p class="dim-label">呼应 03b 篇:Qwen-Drive 规划路径里 12 帧各自 t 恒定,帧间时序其实靠"文本 frame 标签 + 序列顺序"表达;若走视频通路,时序会由上述绝对时间号直接给出。</p>
+</div>
+
+<!-- ============ ⑦ numbers ============ -->
+<h2 id="numbers">⑦ 数字实例:一段 10s 视频要花多少 token<span class="en">token budget</span></h2>
+<div class="card">
+  <p>延续 ④ 的滑块(视频 10 s @ 30 fps @ 1920×1080,每帧上限 768 token、factor=32):</p>
+  <table id="numTable">
+    <tr><th>采样 fps</th><th>nframes(取偶后)</th><th>时间步 grid_t</th><th>每帧分辨率(预算内)</th><th>每帧 token</th><th><b>整段 token</b> = grid_t × 每帧</th></tr>
+    <tr><td>0.5</td><td>4(触下限)</td><td>2</td><td>1184×640</td><td>740</td><td><b>1,480</b></td></tr>
+    <tr><td>1.0</td><td>10</td><td>5</td><td>1184×640</td><td>740</td><td><b>3,700</b></td></tr>
+    <tr><td><b>2.0(默认)</b></td><td><b>20</b></td><td><b>10</b></td><td>1184×640</td><td>740</td><td><b>7,400</b></td></tr>
+    <tr><td>4.0</td><td>40</td><td>20</td><td>1184×640</td><td>740</td><td><b>14,800</b></td></tr>
+    <tr><td>8.0</td><td>80</td><td>40</td><td>1184×640</td><td>740</td><td><b>29,600</b></td></tr>
+  </table>
+  <p class="dim-label">每帧预算来自官方常量:每帧 ≤ 768 token(VIDEO_MAX_TOKEN_NUM=768)→ 768×32² = 786,432 px,1080p(2.07M px)缩到 1184×640 = 740 token;本例总预算未被触发。若传入 total_pixels 更小,分辨率会随帧数自动下调(total_pixels/nframes×2)。</p>
+  <div class="warn">
+  <b>和 Qwen-Drive 现行方案对比:</b>同一前视角,<b>4 帧方案(现行)= 1,018 token</b>(3×156 历史 + 550 当前);<b>10s 视频方案(默认 2fps)= 7,400 token,贵 7.3 倍</b>,而当前帧分辨率反而更低(1184×640 vs 704×800)、历史时刻被均匀稀释。这就是规划流水线选择"少帧 + 分档分辨率"而放弃视频通路的经济学(详见 ⑧)。
+  </div>
+  <div class="good">
+  <b>官方护栏:</b>帧数上限 768、整段 token 上限(Qwen2.5-VL 评测设 24,576;qwen_vl_utils 用 MODEL_SEQ_LEN≈128k 兜底)、每帧 128~768 token——三层预算保证长视频不会撑爆序列。
+  </div>
+</div>
+
+<!-- ============ ⑧ why ============ -->
+<h2 id="why">⑧ 那 Qwen-Drive 为什么不用视频输入?<span class="en">engineering choice</span></h2>
+<div class="card">
+  <p>基座(Qwen3.5)有完整的视频通路(训练数据含 3.7% 视频 + 4.4% 多视角时序样本,论文图 2 也画了 "Driving videos"),但 Qwen-Drive 的规划流水线刻意走<b>多视图帧序列</b>。四个工程理由:</p>
+  <table>
+    <tr><th>理由</th><th>说明</th></tr>
+    <tr><td><b>1. 结构不同</b></td><td>输入是 <b>3 相机 × 4 时刻</b> 的二维结构(视图 × 时间),需要 <code>&lt;FRONT VIEW&gt;</code> / <code>frame: k</code> 显式分组标签;视频通路只有<b>单一时间轴</b>,没有"视图"概念。</td></tr>
+    <tr><td><b>2. 时间非均匀</b></td><td>4 时刻是 t-1.5 / -1.0 / -0.5 / 0 s 的<b>固定非均匀</b>采样(0.5 s 间隔、当前时刻权重高);视频通路是<b>等间隔</b> linspace 采样,当前帧没有特权。</td></tr>
+    <tr><td><b>3. 分辨率分档</b></td><td>历史帧 320p 档省 token、当前帧 720p 档保细节;<b>视频要求整段统一分辨率</b>(帧张量必须同形),无法分档。</td></tr>
+    <tr><td><b>4. token 成本</b></td><td>见 ⑦:默认 2fps 的 10 s 视频要 7,400 token,是 4 帧 1,018 token 的 7.3 倍,且对 5 s 内的规划决策,大部分历史帧信息冗余。</td></tr>
+  </table>
+  <div class="note">
+  <b>仓库自己的做法也印证了这条思路:</b>基准数据 NVIDIA PhysicalAI 原生就是 <b>mp4 视频</b>(每相机一个 <code>&lt;clip&gt;.&lt;camera&gt;.mp4</code>),官方 <code>docs/data.md</code> 的处理方式是<b>数据准备阶段用 ffmpeg 逐帧解码成 jpg</b>——"视频处理"被前置到模型外面,模型侧永远只吃帧序列(摘录见 reference/06)。
+  </div>
+  <div class="good">
+  <b>如果想真喂一段 mp4 给 Qwen-Drive 的 VLM 做问答</b>(VQA 模式):用官方 qwen_vl_utils 的 <code>process_vision_info</code> 走 ③ 的视频通路,产出 <code>pixel_values_videos + video_grid_thw + second_per_grid_ts</code>;基座权重支持它,但发布仓库的 <code>QwenDriveProcessor</code> 没有封装这条路径——需要自己补解码与占位逻辑。
+  </div>
+</div>
+
+<!-- ============ ⑨ faq ============ -->
+<h2 id="faq">⑨ 常见疑问<span class="en">FAQ</span></h2>
+<div class="card">
+  <h3>Q1:视频输入时 <code>expand(-1, 2, -1, -1)</code> 这行去哪了?</h3>
+  <p>不需要了。它只在"单帧凑时间维"时存在;视频张量解码后天然是 (T, C, H, W),T≥2 且为偶数,reshape 时相邻帧自动配对。<b>后续所有代码(切 patch、ViT、合并)两路完全共用</b>——这正是"each image is treated as two identical frames"的设计目的:让图像成为视频的特例,而不是两套模型。</p>
+
+  <h3>Q2:两帧打包,序列长度不就翻倍了吗?</h3>
+  <p>不翻倍——这正是 tube 的意义:2 帧的 patch 信息<b>合在 1 个 1536 维向量里</b>(16×16×3×2),序列长度按<b>时间步</b>(帧数÷2)计,与单帧图像相同的空间 token 数。代价是时间分辨率减半,收益是序列成本不随帧数线性爆炸。</p>
+
+  <h3>Q3:帧数为什么夹在 [4, 768]?为什么 4 是下限?</h3>
+  <p>上限 768 是官方训练/评测约定(FPS_MAX_FRAMES,对应序列与显存预算);下限 4 = FPS_MIN_FRAMES,<b>保证至少 2 个时间步</b>,时间维 RoPE 才有"间隔"可言(1 个步长无法表达节奏)。且 4 与 768 都是偶数,与 temporal_patch_size=2 自洽。</p>
+
+  <h3>Q4:采样 fps 放越高越好吗?</h3>
+  <p>不是。token 数随帧数线性涨(⑦ 表:2fps→7,400,8fps→29,600),而每帧分辨率预算会被 <code>total_pixels/nframes×2</code> 摊薄——帧越多,每帧越糊。Qwen2.5-VL 训练时"动态采样 FPS"就是为了模型能在各种稀疏度下读时间;推理时应按任务选:粗看事件 → 1~2 fps,精细动作 → 4+ fps 且缩小分辨率。</p>
+
+  <h3>Q5:video_grid_thw 和 image_grid_thw 会混在一个 batch 里吗?</h3>
+  <p>会。两个列表分开传(<code>image_grid_thw</code>、<code>video_grid_thw</code>),模型 forward 里按各自分支算 RoPE(图像 t 恒定、视频 t 随绝对时间)。图文视频混排的多模态 prompt 就靠这个机制统一编码。</p>
+
+  <h3>Q6:视频路径下,2×2 空间合并后每个 token 覆盖多大?</h3>
+  <p>空间上仍是 32×32 像素(与 03 篇一致),但<b>时间上覆盖 2 帧(默认 0.5 s)</b>。即一个 LLM token = "32×32 px × 0.5 s" 的时空块;整段视频 token 数 = 时间步数 × 每帧空间 token 数。</p>
+</div>
+
+<!-- ============ ⑩ refs ============ -->
+<h2 id="refs">⑩ 参考资料与出处<span class="en">references</span></h2>
+<div class="card">
+  <p>本文全部论断的原文与代码摘录已存至项目 <code>reference/</code> 文件夹:</p>
+  <table>
+    <tr><th>文件</th><th>内容</th></tr>
+    <tr><td><code>reference/qwen_vl_utils_vision_process.py</code></td><td>官方预处理库完整源码(fetch_video / smart_nframes / 三种解码后端)</td></tr>
+    <tr><td><code>reference/01_qwen2_vl_paper_video.md</code></td><td>Qwen2-VL 论文摘录:3D tube、"each image is treated as two identical frames"、2fps、M-RoPE 帧号</td></tr>
+    <tr><td><code>reference/02_qwen2_5_vl_paper_video.md</code></td><td>Qwen2.5-VL 技术报告摘录:绝对时间对齐 M-RoPE、动态 FPS、768 帧/24576 token 上限、窗口注意力</td></tr>
+    <tr><td><code>reference/03_transformers_video_mrope.md</code></td><td>transformers get_rope_index 视频分支代码:second_per_grid_ts × tokens_per_second</td></tr>
+    <tr><td><code>reference/04_qwen_vl_utils_video_pipeline.md</code></td><td>官方视频流水线逐行导读(本文 ③④ 的依据)</td></tr>
+    <tr><td><code>reference/05_qwen3_vl_video_features.md</code></td><td>Qwen3-VL 模型卡:Interleaved-MRoPE、DeepStack、文本-时间戳对齐</td></tr>
+    <tr><td><code>reference/06_qwen_drive_repo_video.md</code></td><td>Qwen-Drive 仓库自身证据:论文 "Driving videos"、训练数据配比、data.md 的 ffmpeg 拆帧</td></tr>
+  </table>
+  <p class="dim-label">姊妹篇:<a href="03_vit_process.html">03_vit_process.html</a>(图像路径全流程)· <a href="03a_rope.html">03a_rope.html</a>(RoPE 原理)· <a href="03b_mrope.html">03b_mrope.html</a>(M-RoPE 与 get_rope_index 图像分支)</p>
+</div>
+
+<footer>
+  结论摘要:expand(-1,2,-1,-1) 是视频 ViT(temporal_patch_size=2)在单帧输入下的退化用法;视频文件走官方 qwen_vl_utils 通路 —— 解码 → 2fps 等间隔采样(偶数帧,[4,768])→ 整段统一 resize → 相邻两帧自然配成 3D tube patch(与图像同维 1536)→ 同一套 ViT/合并/投影,唯一本质变化是 video_grid_thw 的 T=nframes/2 与 M-RoPE 时间号按绝对时间递增。Qwen-Drive 规划流水线因多视图结构、非均匀时刻、分档分辨率与 token 成本四点选择帧序列路径,视频在数据链路中由 ffmpeg 前置拆帧。
+</footer>
+</div>
+
+<script>
+// ───────────────────────── ④ 帧采样器 ─────────────────────────
+(function () {
+  var TOTAL = 300, SRC_FPS = 30, DUR = 10;   // 10s @ 30fps
+  var strip = document.getElementById('strip');
+  var slider = document.getElementById('fpsSlider');
+  var fpsVal = document.getElementById('fpsVal');
+  var code = document.getElementById('samplerCode');
+  var playBtn = document.getElementById('playBtn');
+  var cells = [];
+  for (var i = 0; i < TOTAL; i++) {
+    var d = document.createElement('div');
+    d.className = 'fcell';
+    d.title = 'frame ' + i + '  (t=' + (i / SRC_FPS).toFixed(2) + 's)';
+    strip.appendChild(d);
+    cells.push(d);
+  }
+  var picked = [], scanIdx = -1, timer = null, scanning = false;
+
+  function compute(fps) {
+    var raw = TOTAL / SRC_FPS * fps;                 // nframes = 总帧数/源fps × fps
+    var clamped = Math.min(Math.max(raw, 4), 768);   // 夹 [FPS_MIN_FRAMES, FPS_MAX_FRAMES]
+    clamped = Math.min(clamped, TOTAL);
+    var n = Math.floor(clamped / 2) * 2;             // floor_by_factor(…, 2) 取偶
+    return { raw: raw, n: n };
+  }
+
+  function render() {
+    var fps = parseFloat(slider.value);
+    var r = compute(fps);
+    fpsVal.textContent = fps.toFixed(1);
+    cells.forEach(function (c) { c.className = 'fcell'; });
+    picked = [];
+    for (var k = 0; k < r.n; k++) {
+      var idx = Math.round(k * (TOTAL - 1) / (r.n - 1));   // linspace(0, 299, n).round()
+      cells[idx].classList.add('picked');
+      picked.push(idx);
+    }
+    // 扫描高亮:当前选中采样帧(演示两两配对)
+    if (scanIdx >= 0 && picked.indexOf(scanIdx) >= 0) cells[scanIdx].classList.add('current');
+    var step = 2 / fps;   // 每个时间步 = 2 帧 / fps 秒
+    code.innerHTML =
+      '<span class="cmt"># smart_nframes(qwen_vl_utils,默认 fps=' + fps.toFixed(1) + ')</span>\n' +
+      'nframes = total_frames / video_fps * fps = <span class="num">' + TOTAL + '</span>/<span class="num">' + SRC_FPS + '</span> × <span class="num">' + fps.toFixed(1) + '</span> = <span class="num">' + r.raw.toFixed(1) + '</span>\n' +
+      'nframes = min(max(nframes, <span class="num">4</span>), <span class="num">768</span>) = <span class="num">' + Math.min(Math.max(r.raw, 4), 768).toFixed(1) + '</span>' +
+      (r.raw < 4 ? '   <span class="cmt">← 触下限 min_frames=4</span>' : (r.raw > 768 ? '   <span class="cmt">← 触上限 max_frames=768</span>' : '')) + '\n' +
+      'nframes = floor_by_factor(nframes, <span class="num">2</span>) = <span class="num"><b>' + r.n + '</b></span>   <span class="cmt"># 取偶:temporal_patch_size=2</span>\n' +
+      'idx = linspace(<span class="num">0</span>, <span class="num">299</span>, <span class="num">' + r.n + '</span>).round()   <span class="cmt"># 等间隔取样,首尾必含</span>\n' +
+      '<span class="cmt"># → video_grid_thw 时间维 grid_t = ' + r.n + '/2 = ' + (r.n / 2) + ' 个时间步(步长 ' + step.toFixed(2) + 's)</span>\n' +
+      '<span class="cmt"># → 整段 token ≈ grid_t × 每帧token(见 ⑦ 表)</span>';
+    updateTokenRow(fps, r);
+  }
+
+  // ⑦ 表联动高亮当前 fps 行
+  function updateTokenRow(fps, r) {
+    var map = { '0.5': 0, '1': 1, '2': 2, '4': 3, '8': 4 };
+    var rows = document.querySelectorAll('#numTable tbody tr');
+    rows.forEach(function (tr, i) { tr.style.background = (i === map[fps]) ? '#fef9c3' : ''; });
+  }
+
+  slider.addEventListener('input', render);
+  playBtn.addEventListener('click', function () {
+    scanning = !scanning;
+    playBtn.textContent = scanning ? '⏸ 停止' : '▶ 自动扫描';
+    playBtn.className = scanning ? 'btn' : 'btn off';
+    if (scanning) {
+      var pi = 0;
+      timer = setInterval(function () {
+        scanIdx = picked[pi % picked.length];
+        render();
+        pi++;
+      }, 700);
+    } else {
+      clearInterval(timer);
+      scanIdx = -1;
+      render();
+    }
+  });
+  render();
+})();
+
+// ───────────────────────── ⑤ 两帧 tube 演示 ─────────────────────────
+(function () {
+  var COLS = 8, ROWS = 6;
+  var g0 = document.getElementById('tube0'), g1 = document.getElementById('tube1');
+  var info = document.getElementById('tubeInfo');
+  var cells0 = [], cells1 = [];
+  g0.style.gridTemplateColumns = 'repeat(' + COLS + ', 24px)';
+  g1.style.gridTemplateColumns = 'repeat(' + COLS + ', 24px)';
+  function mkGrid(g, store, frameIdx) {
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var d = document.createElement('div');
+        d.className = 'tcell';
+        var hue = (r * COLS + c) * 7 % 360;
+        d.style.background = 'hsl(' + hue + ', ' + (frameIdx ? 60 : 70) + '%, ' + (frameIdx ? 66 : 58) + '%)';
+        d.addEventListener('click', (function (rr, cc) { return function () { select(rr, cc); }; })(r, c));
+        g.appendChild(d); store.push(d);
+      }
+    }
+  }
+  mkGrid(g0, cells0, 0);
+  mkGrid(g1, cells1, 1);
+  var cur = { r: 2, c: 3 };
+  function paint() {
+    cells0.concat(cells1).forEach(function (d) { d.classList.remove('sel'); });
+    cells0[cur.r * COLS + cur.c].classList.add('sel');
+    cells1[cur.r * COLS + cur.c].classList.add('sel');
+    var t = (cur.r * COLS + cur.c) * (2 / 30);   // 假设源 30fps 的第 n 采样帧附近
+    info.innerHTML =
+      '<b>patch (行 ' + cur.r + ', 列 ' + cur.c + ')</b> 的时空向量:<br>' +
+      '<span class="dim">(3 通道 × 2 帧 × 16 × 16) = 1536 维</span><br>' +
+      '上:帧 2k 里这块 16×16px 的颜色<br>' +
+      '下:帧 2k+1 里<b>同一位置</b>的颜色(默认 2fps → 相隔 0.5s)<br>' +
+      '两份像素按<b>通道 → 时刻 → 行 → 列</b>的固定顺序展平成 1 个向量进 ViT(解剖见下)。' +
+      '<span style="color:var(--red);font-weight:600">两帧颜色差 = 运动信息</span>(图像路径里两帧相同,差恒为 0)。';
+  }
+  function select(r, c) { cur = { r: r, c: c }; paint(); }
+  // 自动扫描
+  var auto = true, n = 0;
+  paint();
+  var timer = setInterval(function () {
+    if (!auto) return;
+    cur.r = Math.floor(n / COLS) % ROWS; cur.c = n % COLS; n++;
+    paint();
+  }, 900);
+  document.querySelector('.tube-wrap').addEventListener('click', function () {
+    auto = false; clearInterval(timer);
+  });
+})();
+
+// ───────────────────────── ⑤ 1536 维解剖条 ─────────────────────────
+(function () {
+  var CH = { R: { name: 'R(红)', hi: '#dc2626', lo: '#f87171' },
+             G: { name: 'G(绿)', hi: '#059669', lo: '#34d399' },
+             B: { name: 'B(蓝)', hi: '#2563eb', lo: '#60a5fa' } };
+  var segs = [];
+  ['R', 'G', 'B'].forEach(function (ch) {
+    [0, 1].forEach(function (t) {
+      segs.push({
+        ch: ch, t: t,
+        from: (ch === 'R' ? 0 : ch === 'G' ? 512 : 1024) + t * 256
+      });
+    });
+  });
+  var bar = document.getElementById('vecbar');
+  var info = document.getElementById('anatomyInfo');
+  var selIdx = -1;
+
+  function describe(s) {
+    var ch = CH[s.ch];
+    var frameName = s.t === 0 ? '帧 2k(时间步内第 1 帧)' : '帧 2k+1(时间步内第 2 帧)';
+    return '<b>dim ' + s.from + '–' + (s.from + 255) + '</b> = <b>' + ch.name + '</b> 通道 · <b>' + frameName + '</b><br>' +
+      '内容:该 patch 内 16×16 像素的 ' + s.ch + ' 分量,<b>行主序</b>扫描 (0,0) → (0,15) → (1,0) → … → (15,15),共 256 个数<br>' +
+      '下标公式:dim = ' + s.from + ' + 行i × 16 + 列j(即 ((c×2+' + s.t + ')×16+i)×16+j)';
+  }
+
+  segs.forEach(function (s, idx) {
+    var d = document.createElement('div');
+    d.className = 'vseg';
+    d.style.background = s.t === 0 ? CH[s.ch].hi : CH[s.ch].lo;
+    d.innerHTML = '<b>' + s.ch + '·帧' + (s.t === 0 ? '2k' : '2k+1') + '</b><span>' + s.from + '–' + (s.from + 255) + '</span>';
+    d.addEventListener('click', function () {
+      selIdx = idx;
+      Array.prototype.forEach.call(bar.children, function (el, i) {
+        el.classList.toggle('sel', i === idx);
+      });
+      info.innerHTML = describe(s);
+    });
+    bar.appendChild(d);
+  });
+
+  // 默认说明
+  info.innerHTML =
+    '<span class="judge-right">✓ 但时间确实是成块的</span>:不逐像素交错,每段通道内帧 2k 的 256 维完整排在帧 2k+1 前面 —— <b>点上面 6 个色块</b>看每段装什么。';
+})();
+</script>
+</body>
+</html>

@@ -9,6 +9,7 @@
 | [03_vit_process.html](03_vit_process.html) | 可视化详解:patch 16×16 与 token 32×32 的区别、ViT 编码六步全流程(含交互式 patch/合并演示图,浏览器打开) |
 | [03a_rope.html](03a_rope.html) | 可视化详解:RoPE 旋转位置编码专题 —— 自注意力为何对顺序不敏感(置换不变性实时演示)、"二维平面内旋转 Q/K"交互动画、平移不变性动画与代码逐步验证、2D RoPE 与 M-RoPE 回顾(浏览器打开) |
 | [03b_mrope.html](03b_mrope.html) | 可视化详解:多模态 RoPE(M-RoPE)专题 —— 一维位置的展平/跨结构碰撞(实时算分对比)、(t,h,w) 三轴分配交互演示、mrope_section [11,11,10] 三段维度与打分分解、get_rope_index 位置表代码、设计取舍与 FAQ(浏览器打开) |
+| [03c_video_process.html](03c_video_process.html) | 可视化详解:如果输入是视频文件?—— expand(-1,2,-1,-1) 的"另一条路":解码→2fps 采样(交互帧采样器)→统一 resize→相邻两帧 3D tube 打包(交互演示)→同一套 ViT,video_grid_thw 的 T 与绝对时间 RoPE;10s 视频 token 账单、Qwen-Drive 为何走帧序列(资料原文摘录在 [../reference/](../reference/README.md))(浏览器打开) |
 | [04_view_transform.html](04_view_transform.html) | 可视化详解:BEV 感知头的深度视图变换(论文 Eq. 2)——DepthNet/ASPP、深度分布如何把图像特征撒进 3D 体素、无深度监督、代码 scatter 实现(浏览器打开) |
 | [05_uvtr_frustum.html](05_uvtr_frustum.html) | 可视化详解:UVTR vs LSS 两种深度视图变换的对比 —— Lift/Splat/Shoot 与视锥体素池化、外积内存账、输出空间 2D/3D 之别、本仓库为何选 UVTR(浏览器打开) |
 | [06_bev_head_architecture.html](06_bev_head_architecture.html) | 可视化详解:图 3(a) BEV 感知头全架构 —— ViT→UVTR/LLM 两路的维数地图、BEV Transformer(6 层注意力)与 UVTR 的分工、检测/占用/建图三头(浏览器打开) |
