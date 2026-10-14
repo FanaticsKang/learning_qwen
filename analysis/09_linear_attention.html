@@ -146,7 +146,7 @@
   <h1>线性注意力机制详解 —— 从 O(N²) Softmax 到 O(N) 递归</h1>
   <p>标准(Softmax)注意力 vs 线性注意力:核心思想、计算等价变换、RNN 视角、主要变体、能力差异</p>
   <p>以及 Qwen3.5 里 <span class="pill purple" style="background:rgba(255,255,255,.18);color:#fff">1×GQA + 3×GDN</span> 中 GDN(Gated DeltaNet)到底是什么、为什么要这样混合</p>
-  <p class="sub">Qwen-Drive 结构剖析笔记 09 · 关联:[00 整体框架图](00_overall_architecture.html) · [03b M-RoPE](03b_mrope.html) · 论文 arXiv:2609.00111 图 3(b)</p>
+  <p class="sub">Qwen-Drive 结构剖析笔记 09 · 关联:[00 整体框架图](00_overall_architecture.html) · [01b M-RoPE](01b_mrope.html) · 论文 arXiv:2609.00111 图 3(b)</p>
 </header>
 
 <div class="card toc">
@@ -387,7 +387,7 @@
   <tr><td>长程依赖形态</td><td>任意两 token 直接相连(路径长 1)</td><td>信息在状态中随时间衰减/被覆盖,靠门控选择性保存</td></tr>
   <tr><td>召回类任务<br>(keys 检索、复制、ICL)</td><td><strong>强</strong>:MQAR 等精确回忆任务接近满分</td><td>固定容量下受限:键值对数超过状态容量即开始丢(MQAR 明显掉分)</td></tr>
   <tr><td>平滑归纳偏置</td><td>softmax 产生尖峰分布 → 选择性强</td><td>线性加权更"平均",需靠门控/delta 补选择性</td></tr>
-  <tr><td>位置编码</td><td>RoPE 等作用于 pairwise 打分(见笔记 <a href="03b_mrope.html">03b</a>)</td><td>位置信息隐含在状态的时间演化中(衰减即"位置")</td></tr>
+  <tr><td>位置编码</td><td>RoPE 等作用于 pairwise 打分(见笔记 <a href="01b_mrope.html">01b</a>)</td><td>位置信息隐含在状态的时间演化中(衰减即"位置")</td></tr>
   <tr><td>训练生态</td><td>成熟(FlashAttention / PagedAttention)</td><td>需要专门的 chunkwise/scan kernel(fla、Mamba 系),迭代更快但门槛高</td></tr>
 </table>
 <div class="good"><strong>线性注意力赢在:长序列成本。</strong>N 大到一定程度(约 N &gt; d 之后),计算与显存全面碾压;且推理吞吐不随上下文变长而衰减——这对 128K/1M 级上下文、流式视频(逐帧无限输入)是结构性优势。</div>
@@ -451,7 +451,7 @@
 <p><strong>Q3:那为什么不一刀切全用线性注意力?</strong><br>
 因为<strong>精确回忆</strong>会被固定容量卡死(§7)。全线性模型在 MQAR / needle-in-a-haystack / 长文档问答上明显掉分。混合架构(如 Qwen3.5 的 3:1)是目前效率与能力的主流平衡点。</p>
 <p><strong>Q4:线性注意力还需要位置编码(RoPE)吗?</strong><br>
-通常不需要传统 RoPE:时间顺序已经由状态的时间演化(衰减/覆盖)隐式编码。这也是为什么笔记 <a href="03b_mrope.html">03b</a> 里 M-RoPE 的讨论只涉及全注意力通路——GDN 层吃的是 (t,h,w) 位置信息经过状态动态间接体现的。</p>
+通常不需要传统 RoPE:时间顺序已经由状态的时间演化(衰减/覆盖)隐式编码。这也是为什么笔记 <a href="01b_mrope.html">01b</a> 里 M-RoPE 的讨论只涉及全注意力通路——GDN 层吃的是 (t,h,w) 位置信息经过状态动态间接体现的。</p>
 <p><strong>Q5:递归模型不是不能并行训练吗?</strong><br>
 那是老 RNN 的问题。线性 RNN 的更新对状态是<strong>线性的</strong>,因此可以矩阵化分块:块内并行(小矩阵乘)、块间接力(结合律),配合 Triton/CUDA kernel 在 GPU 上高效训练(chunkwise 并行,§3 表)。Mamba 的 selective scan 与 GLA/GDN 的 chunkwise kernel 同属此类。</p>
 <p><strong>Q6:"门控"的 α、β 都是什么?</strong><br>
@@ -477,7 +477,7 @@
 
 <footer>
   Qwen-Drive-1.0 结构剖析笔记 09 · 线性注意力与 GDN · 本页所有交互为原生 JavaScript + Canvas,可离线打开 ·
-  相关:[03b_mrope.html](03b_mrope.html) · [06_bev_head_architecture.html](06_bev_head_architecture.html) · [00_overall_architecture.html](00_overall_architecture.html)
+  相关:[01b_mrope.html](01b_mrope.html) · [06_bev_head_architecture.html](06_bev_head_architecture.html) · [00_overall_architecture.html](00_overall_architecture.html)
 </footer>
 </div>
 

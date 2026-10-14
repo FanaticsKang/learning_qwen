@@ -301,7 +301,7 @@
 <header class="hero">
   <h1>ViT 视觉编码全过程详解</h1>
   <p>以 Qwen-Drive-1.0(基座 Qwen3.5-4B VLM)为例:一张图像如何变成 LLM 序列里的 token?</p>
-  <p>解构 Vision Encoder 系列 · <b>01 入口总览</b>(专题展开:<a href="03a_rope.html" style="color:#fff">03a RoPE</a> · <a href="03b_mrope.html" style="color:#fff">03b 多模态 RoPE</a> · <a href="03c_video_process.html" style="color:#fff">03c 视频输入</a>)</p>
+  <p>解构 Vision Encoder 系列 · <b>01 入口总览</b>(专题展开:<a href="01a_rope.html" style="color:#fff">01a RoPE</a> · <a href="01b_mrope.html" style="color:#fff">01b 多模态 RoPE</a> · <a href="01c_video_process.html" style="color:#fff">01c 视频输入</a>)</p>
   <p class="sub">依据:论文 arXiv:2609.00111 + 官方仓库 QwenLM/Qwen-Drive-1.0(src/qwen_drive/scene.py、configuration_qwen_drive.py、docs/model.md),数字均经代码验证。</p>
 </header>
 
@@ -397,7 +397,7 @@ pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-
   <div class="note">易错:expand 之后<b>不是</b> (3, 2, 16, 16)。(3, 2, 16, 16) 是最终输出里<b>每一个 patch 向量</b>的内部结构(见 Step 3 的形状逐行轨迹)。</div>
 
   <p><b>为什么要复制成 2 份?</b> <code>image_temporal_patch_size = 2</code>:这套 ViT 是为<b>视频</b>设计的——每次取<b>相邻 2 帧</b>的同一位置 patch 打包处理,让 ViT 能感知帧间运动。输入单张静止图像时,就把同一帧复制两份凑齐时间维,<b>与视频共用同一套权重</b>。这就是每 patch 输入维度里那个"×2"的来源。</p>
-  <p class="dim-label">📖 视频输入路径(真实两帧打包)的完整流程与交互演示:<a href="03c_video_process.html#tube">03c_video_process.html ⑤《两帧 tube 打包 —— "×2" 里装的是什么》</a></p>
+  <p class="dim-label">📖 视频输入路径(真实两帧打包)的完整流程与交互演示:<a href="01c_video_process.html#tube">01c_video_process.html ⑤《两帧 tube 打包 —— "×2" 里装的是什么》</a></p>
 </div>
 
 <!-- ============ ④ step3 ============ -->
@@ -560,7 +560,7 @@ pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-
   </div>
   <p class="dim-label center"><b>624 = 13 × 12 × 2 × 2</b>(块行列数 × 每块的合并行列);624 行 × 每行 1536 维 = ViT 的输入张量 <b>(624, 1536)</b>。</p>
   <div class="note" style="border-left-color: var(--purple); background: var(--purple-soft);">
-    <b>📖 概览。</b>"×2" 的完整拆解见 <a href="03c_video_process.html#tube"><b>03c_video_process.html ⑤《两帧 tube 打包 —— "×2" 里装的是什么》</b></a>。
+    <b>📖 概览。</b>"×2" 的完整拆解见 <a href="01c_video_process.html#tube"><b>01c_video_process.html ⑤《两帧 tube 打包 —— "×2" 里装的是什么》</b></a>。
   </div>
 </div>
 
@@ -574,7 +574,7 @@ pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-
 
     <div class="vf-arrow"><span class="lbl">① Patch Embedding:一个可学习的权重矩阵 W<sub>e</sub>(1536 × 1024),整批一次矩阵乘,非查词表</span><span class="down">↓</span></div>
     <div class="vf-box"><b>线性投影</b><div class="vf-sub">(624, 1536) · W<sub>e</sub>(1536, 1024) → 624 个 patch 共享同一个 W<sub>e</sub>,一步算完(可带偏置)。<br>"非查词表":文字 token 有 id、按行查 embedding 表;patch 是原始像素数据、没有 id,只能投影</div><div class="vf-dim">(624, D<sub>VIT</sub> = 1024)</div></div>
-    <div class="vf-arrow"><span class="lbl">位置信息<b>不在这一步加进向量</b>:只给每个 patch 记录 (行, 列) 号;旋转发生在每层注意力的 Q / K 上(2D RoPE,机制见 <a href="03a_rope.html">03a 篇</a>)</span><span class="down">↓</span></div>
+    <div class="vf-arrow"><span class="lbl">位置信息<b>不在这一步加进向量</b>:只给每个 patch 记录 (行, 列) 号;旋转发生在每层注意力的 Q / K 上(2D RoPE,机制见 <a href="01a_rope.html">01a 篇</a>)</span><span class="down">↓</span></div>
 
     <div class="vf-arrow"><span class="lbl">② 送入 Transformer 块 × <b>depth = 24</b>:重复 24 轮 —— 24 个<b>权重各自独立</b>的层串联:<br>第 1 层输出 = 第 2 层输入,依次到第 24 层;每层形状都是 (624, 1024) 不变,所以能层层相叠。下面展开其中任意一层</span><span class="down">↓</span></div>
 
@@ -600,7 +600,7 @@ pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-
             </div>
             <i class="flowline q"></i>
             <i class="flowline k"></i>
-            <b class="fl-lbl rope">Q、K 先按各自 patch 的位置(行列)做 2D RoPE 旋转(详情见 <a href="03a_rope.html">03a</a>)</b>
+            <b class="fl-lbl rope">Q、K 先按各自 patch 的位置(行列)做 2D RoPE 旋转(详情见 <a href="01a_rope.html">01a</a>)</b>
             <div class="vflow" style="margin:0;">
               <div class="vf-box" style="width:460px;"><b>注意力矩阵 A = softmax(QK<sup>T</sup>/√64)(中间结果)</b><div class="vf-sub">再相乘打分(每头独立):由 Q、K 算出,每行 = 该 patch 对全部 624 个 patch 的注意力权重,行和 = 1,回答"该看谁";也是 O(L²) 计算量的来源</div><div class="vf-dim">(16, 624, 624)</div></div>
               <div class="vf-arrow"><span class="lbl">A·V:用 A(来自 Q、K)对 V(橙色轨道引来)加权求和 —— 这一步才带上内容</span><span class="down">↓</span></div>
@@ -698,7 +698,7 @@ pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-
   <p>① <b>切</b>:一个 32×32 像素块,恰好切出 <b>2×2 = 4 个</b> 16×16 的 patch(左上、右上、左下、右下);</p>
   <p>② <b>编码</b>:4 个 patch 一起过完 24 层 ViT,出来时<b>仍是 4 个独立的向量</b>(各 D<sub>VIT</sub> = 1024 维)—— 合并不发生在 ViT 内部;</p>
   <p>③ <b>拼 + 压</b>:把 4 个向量按 <b>左上 → 右上 → 左下 → 右下</b> 的固定顺序在通道维<b>首尾拼接</b>成 1 根 4096 维(4 × 1024)长向量,再经 Projector(MLP)压缩回 2560 维 —— 这 1 根 2560 维向量,才是 LLM 序列里的 <b>1 个 token</b>。</p>
-  <p class="dim-label" style="margin-bottom:8px">关键在理解 ③ 是<b>「拼接后压缩」,不是「求平均/丢弃」</b>:concat 把 4 份 1024 维信息原封不动排成一根 4096 维长向量(信息一点没少,只是换了打包方式),MLP 再把这份打包信息翻译、压缩回 LLM 的工作宽度 2560 维。<b>为什么"取连续 4 个"取到的恰好是同一个 32×32 块?</b> 因为 _patchify 的九维 permute 已让同一块内的 4 个 patch 在展平序列中恰好连续(序号 4k、4k+1、4k+2、4k+3,块内顺序恒为 左上→右上→左下→右下),逐维拆解见 <a href="03d_permute.html"><b>03d_permute.html《permute 张量变换逻辑可视化》</b></a>。</p>
+  <p class="dim-label" style="margin-bottom:8px">关键在理解 ③ 是<b>「拼接后压缩」,不是「求平均/丢弃」</b>:concat 把 4 份 1024 维信息原封不动排成一根 4096 维长向量(信息一点没少,只是换了打包方式),MLP 再把这份打包信息翻译、压缩回 LLM 的工作宽度 2560 维。<b>为什么"取连续 4 个"取到的恰好是同一个 32×32 块?</b> 因为 _patchify 的九维 permute 已让同一块内的 4 个 patch 在展平序列中恰好连续(序号 4k、4k+1、4k+2、4k+3,块内顺序恒为 左上→右上→左下→右下),逐维拆解见 <a href="01d_permute.html"><b>01d_permute.html《permute 张量变换逻辑可视化》</b></a>。</p>
 
   <svg viewBox="0 0 900 208" style="width:100%; max-width:900px; display:block; margin:12px auto 0;" role="img" aria-label="1 个 token 的诞生:切、编码、拼接压缩">
     <defs>
@@ -797,7 +797,7 @@ vlm(input_ids, pixel_values=patches, image_grid_thw=…)
 
   <div class="note" style="border-left-color: var(--purple); background: var(--purple-soft);">
     <b>备注:什么是"多模态 RoPE"?</b><br>
-    <span style="font-size:13px">📖 本框为概览;RoPE 的原理拆解、交互动画(二维旋转、平移不变性)与代码逐步验证,见 <a href="03a_rope.html"><b>03a_rope.html《RoPE 旋转位置编码详解》</b></a>;M-RoPE 专题深入(一维盲区、交互式 (t,h,w) 分配、[11,11,10] 打分分解、位置表代码)见 <a href="03b_mrope.html"><b>03b_mrope.html《多模态 RoPE 详解》</b></a>。</span><br><br>
+    <span style="font-size:13px">📖 本框为概览;RoPE 的原理拆解、交互动画(二维旋转、平移不变性)与代码逐步验证,见 <a href="01a_rope.html"><b>01a_rope.html《RoPE 旋转位置编码详解》</b></a>;M-RoPE 专题深入(一维盲区、交互式 (t,h,w) 分配、[11,11,10] 打分分解、位置表代码)见 <a href="01b_mrope.html"><b>01b_mrope.html《多模态 RoPE 详解》</b></a>。</span><br><br>
     <b>RoPE 为什么需要:</b>自注意力本身对顺序不敏感——不打乱 token 顺序,注意力输出完全一样。RoPE(Rotary Position Embedding,旋转位置编码)负责补上位置信息:把每个 token 的 Q/K 向量按"位置对应的角度"在二维平面内旋转,旋转后两个 token 的注意力得分只取决于它们的<b>相对位置差</b>。纯文本 LLM 里,每个 token 只有一个位置号 0, 1, 2, …<br><br>
     <b>多模态 RoPE(M-RoPE):1 个位置号 → 3 个位置分量 (t, h, w)</b><br>
     视觉 token 的位置天然是三维的:第几帧(时间 t)、patch 网格第几行(h)、第几列(w),这些编号在预处理时就由 <code>image_grid_thw</code> 记录下来。M-RoPE 的分配规则:<br>

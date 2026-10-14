@@ -112,7 +112,7 @@
 
 <header class="hero">
   <h1>permute(1,3,6,4,7,0,2,5,8) 张量变换逻辑可视化</h1>
-  <p>解构 Vision Encoder 系列 · <b>03d 专题</b> —— 从"切碎的图"到"每 patch 一行",这一步 permute 到底在做什么、该怎么想?(专题:<a href="03_vit_process.html" style="color:#fff">03 全流程</a> · <a href="03a_rope.html" style="color:#fff">03a RoPE</a> · <a href="03b_mrope.html" style="color:#fff">03b M-RoPE</a> · <a href="03c_video_process.html" style="color:#fff">03c 视频输入</a>)</p>
+  <p>解构 Vision Encoder 系列 · <b>01d 专题</b> —— 从"切碎的图"到"每 patch 一行",这一步 permute 到底在做什么、该怎么想?(专题:<a href="01_vit_process.html" style="color:#fff">01 全流程</a> · <a href="01a_rope.html" style="color:#fff">01a RoPE</a> · <a href="01b_mrope.html" style="color:#fff">01b M-RoPE</a> · <a href="01c_video_process.html" style="color:#fff">01c 视频输入</a>)</p>
   <p class="sub">依据:Qwen-Drive-1.0 仓库 src/qwen_drive/scene.py :: _patchify(237-252 行);尺寸以历史帧 384×416(H×W)为例,所有乘积均经复算验证。</p>
 </header>
 
@@ -214,7 +214,7 @@ patches = patches.permute(<span class="num">1, 3, 6, 4, 7, 0, 2, 5, 8</span>).re
     <tr><td>GH → GW</td><td>慢</td><td>32×32 块按<b>行优先</b>扫描:扫完一行块,再下一行块</td></tr>
     <tr><td>MH → MW</td><td>最快</td><td><b>每 4 个连续编号 = 同一个 32×32 块</b>内的 左上→右上→左下→右下 4 个 patch</td></tr>
   </table>
-  <div class="good"><b>读法:</b>patch 行号 k 拆开就是 k = ((gh×12 + gw)×2 + mh)×2 + mw——先定位块,再定位块内四分格。这就是 03 篇说的"每 4 个连续的 patch 恰好属于同一个 32×32 像素块,为 2×2 合并提前排好队":合并时把相邻 4 行拼起来即可,<b>不需要再查找</b>。</div>
+  <div class="good"><b>读法:</b>patch 行号 k 拆开就是 k = ((gh×12 + gw)×2 + mh)×2 + mw——先定位块,再定位块内四分格。这就是 01 篇说的"每 4 个连续的 patch 恰好属于同一个 32×32 像素块,为 2×2 合并提前排好队":合并时把相邻 4 行拼起来即可,<b>不需要再查找</b>。</div>
 </div>
 
 <!-- ============ ⑥ ============ -->
@@ -255,15 +255,15 @@ patches = patches.permute(<span class="num">1, 3, 6, 4, 7, 0, 2, 5, 8</span>).re
   <h3>Q3:grid_t 这个大小恒为 1 的轴,为什么存在?</h3>
   <p>为视频路径预留。视频输入时 grid_t = 帧数 ÷ 2(两帧一个时间步)&gt; 1,图像/单帧路径固定为 1。有它,图像与视频共用同一套 reshape-permute-reshape 代码和同一套 ViT 权重,只是地址组多了一层"时间步"的分段。</p>
 
-  <h3>Q4:和 03c 篇"1536 维的内部解剖"的下标公式什么关系?</h3>
-  <p>permute 后内容轴顺序是 (C, T, PH, PW),reshape 展平后每个 patch 向量里第 (c, t, i, j) 个元素的一维位置就是 <code>dim(c,t,i,j) = c×512 + t×256 + i×16 + j</code>——这正是 <a href="03c_video_process.html#tube">03c 篇 ⑤</a> 逐段验证的公式。c、t 恰好是新坐标的第 5、6 位(内容组前两维):通道最外、时刻次之,所以解剖图上是 R/G/B 三大段、每段内再分两个时刻。</p>
+  <h3>Q4:和 01c 篇"1536 维的内部解剖"的下标公式什么关系?</h3>
+  <p>permute 后内容轴顺序是 (C, T, PH, PW),reshape 展平后每个 patch 向量里第 (c, t, i, j) 个元素的一维位置就是 <code>dim(c,t,i,j) = c×512 + t×256 + i×16 + j</code>——这正是 <a href="01c_video_process.html#tube">01c 篇 ⑤</a> 逐段验证的公式。c、t 恰好是新坐标的第 5、6 位(内容组前两维):通道最外、时刻次之,所以解剖图上是 R/G/B 三大段、每段内再分两个时刻。</p>
 
   <h3>Q5:下次遇到别的 permute,怎么快速心算参数?</h3>
   <p>三步:① 给每个旧轴写名字、标组;② 确定目标形状最外层要谁(地址组,从粗到细)、最内层要谁(内容组);③ 把这些轴的<b>旧下标</b>按顺序抄成参数。反过来校验:参数列表必须是 0…8 的一个排列,且新 shape = 旧 shape 按参数重排后各组乘积分别等于目标行、列数。</p>
 </div>
 
 <footer>
-  来源:Qwen-Drive-1.0 仓库 src/qwen_drive/scene.py :: _patchify(237-252 行,维度 384×416/704×800、merge=2、patch=16、temporal_patch=2);配套篇:<a href="03_vit_process.html">03_vit_process.html《ViT 视觉编码全过程》</a>(张量形状逐行轨迹)、<a href="03c_video_process.html">03c_video_process.html</a>(1536 维内部解剖,dim(c,t,i,j) 公式 numpy 验证);论文 arXiv:2609.00111 §2.1。本文所有乘积(624 = 1×13×12×2×2,1536 = 3×2×16×16,32 元素迷你实验)均按行主序复算验证。
+  来源:Qwen-Drive-1.0 仓库 src/qwen_drive/scene.py :: _patchify(237-252 行,维度 384×416/704×800、merge=2、patch=16、temporal_patch=2);配套篇:<a href="01_vit_process.html">01_vit_process.html《ViT 视觉编码全过程》</a>(张量形状逐行轨迹)、<a href="01c_video_process.html">01c_video_process.html</a>(1536 维内部解剖,dim(c,t,i,j) 公式 numpy 验证);论文 arXiv:2609.00111 §2.1。本文所有乘积(624 = 1×13×12×2×2,1536 = 3×2×16×16,32 元素迷你实验)均按行主序复算验证。
 </footer>
 </div>
 

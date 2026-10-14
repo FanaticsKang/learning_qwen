@@ -185,7 +185,7 @@
   <h1>RoPE 旋转位置编码详解</h1>
   <p>位置为什么是"转"出来的 —— 顺序不敏感 × 二维旋转 × 只看相对位置</p>
   <p>解决两个疑问:① 自注意力既然有位置编码,为什么还说它"对顺序不敏感"?② "把 Q/K 向量按位置对应的角度在二维平面内旋转"到底是什么操作?</p>
-  <p class="sub">姊妹篇:<a href="03_vit_process.html" style="color:#fff">03_vit_process.html §⑧ 多模态 RoPE 概览</a> · 依据:RoFormer 论文(arXiv:2104.09864)· 本页所有演示均在浏览器本地实时计算。</p>
+  <p class="sub">姊妹篇:<a href="01_vit_process.html" style="color:#fff">01_vit_process.html §⑧ 多模态 RoPE 概览</a> · 依据:RoFormer 论文(arXiv:2104.09864)· 本页所有演示均在浏览器本地实时计算。</p>
 </header>
 
 <div class="card toc">
@@ -263,7 +263,7 @@
   </table>
 
   <div class="good">
-    <b>所以 03 篇那句话的准确读法是:</b>"自注意力本身对顺序不敏感"= 把 RoPE 拿掉之后,Qwen 的 LLM 里就不剩任何位置信息,此时随便打乱序列,每个 token 的输出都完全一样。RoPE 不是"锦上添花",而是这类模型<b>感知顺序的唯一渠道</b>。
+    <b>所以 01 篇那句话的准确读法是:</b>"自注意力本身对顺序不敏感"= 把 RoPE 拿掉之后,Qwen 的 LLM 里就不剩任何位置信息,此时随便打乱序列,每个 token 的输出都完全一样。RoPE 不是"锦上添花",而是这类模型<b>感知顺序的唯一渠道</b>。
   </div>
 </div>
 
@@ -507,7 +507,7 @@ print(rot(q, <span class="num">2</span>)  @ rot(k, <span class="num">9</span>)) 
     <b>实现层面的三个要点(面试/读码常考):</b>
     <ul style="margin:4px 0 0; padding-left:20px; font-size:14px">
       <li><b>只有 Q、K 被旋转,V 不转</b>——"内容"不掺位置,位置只决定"谁关注谁"(打分),不改变"被搬运的信息"本身;</li>
-      <li><b>每层都重新转一次</b>,但 cos/sin 位置表只算一次、全部层共用(这就是 03 篇说的 <code>_rope_positions</code> 算出 [3, batch, seq_len] 的那张表);</li>
+      <li><b>每层都重新转一次</b>,但 cos/sin 位置表只算一次、全部层共用(这就是 01 篇说的 <code>_rope_positions</code> 算出 [3, batch, seq_len] 的那张表);</li>
       <li><b>KV 缓存里存的是已旋转的 K</b>—— causal 解码下 K 每个位置只算一次,Qwen-Drive 的 Planning Expert 直接读缓存,位置信息已经在里面了。</li>
     </ul>
   </div>
@@ -524,7 +524,7 @@ print(rot(q, <span class="num">2</span>)  @ rot(k, <span class="num">9</span>)) 
     <tr><td>位置数值来源</td><td>patch 网格的 (行, 列)</td><td><code>get_rope_index</code> 从 <code>image_grid_thw</code> 算出 [3, B, L] 位置表:视觉 token = (帧号, 行, 列);文本 token = (i, i, i) 三分量相同,退化为一维 RoPE</td></tr>
     <tr><td>注意力能"读"到什么</td><td>"这两块 patch 隔了几行几列"(纯空间)</td><td>"隔了几帧(时序)+ 隔了几行几列(空间)",Δt 与 Δh/Δw 解耦到不同旋转组,可分别感知、自由组合</td></tr>
   </table>
-  <p>机制与 §③–§⑤ 完全相同,只是"位置 m"换成了"(t, h, w) 三个分量各自喂给各自的旋转组"。例如帧 0(行 0,列 0)与帧 0(行 0,列 1)的两个 token:t 组、h 组转角相同,w 组差 1×θ → 注意力读到"同一时刻、右邻一格";跨帧同位置则三组都有转差 → "运动信号"。完整的三维位置表、[11,11,10] 分段图和 Planning Expert 的位置衔接,见 <a href="03_vit_process.html#step6">03_vit_process.html §⑧ 的紫框</a>;M-RoPE 的深入拆解(一维盲区对比、交互式 (t,h,w) 分配、按段打分分解、get_rope_index 代码)见 <a href="03b_mrope.html"><b>03b_mrope.html《多模态 RoPE 详解》</b></a>。</p>
+  <p>机制与 §③–§⑤ 完全相同,只是"位置 m"换成了"(t, h, w) 三个分量各自喂给各自的旋转组"。例如帧 0(行 0,列 0)与帧 0(行 0,列 1)的两个 token:t 组、h 组转角相同,w 组差 1×θ → 注意力读到"同一时刻、右邻一格";跨帧同位置则三组都有转差 → "运动信号"。完整的三维位置表、[11,11,10] 分段图和 Planning Expert 的位置衔接,见 <a href="01_vit_process.html#step6">01_vit_process.html §⑧ 的紫框</a>;M-RoPE 的深入拆解(一维盲区对比、交互式 (t,h,w) 分配、按段打分分解、get_rope_index 代码)见 <a href="01b_mrope.html"><b>01b_mrope.html《多模态 RoPE 详解》</b></a>。</p>
   <div class="good"><b>一张图记住 Qwen-Drive 里的位置:</b>ViT 用 2D 旋转补上"在图内何处";LLM 用 3D 旋转补上"在何时、何处"——而这一切的基础,都是本页那个把位置变成角度的二维旋转。</div>
 </div>
 
@@ -548,7 +548,7 @@ print(rot(q, <span class="num">2</span>)  @ rot(k, <span class="num">9</span>)) 
 </div>
 
 <footer>
-  来源:RoFormer: Enhanced Transformer with Rotary Position Embedding(arXiv:2104.09864,RoPE 原始论文);Qwen2/2.5-VL 系实现的 apply_rotary_pos_emb / rotate_half 惯例;Qwen-Drive 数字(mrope_section [11,11,10]、2D RoPE、[3,B,L] 位置表)沿用姊妹篇 03_vit_process.html §⑧ 并与其 config 出处一致。本页动画与数值演示均为浏览器本地计算,可离线打开。
+  来源:RoFormer: Enhanced Transformer with Rotary Position Embedding(arXiv:2104.09864,RoPE 原始论文);Qwen2/2.5-VL 系实现的 apply_rotary_pos_emb / rotate_half 惯例;Qwen-Drive 数字(mrope_section [11,11,10]、2D RoPE、[3,B,L] 位置表)沿用姊妹篇 01_vit_process.html §⑧ 并与其 config 出处一致。本页动画与数值演示均为浏览器本地计算,可离线打开。
 </footer>
 </div>
 

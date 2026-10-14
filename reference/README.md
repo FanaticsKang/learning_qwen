@@ -1,6 +1,6 @@
 # 参考资料:Qwen-VL 系如何处理视频输入
 
-回答的问题:`analysis/03_vit_process.html` 中 `pixels.unsqueeze(1).expand(-1, 2, -1, -1)`
+回答的问题:`analysis/01_vit_process.html` 中 `pixels.unsqueeze(1).expand(-1, 2, -1, -1)`
 (单帧图像复制 2 份凑齐时间维)——**如果输入是视频文件,这里会怎么处理?**
 
 ## 一句话结论

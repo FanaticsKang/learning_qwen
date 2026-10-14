@@ -206,8 +206,8 @@
 <header class="hero">
   <h1>多模态 RoPE(M-RoPE)详解</h1>
   <p>三个位置轴 (t, h, w) × 三段旋转维度 —— 视觉 token 如何在注意力里"在何时、何处"</p>
-  <p>承接 03a:单轴 RoPE 把位置变成角度;本篇回答"多张图、多帧、图文混排时,位置号怎么发、维度怎么分、打分怎么变"。</p>
-  <p class="sub">RoPE 系列:<a href="03_vit_process.html">03 篇 §⑧(概览)</a> → <a href="03a_rope.html">03a(单轴机制与动画)</a> → <b>本篇(M-RoPE 深入)</b> · 依据:Qwen2-VL 技术报告(arXiv:2409.12191,M-RoPE 原始提出)+ 本项目已验证的 config(mrope_section = [11, 11, 10])。演示均浏览器本地计算。</p>
+  <p>承接 01a:单轴 RoPE 把位置变成角度;本篇回答"多张图、多帧、图文混排时,位置号怎么发、维度怎么分、打分怎么变"。</p>
+  <p class="sub">RoPE 系列:<a href="01_vit_process.html">01 篇 §⑧(概览)</a> → <a href="01a_rope.html">01a(单轴机制与动画)</a> → <b>本篇(M-RoPE 深入)</b> · 依据:Qwen2-VL 技术报告(arXiv:2409.12191,M-RoPE 原始提出)+ 本项目已验证的 config(mrope_section = [11, 11, 10])。演示均浏览器本地计算。</p>
 </header>
 
 <div class="card toc">
@@ -224,7 +224,7 @@
 <!-- ============ ⓪ TLDR ============ -->
 <h2 id="tldr">⓪ 太长不看<span class="en">TL;DR</span></h2>
 <div class="qa">
-  <p><b class="tag">M-RoPE 是什么:</b>把单轴 RoPE 的"一个位置号 m"升级成"<b>三个位置号 (t, h, w)</b>"(时间帧、图像行、图像列),并把每个注意力头的 32 个旋转组切成三段(mrope_section = [11, 11, 10])——前 11 组跟着 <b>t</b> 转、中间 11 组跟着 <b>h</b> 转、后 10 组跟着 <b>w</b> 转。旋转机制与 03a 完全相同,只是同一头的维度被三张"角度表"分段驱动。</p>
+  <p><b class="tag">M-RoPE 是什么:</b>把单轴 RoPE 的"一个位置号 m"升级成"<b>三个位置号 (t, h, w)</b>"(时间帧、图像行、图像列),并把每个注意力头的 32 个旋转组切成三段(mrope_section = [11, 11, 10])——前 11 组跟着 <b>t</b> 转、中间 11 组跟着 <b>h</b> 转、后 10 组跟着 <b>w</b> 转。旋转机制与 01a 完全相同,只是同一头的维度被三张"角度表"分段驱动。</p>
   <p><b class="tag">分配规则:</b>文本 token:t = h = w = 自身序号(退化回一维 RoPE);视觉 token:t = 段起点 st,h = st + 行号,w = st + 列号。每个视觉段从它所在序列位置领号,多视角、多帧自然排队。</p>
   <p style="margin-bottom:0"><b class="tag">为什么需要:</b>一维位置号有两个盲区——"序列相邻但空间不相邻"(展平碰撞)和"1D 距离相同但语义完全不同"(换行 vs 跨帧),§① 有逐对数字。M-RoPE 把打分拆成 (Δt, Δh, Δw) 三个独立的相对差:<b>时间差与空间差解耦到不同维度段</b>,注意力可以分别感知、自由组合——这正是驾驶场景"同一位置跨帧 = 运动、同一时刻跨像素 = 空间结构"所需的位置结构。</p>
 </div>
@@ -233,7 +233,7 @@
 <h2 id="blind">① 一维位置的盲区:序列相邻 ≠ 空间相邻<span class="en">why 1D is not enough</span></h2>
 
 <div class="card">
-  <p>图像 patch 按<b>行优先</b>展平成序列后,一维位置号只能表达"序列上隔几个",而丢失了网格结构。沿用 03 篇 §⑧ 的示例(2 行 × 3 列的一帧,段起点 st = 11),四个真实的关系对:</p>
+  <p>图像 patch 按<b>行优先</b>展平成序列后,一维位置号只能表达"序列上隔几个",而丢失了网格结构。沿用 01 篇 §⑧ 的示例(2 行 × 3 列的一帧,段起点 st = 11),四个真实的关系对:</p>
 
   <div class="flatwrap">
     <div>
@@ -274,7 +274,7 @@
   <ul style="font-size:14.5px">
     <li><b>盲区一(展平碰撞)α vs β:</b>12→13 是"同行右邻一格",13→14 是"从行末跳到下一行行首"(空间上斜跨几乎整个图宽)——但序列里都只差 1,<b>一维打分完全相等</b>(同一列的两个数逐位相同)。</li>
     <li><b>盲区二(跨结构碰撞)γ vs δ:</b>11→14 是"同一时刻、正下方一行";16→19 是"时刻推进(跨帧)、且位置从行末到行首"——一维距离都是 3,打分又完全相等。</li>
-    <li><b>盲区三(时/空耦合):</b>一维只有一条距离轴,无法同时表达"同一时刻、隔几行几列"(纯空间)和"同一位置、隔了几帧"(纯时序)——而后者正是驾驶里的"运动信号"(03 篇 A↔C 对比)。</li>
+    <li><b>盲区三(时/空耦合):</b>一维只有一条距离轴,无法同时表达"同一时刻、隔几行几列"(纯空间)和"同一位置、隔了几帧"(纯时序)——而后者正是驾驶里的"运动信号"(01 篇 A↔C 对比)。</li>
   </ul>
 
   <div class="note"><b>关于"M-RoPE 打分"列:</b>这里取单位向量、均匀权重的近似,只为看结构。真实注意力还会给每个维度学不同的幅度权重 |q|·|k|,把有用的维度段放大——但<b>一维的"完全相等"是结构性的</b>(输入就一样),无论权重怎么学都分不开;M-RoPE 的三段输入不同,天然可分。</div>
@@ -294,7 +294,7 @@
   <p class="dim-label">st = 该视觉段第一个 token 的序列位置。多视角、多帧、图文混排时逐段顺延,无需任何特殊处理。</p>
 
   <h3>交互:点两个 token,看它们的三分量与三个差</h3>
-  <p class="dim-label">示例序列与 03 篇 §⑧ 完全同号(文本 0–7 → &lt;FRONT VIEW&gt; 8 → frame:0 标签 9–10 → 帧0 = 11–16 → frame:1 标签 17–18 → 帧1 = 19–24 → 文本 25)。<b>第 1 次点击选 A(紫圈),第 2 次点击选 B(粉圈),再点重新开始</b>;或直接点预设对比按钮。</p>
+  <p class="dim-label">示例序列与 01 篇 §⑧ 完全同号(文本 0–7 → &lt;FRONT VIEW&gt; 8 → frame:0 标签 9–10 → 帧0 = 11–16 → frame:1 标签 17–18 → 帧1 = 19–24 → 文本 25)。<b>第 1 次点击选 A(紫圈),第 2 次点击选 B(粉圈),再点重新开始</b>;或直接点预设对比按钮。</p>
 
   <div class="demo-panel">
     <div class="strip" id="tokStrip"></div>
@@ -318,14 +318,14 @@
     </div>
   </div>
 
-  <div class="note"><b>读表要点:</b>① 帧内所有视觉 token 的 <b>t 恒等于帧起点</b>(如帧0 全是 11)——"同一时刻"不靠猜,是发号规则直接保证的;② 行号、列号只进各自的分量,frame 标签、&lt;FRONT VIEW&gt; 这些"夹在中间的文本"完全不影响帧内 (h, w) 网格,只顺延下一个段的 st;③ 文本 token 的三分量永远相等,和 03a 的一维动画对得上。</div>
+  <div class="note"><b>读表要点:</b>① 帧内所有视觉 token 的 <b>t 恒等于帧起点</b>(如帧0 全是 11)——"同一时刻"不靠猜,是发号规则直接保证的;② 行号、列号只进各自的分量,frame 标签、&lt;FRONT VIEW&gt; 这些"夹在中间的文本"完全不影响帧内 (h, w) 网格,只顺延下一个段的 st;③ 文本 token 的三分量永远相等,和 01a 的一维动画对得上。</div>
 </div>
 
 <!-- ============ ③ sections ============ -->
 <h2 id="sections">③ [11, 11, 10] 分段:三段维度各跟一个轴<span class="en">score decomposition</span></h2>
 
 <div class="card">
-  <p>每个注意力头的 Q/K 有 64 维 = <b>32 个旋转组</b>(03a 的"平面")。M-RoPE 把这 32 组按 mrope_section 切成三段,<b>三段共用同一条频率梯子</b> θ<sub>j</sub> = 10000<sup>−j/32</sup>(j = 0…31),区别只在"读哪张位置表":</p>
+  <p>每个注意力头的 Q/K 有 64 维 = <b>32 个旋转组</b>(01a 的"平面")。M-RoPE 把这 32 组按 mrope_section 切成三段,<b>三段共用同一条频率梯子</b> θ<sub>j</sub> = 10000<sup>−j/32</sup>(j = 0…31),区别只在"读哪张位置表":</p>
 
   <div class="segbar">
     <div class="seg" style="flex:11; background:#2563eb">组 0–10(11 组)<br>角度 = t × θ<sub>j</sub></div>
@@ -361,7 +361,7 @@
 
   <ul style="font-size:14.5px">
     <li><b>解耦:</b>Δt 只出现在第一段的 cos 里,Δh、Δw 只出现在各自段——"运动信号"(Δt 大、Δh=Δw=0)与"空间邻接"(Δt=0、Δh/Δw 小)落在<b>不同的维度集合</b>上,头可以学出"只看某几段"的组合。</li>
-    <li><b>每段内部仍是 03a 的多频率钟表:</b>t 段里 θ₀=1(快针)分辨相邻帧的精细差别,θ₁₀≈0.24(慢针)看长时序;w 段同理分辨列距离。</li>
+    <li><b>每段内部仍是 01a 的多频率钟表:</b>t 段里 θ₀=1(快针)分辨相邻帧的精细差别,θ₁₀≈0.24(慢针)看长时序;w 段同理分辨列距离。</li>
     <li><b>越靠后的组频率越低:</b>w 段(组 22–31)整体是低频段,Δw=1 引起的角度变化很小——所以网格坐标的精细分辨主要靠每段开头的几根"快针",学习到的幅度权重会按需加权。</li>
   </ul>
 </div>
@@ -401,12 +401,12 @@ inv_freq = <span class="num">10000</span> ** (-torch.arange(<span class="num">32
     <span class="kwd">return</span> torch.cat([f[<span class="num">0</span>, :, <span class="num">0</span>:<span class="num">11</span>],          <span class="cmt"># 组 0–10 读 t 表</span>
                       f[<span class="num">1</span>, :, <span class="num">11</span>:<span class="num">22</span>],         <span class="cmt"># 组 11–21 读 h 表</span>
                       f[<span class="num">2</span>, :, <span class="num">22</span>:<span class="num">32</span>]], dim=-<span class="num">1</span>)  <span class="cmt"># 组 22–31 读 w 表</span>
-<span class="cmt"># 之后与 03a 完全相同:emb = cat(freqs, freqs) → cos/sin → apply_rope(Q, K)</span></code></pre>
+<span class="cmt"># 之后与 01a 完全相同:emb = cat(freqs, freqs) → cos/sin → apply_rope(Q, K)</span></code></pre>
 
   <div class="good">
     <b>三个实现要点:</b>
     <ul style="margin:4px 0 0; padding-left:20px; font-size:14px">
-      <li>位置表 <b>[3, batch, L] 只算一次</b>,全部 32 层共用(03 篇的 <code>_rope_positions</code>);每层拿它拼出自己的 cos/sin 施加到 Q、K;</li>
+      <li>位置表 <b>[3, batch, L] 只算一次</b>,全部 32 层共用(01 篇的 <code>_rope_positions</code>);每层拿它拼出自己的 cos/sin 施加到 Q、K;</li>
       <li>发号顺序天然处理<b>多图</b>:每个视觉段用自己的 st,段与段之间由文本/标签 token 顺延——Qwen-Drive 的 12 帧 3054 个视觉 token 就是这样排进一条序列的;</li>
       <li>视频输入时 t 维不再是常量:每帧的 t 沿帧序推进(Qwen2.5-VL 起更默认改为按帧率换算的<b>绝对时间</b>,见 §⑤)。</li>
     </ul>
@@ -426,7 +426,7 @@ inv_freq = <span class="num">10000</span> ** (-torch.arange(<span class="num">32
   <p>θ<sub>j</sub> 只由组号 j 决定,与轴无关;mrope_section 只是"查表路由"——第 j 组读 t/h/w 三张角度表中的哪一张。可以把 M-RoPE 想成<b>三块共用齿轮的表盘</b>:齿轮(频率)一样,指针读的表不一样。</p>
 
   <h3>4. K 缓存与 Planning Expert 的衔接</h3>
-  <p>每层注意力中 Q、K 被旋转、V 不转(03a 要点);K 旋转后进 KV 缓存——<b>Planning Expert 直接读缓存,位置相位已在其中</b>。50 个 waypoint token 从 anchor(前缀最后一个 token 的位置)起<b>继续</b> M-RoPE 编号,保证专家生成的位置与 VLM 前缀连续无缝(03 篇 §⑧)。</p>
+  <p>每层注意力中 Q、K 被旋转、V 不转(01a 要点);K 旋转后进 KV 缓存——<b>Planning Expert 直接读缓存,位置相位已在其中</b>。50 个 waypoint token 从 anchor(前缀最后一个 token 的位置)起<b>继续</b> M-RoPE 编号,保证专家生成的位置与 VLM 前缀连续无缝(01 篇 §⑧)。</p>
 
   <h3>5. ViT 侧是 2D 版</h3>
   <p>ViT 每次只编码一帧,没有时间轴,用的是 (h, w) 两轴的 2D RoPE;进入 LLM 后升级为完整 (t, h, w)。两处的旋转公式、频率梯子完全同源,只是轴数不同。</p>
@@ -451,11 +451,11 @@ inv_freq = <span class="num">10000</span> ** (-torch.arange(<span class="num">32
   <p>见过且是常态:视觉 token 的 (st, st+r, st+c) 天然三分量接近但不相等;只有纯文本是 (i, i, i) 对角线。M-RoPE 模型就是在这样的位置分布上训练的,推理时同分布。</p>
 
   <h3>Q6:多视角、多帧的图像(如 Qwen-Drive 的 12 帧)怎么发号?</h3>
-  <p>逐段处理:每个视觉段有自己的 st,段内按 (帧, 行, 列) 展开,段间由文本/标签顺延。不同视角、不同时刻的 token 靠各自的 (t, h, w) 自然区分——03 篇 ⑨ 节的 3054 个视觉 token 就是这样组织进一条序列的。</p>
+  <p>逐段处理:每个视觉段有自己的 st,段内按 (帧, 行, 列) 展开,段间由文本/标签顺延。不同视角、不同时刻的 token 靠各自的 (t, h, w) 自然区分——01 篇 ⑨ 节的 3054 个视觉 token 就是这样组织进一条序列的。</p>
 </div>
 
 <footer>
-  来源:Qwen2-VL 技术报告(arXiv:2409.12191,M-RoPE 原始提出);Qwen2.5-VL(arXiv:2502.13923,视频时间轴绝对化);RoFormer(arXiv:2104.09864,RoPE 基础);示例序列与数字沿用 03_vit_process.html §⑧(st = 11/19、2×3 网格)。本页所有打分为"单位向量 + 均匀权重"的教学近似,真实注意力含逐维学习的幅度权重;动画与表格均为浏览器本地计算,可离线打开。
+  来源:Qwen2-VL 技术报告(arXiv:2409.12191,M-RoPE 原始提出);Qwen2.5-VL(arXiv:2502.13923,视频时间轴绝对化);RoFormer(arXiv:2104.09864,RoPE 基础);示例序列与数字沿用 01_vit_process.html §⑧(st = 11/19、2×3 网格)。本页所有打分为"单位向量 + 均匀权重"的教学近似,真实注意力含逐维学习的幅度权重;动画与表格均为浏览器本地计算,可离线打开。
 </footer>
 </div>
 
@@ -465,7 +465,7 @@ inv_freq = <span class="num">10000</span> ** (-torch.arange(<span class="num">32
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-  /* ============ 数据:示例序列(与 03 篇 §⑧ 同号) ============ */
+  /* ============ 数据:示例序列(与 01 篇 §⑧ 同号) ============ */
   var FRAME_ST = [11, 19];
   var seq = [];
   for (var i = 0; i < 8; i++) seq.push({ pos: i, kind: 'text', label: '文', sub: String(i) });
