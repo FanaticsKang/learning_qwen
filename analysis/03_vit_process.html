@@ -90,6 +90,133 @@
   .flow .step b { font-size: 13.5px; }
   .flow .step small { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
   .flow .arrow { align-self: center; color: #94a3b8; font-size: 20px; font-weight: 700; }
+  .flow .step { position: relative; }
+  .flow .step:hover { border-color: #93c5fd; box-shadow: 0 4px 14px rgba(37,99,235,.15); }
+  .tip {
+    display: none; position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    width: 480px; max-width: 80vw; background: var(--card); border: 1.5px solid var(--accent);
+    border-radius: 10px; padding: 12px 14px; box-shadow: 0 12px 28px rgba(15,23,42,.22);
+    z-index: 50; text-align: left;
+  }
+  .flow .step:hover .tip { display: block; }
+  .tip pre { margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; }
+  .tip .tip-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  /* patch 网格 + 左侧 1536 维竖排解剖列 */
+  .patch-demo { display: flex; gap: 14px; align-items: stretch; justify-content: center; width: max-content; margin: 12px auto; }
+  .dim-col {
+    width: 92px; display: flex; flex-direction: column; border: 1.5px solid #334155;
+    border-radius: 6px; overflow: hidden; background: #cbd5e1;
+    visibility: hidden; opacity: .2; transition: opacity .15s;
+  }
+  .patch-demo:hover .dim-col { visibility: visible; opacity: 1; }
+  .dim-seg {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px; color: #fff; text-align: center; line-height: 1.3; padding: 2px 4px;
+  }
+  .dim-seg b { font-size: 10.5px; font-weight: 700; }
+  .dim-seg span { font-size: 9.5px; font-family: Consolas, "Courier New", monospace; opacity: .92; }
+  /* 叠框(多头:背卡向左上露出)与残差捷径轨道 */
+  .stack { position: relative; z-index: 0; }
+  .stack::before, .stack::after {
+    content: ""; position: absolute; top: 6px; bottom: 6px; left: 0; right: 0;
+    background: var(--card); border: 1.5px solid var(--deck, #93c5fd); border-radius: 10px; z-index: -1;
+  }
+  .stack::before { transform: translate(-7px, -6px); }
+  .stack::after { transform: translate(-14px, -12px); }
+  .res-block { display: flex; align-items: stretch; width: 100%; }
+  .res-line { width: 84px; flex: none; position: relative; }
+  .res-line::before {
+    content: ""; position: absolute; left: 14px; top: 32px; bottom: 33px;
+    border-left: 2px dashed #94a3b8;
+  }
+  .res-line .rl-tick {
+    position: absolute; left: 14px; right: -1px; height: 0;
+    border-top: 2px solid #94a3b8;
+  }
+  .res-line .rl-tick.top { top: 32px; }
+  .res-line .rl-tick.top::before {
+    content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px;
+    background: #94a3b8; border-radius: 50%;
+  }
+  .res-line .rl-tick.bottom { bottom: 33px; top: auto; }
+  .res-line .rl-tick.bottom::after {
+    content: ""; position: absolute; right: -1px; top: -6px;
+    border-left: 8px solid #94a3b8; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  }
+  .res-line .rl-lbl {
+    position: absolute; left: 0; width: 100%; text-align: center;
+    font-size: 10px; line-height: 1.3; color: #64748b; font-weight: 600;
+  }
+  .res-line .rl-lbl.from { top: 40px; }
+  .res-line .rl-lbl.into { bottom: 6px; }
+  .res-line em {
+    position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
+    writing-mode: vertical-rl; color: #94a3b8; font-size: 10px; font-style: normal;
+    white-space: nowrap; letter-spacing: 1px;
+  }
+  /* V 旁路轨道(右侧,橙色):V 不参与打分,直连 A·V */
+  .av-block { display: flex; align-items: stretch; width: 100%; }
+  .av-line { width: 56px; flex: none; position: relative; }
+  .av-line::before {
+    content: ""; position: absolute; right: 14px; top: -100px; bottom: 33px;
+    border-right: 2px dashed #f59e0b;
+  }
+  .av-line .rl-tick {
+    position: absolute; right: 14px; left: -1px; height: 0;
+    border-top: 2px dashed #f59e0b;
+  }
+  .av-line .rl-tick.top { top: -100px; }
+  .av-line .rl-tick.top::before {
+    content: ""; position: absolute; right: -4px; top: -5px; width: 8px; height: 8px;
+    background: #f59e0b; border-radius: 50%;
+  }
+  .av-line .rl-tick.bottom { bottom: 33px; top: auto; }
+  .av-line .rl-tick.bottom::after {
+    content: ""; position: absolute; left: -1px; top: -6px;
+    border-right: 8px solid #f59e0b; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  }
+  .av-line .rl-lbl {
+    position: absolute; right: 0; width: 100%; text-align: center;
+    font-size: 10px; line-height: 1.3; color: #b45309; font-weight: 600;
+  }
+  .av-line .rl-lbl.from { top: -92px; }
+  .av-line .rl-lbl.into { bottom: 6px; }
+  .av-line em {
+    position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
+    writing-mode: vertical-rl; color: #b45309; font-size: 10px; font-style: normal;
+    white-space: nowrap; letter-spacing: 1px;
+  }
+  /* Q/K→A 与 V→A·V 连线:锚定叠框与中列框的实际位置 */
+  .qk-wrap { position: relative; }
+  .qk-wrap .flowline { position: absolute; width: 0; top: 118px; height: 28px; }
+  .flowline.q { left: calc(50% - 184px); border-left: 2px dashed #3b82f6; }
+  .flowline.q::after {
+    content: ""; position: absolute; left: -6px; bottom: -2px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid #3b82f6;
+  }
+  .flowline.k { left: calc(50% + 6px); border-left: 2px dashed #10b981; }
+  .flowline.k::after {
+    content: ""; position: absolute; left: -6px; bottom: -2px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid #10b981;
+  }
+  .flowline.v { left: calc(50% + 250px); height: 217px; border-left: 2px dashed #f59e0b; }
+  .vstub { position: absolute; top: 118px; left: calc(50% + 184px); width: 66px; height: 0; border-top: 2px dashed #f59e0b; }
+  .vjoin { position: absolute; top: 335px; left: calc(50% + 160px); width: 90px; height: 0; border-top: 2px solid #f59e0b; }
+  .vjoin::before {
+    content: ""; position: absolute; left: -8px; top: -6px;
+    border-right: 8px solid #f59e0b; border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  }
+  .fl-lbl { position: absolute; font-size: 10px; line-height: 1.35; color: #64748b; font-weight: 600; }
+  .fl-lbl a { color: var(--accent); }
+  .fl-lbl.rope {
+    left: -84px; top: 112px; width: 130px; text-align: left; font-weight: 700;
+    background: #faf8ff; border: 1px dashed #c7d2fe; border-radius: 8px; padding: 5px 7px;
+  }
+  .fl-lbl.vfrom {
+    left: calc(50% + 258px); top: 132px; color: #b45309;
+    writing-mode: vertical-rl; letter-spacing: 1px;
+  }
+  .fl-lbl.vinto { left: calc(50% + 168px); top: 312px; width: 130px; color: #b45309; }
   .demo-img {
     display: grid; gap: 2px; background: #cbd5e1; border: 3px solid #334155;
     border-radius: 6px; width: max-content; margin: 12px auto;
@@ -159,7 +286,11 @@
   .segbar { display: flex; width: 100%; max-width: 620px; margin: 10px auto 4px; border-radius: 8px; overflow: hidden; font-size: 12px; color: #fff; text-align: center; }
   .seg { padding: 8px 4px; }
   .toc { font-size: 14px; }
-  .toc a { color: var(--accent); text-decoration: none; }
+  .toc b { display: block; margin-bottom: 4px; }
+  .toc a {
+    color: var(--accent); text-decoration: none;
+    display: block; padding: 3px 0; text-align: left;
+  }
   .toc a:hover { text-decoration: underline; }
   svg text { font-family: inherit; }
 </style>
@@ -170,26 +301,364 @@
 <header class="hero">
   <h1>ViT 视觉编码全过程详解</h1>
   <p>以 Qwen-Drive-1.0(基座 Qwen3.5-4B VLM)为例:一张图像如何变成 LLM 序列里的 token?</p>
+  <p>解构 Vision Encoder 系列 · <b>01 入口总览</b>(专题展开:<a href="03a_rope.html" style="color:#fff">03a RoPE</a> · <a href="03b_mrope.html" style="color:#fff">03b 多模态 RoPE</a> · <a href="03c_video_process.html" style="color:#fff">03c 视频输入</a>)</p>
   <p class="sub">依据:论文 arXiv:2609.00111 + 官方仓库 QwenLM/Qwen-Drive-1.0(src/qwen_drive/scene.py、configuration_qwen_drive.py、docs/model.md),数字均经代码验证。</p>
 </header>
 
 <div class="card toc">
   <b>目录:</b>
-  <a href="#qa">① 一句话回答:patch 与 token 的区别</a> ·
-  <a href="#pipeline">② 全流程总览</a> ·
-  <a href="#step1">③ Step1 动态分辨率</a> ·
-  <a href="#step2">④ Step2 归一化与时间维</a> ·
-  <a href="#step3">⑤ Step3 切 patch(16×16)</a> ·
-  <a href="#step4">⑥ Step4 ViT 编码</a> ·
-  <a href="#step5">⑦ Step5 2×2 合并(token=32×32)</a> ·
-  <a href="#step6">⑧ Step6 进入 LLM</a> ·
-  <a href="#numbers">⑨ 实际数字计算</a> ·
-  <a href="#faq">⑩ 常见疑问</a> ·
-  <a href="#attention">⑪ 两次注意力与 QKV 发生在哪</a>
+  <a href="#pipeline">① 全流程总览</a>
+  <a href="#step1">② Step1 动态分辨率</a>
+  <a href="#step2">③ Step2 归一化与时间维</a>
+  <a href="#step3">④ Step3 切 patch(16×16)</a>
+  <a href="#step4">⑤ Step4 ViT 编码</a>
+  <a href="#step5">⑥ Step5 2×2 合并(token=32×32 · 含 patch vs token 一句话回答)</a>
+  <a href="#step6">⑦ Step6 进入 LLM</a>
+  <a href="#numbers">⑧ 实际数字计算</a>
+  <a href="#faq">⑨ 常见疑问</a>
+  <a href="#attention">⑩ 两次注意力与 QKV 发生在哪</a>
 </div>
 
-<!-- ============ ① QA ============ -->
-<h2 id="qa">① 一句话回答:patch 16×16 和 token 32×32 分别是什么?<span class="en">patch vs token</span></h2>
+<!-- ============ ① pipeline ============ -->
+<h2 id="pipeline">① 全流程总览<span class="en">pipeline</span></h2>
+<div class="card">
+  <div class="flow">
+    <div class="step" style="cursor:help"><b>输入帧</b><small>WOD-E2E 发布帧 972×1079<br><span style="color:var(--accent)">⌄ 悬停查看处理逻辑</span></small>
+      <div class="tip">
+        <b style="font-size:12.5px">这一帧进 ViT 前的处理(scene.py :: _patchify)</b>
+        <pre><code>image = Image.open(jpg).convert("RGB")  # 读入发布帧 972×1079(存储尺寸)
+<span class="cmt">if frame.target_size is not None:</span>       # <span class="cmt">评测元数据带目标:历史 384×416 / 当前 720×799</span>
+    image = TF.resize(image, [h, w], BICUBIC)
+    max_pixels = grid_pixel_limit        # <span class="cmt">有明确目标 → 不再按像素预算压缩</span>
+grid_h, grid_w = smart_resize(h, w, 32, min_pixels, max_pixels)  # <span class="cmt">吸附到 32 的倍数</span>
+image = TF.resize(image, [grid_h, grid_w], BICUBIC)
+<span class="cmt"># → 历史帧 384×416(已对齐) / 当前帧 720×799 → 704×800,随后归一化 [-1,1]</span></code></pre>
+        <div class="tip-note">注:972×1079 就是 WOD-E2E 官方发布帧的原生尺寸——官方工作流是"下载 → 按路径引用"(docs/data.md),pack_images.py 逐字节打包("decoded pixels are unchanged"),仓库内没有任何缩放代码产生它,因此这一步<b>无需处理、原样引用</b>;两级来历详见下文 Step 1。</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="step"><b>① 动态 Resize</b><small>缩放到 32 的倍数<br>320p / 720p 两档</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>② 归一化</b><small>[-1,1]<br>时间维复制 ×2</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>③ 切 patch</b><small>16×16/块<br>每块 1536 维</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>④ ViT 编码</b><small>自注意力<br>2D 位置编码</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>⑤ 2×2 合并</b><small>4 patch → 1 token<br>token = 32×32 px</small></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>⑥ 投影进 LLM</b><small>替换 &lt;image&gt; 占位<br>多模态 RoPE</small></div>
+  </div>
+  <p class="dim-label center">维度变化(以历史帧 384×416 为例):图像 (H,W,3) → patches (624, 1536) → ViT 输出 (624, D<sub>VIT</sub>) → 合并 (156, 4·D<sub>VIT</sub>) → 投影 (156, D<sub>LLM</sub>);实际值 D<sub>VIT</sub> = 1024、D<sub>LLM</sub> = 2560(发布 config.json)。"发布帧 972×1079" 的两级来历见 Step 1。</p>
+</div>
+
+<!-- ============ ② step1 ============ -->
+<h2 id="step1">② Step 1:动态分辨率 Resize<span class="en">smart_resize</span></h2>
+<div class="card">
+  <p>Qwen-VL 系不要求固定输入分辨率(不是把所有图强行拉成 448×448),而是<b>保持长宽比、把分辨率吸附到 32 的倍数</b>(32 = patch 16 × 合并 2,这样恰好能被整除切分),同时不超过像素预算:</p>
+  <div class="note" style="border-left-color: var(--purple); background: var(--purple-soft);">
+    <b>"原图"到底是多少?—— 分辨率两级链:</b>
+    <table style="margin:8px 0 2px">
+      <tr><th>层级</th><th>尺寸</th><th>说明</th></tr>
+      <tr><td>① WOD-E2E 官方发布帧</td><td><b>972×1079</b>(竖构图)</td><td>Waymo 端到端数据集(8 相机 10Hz JPEG)发布的原图就是这一尺寸,Qwen-Drive 按官方工作流<b>原样引用</b>:docs/data.md 只做"下载 → 按路径引用",pack_images.py 逐字节打包("decoded pixels are unchanged"),仓库内不存在产生 972×1079 的缩放代码。jsonl 里的 <code>width/height</code> 记录的就是它</td></tr>
+      <tr><td>② 模型输入目标</td><td>历史 <b>384×416</b> · 当前 <b>720×799</b></td><td>jsonl 里的 <code>resized_width/height</code>;论文原文:"We resize historical images to 320p and current images to 720p"</td></tr>
+    </table>
+    <span style="font-size:13px">② 再经下方 smart_resize 吸附到 32 的倍数 → 历史帧 <b>384×416</b>(已对齐)、当前帧 <b>704×800</b>。注意:Waymo 旧感知数据集的相机为 1920×1280,与 WOD-E2E 的发布帧不是一个东西;Waymo 官方页面未公布 E2E 各相机的像素数,"发布即 972×1079"由仓库证据链(原样引用 + 字节级打包)得出。</span>
+  </div>
+  <table>
+    <tr><th>帧类型</th><th>预算/目标</th><th>demo 实际(发布帧 972×1079)</th><th>为什么</th></tr>
+    <tr><td>历史帧 ×9(t-1.5s~t-0.5s)</td><td>预算 174,080 px(≈320p 档)</td><td><b>384×416</b></td><td>运动历史,少花 token</td></tr>
+    <tr><td>当前帧 ×3(t=0)</td><td>目标 720p 档(demo 给 720×799)</td><td>吸附后 <b>704×800</b></td><td>当前观测,保细节</td></tr>
+  </table>
+  <pre><code><span class="cmt"># scene.py :: smart_resize —— 分辨率四舍五入到 32 的倍数,并缩进预算内</span>
+bar_h = round(h / <span class="num">32</span>) * <span class="num">32</span>;  bar_w = round(w / <span class="num">32</span>) * <span class="num">32</span>
+<span class="cmt"># 超预算 → 按 sqrt(原像素/预算) 等比缩小(floor 取整到 32 倍数)</span></code></pre>
+  <p class="dim-label">验证:发布帧 972×1079 按历史预算 174,080 → 384×416(与 demo 元数据完全一致);720×799 → round(799/32)×32=800、round(720/32)×32=704。</p>
+  <div class="note">
+  <b>注意区分两条流水线(常与 <a href="06_bev_head_architecture.html">06_bev_head_architecture.html《BEV Perception Head 全架构解读》</a>对照):</b>本篇是<b>规划流水线</b> —— 12 帧 = 3 视图(前/左前/右前)× 4 时刻,历史帧 ×9 用低分辨率省 token、当前帧 ×3 用 720p 档保细节,分辨率动态可变。而 <b>BEV 感知头(06 篇)是另一条流水线</b>:严格单帧(只有 t-0s 的环视 6/8 相机,没有历史帧),输入<b>固定 896×512</b> —— 那是感知权重训练时的固定相机布局与分辨率。两处尺寸不同不是矛盾,是两个模型各自的输入规范。
+  </div>
+</div>
+
+<!-- ============ ③ step2 ============ -->
+<h2 id="step2">③ Step 2:归一化 + 时间维复制<span class="en">normalize &amp; temporal patch</span></h2>
+<div class="card">
+  <pre><code><span class="cmt"># scene.py :: _patchify</span>
+pixels = pil_to_tensor(img).float().div_(<span class="num">255</span>).sub_(<span class="num">0.5</span>).div_(<span class="num">0.5</span>)   <span class="cmt"># → [-1, 1]</span>
+pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-1</span>, <span class="num">2</span>, <span class="num">-1</span>, <span class="num">-1</span>)              <span class="cmt"># 时间维复制成 2 份</span></code></pre>
+
+  <h3>这一步的维数变化(易错点)</h3>
+  <div class="vflow">
+    <div class="vf-box">归一化后的<b>整张图</b><div class="vf-dim">(3, H, W)&nbsp;&nbsp;例: (3, 416, 384)</div></div>
+    <div class="vf-arrow"><span class="lbl">unsqueeze(1):在通道维 C 之后插入长度 1 的时间维</span><span class="down">↓</span></div>
+    <div class="vf-box">插入占位时间维<div class="vf-dim">(3, 1, H, W)</div></div>
+    <div class="vf-arrow"><span class="lbl">expand(-1, 2, -1, -1):时间维复制成 2(PyTorch 零拷贝广播视图)</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>结果 = "两帧"整图</b><div class="vf-dim">(3, 2, H, W)&nbsp;&nbsp;例: (3, 2, 416, 384)</div><div class="vf-sub">仍是整张图,所有像素都还在;16×16 的切分发生在下一步 reshape</div></div>
+  </div>
+  <div class="note">易错:expand 之后<b>不是</b> (3, 2, 16, 16)。(3, 2, 16, 16) 是最终输出里<b>每一个 patch 向量</b>的内部结构(见 Step 3 的形状逐行轨迹)。</div>
+
+  <p><b>为什么要复制成 2 份?</b> <code>image_temporal_patch_size = 2</code>:这套 ViT 是为<b>视频</b>设计的——每次取<b>相邻 2 帧</b>的同一位置 patch 打包处理,让 ViT 能感知帧间运动。输入单张静止图像时,就把同一帧复制两份凑齐时间维,<b>与视频共用同一套权重</b>。这就是每 patch 输入维度里那个"×2"的来源。</p>
+  <p class="dim-label">📖 视频输入路径(真实两帧打包)的完整流程与交互演示:<a href="03c_video_process.html#tube">03c_video_process.html ⑤《两帧 tube 打包 —— "×2" 里装的是什么》</a></p>
+</div>
+
+<!-- ============ ④ step3 ============ -->
+<h2 id="step3">④ Step 3:切成 16×16 的 patch<span class="en">patchify</span></h2>
+<div class="card">
+
+  <h3 id="shape-flow">张量形状逐行轨迹(以历史帧 384×416 为例,已用 numpy 复算验证)</h3>
+  <div class="vflow">
+    <div class="vf-box"><b>pil_to_tensor:整张图入库</b><div class="vf-sub">(C, H, W) = 通道 × 高 × 宽</div><div class="vf-dim">(3, 416, 384)</div></div>
+    <div class="vf-arrow"><span class="lbl">unsqueeze(1):通道之后插入长度 1 的时间维</span><span class="down">↓</span></div>
+    <div class="vf-box">占位时间维<div class="vf-dim">(3, 1, 416, 384)</div></div>
+    <div class="vf-arrow"><span class="lbl">expand(-1, 2, -1, -1):时间维复制成 2(零拷贝广播视图,不复制内存)</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>"两帧"整图:同一帧复制成 2 份</b><div class="vf-sub">单帧输入:两份内容完全相同(不带来新信息);视频输入:是真实相邻两帧</div><div class="vf-dim">(3, 2, 416, 384)</div></div>
+    <div class="vf-arrow"><span class="lbl">reshape(3,1,2,13,2,16,12,2,16):<b>16×16 在这一步才被切开</b></span><span class="down">↓</span></div>
+    <div class="vf-box">九维视图(每一维的含义见下方「九维视图图解」)<div class="vf-sub">13×12 = patch 块网格 · 2×2 = 合并组(每 4 个连续 patch 属于同一 32×32 块)· 16×16 = 块内像素</div><div class="vf-dim">(3, 1, 2, 13, 2, 16, 12, 2, 16)</div></div>
+    <div class="vf-arrow"><span class="lbl">permute(1,3,6,4,7,0,2,5,8):(时间, 块行, 块列, 合并行, 合并列) 提到最外,(C, T, 像素行, 像素列) 收进每块</span><span class="down">↓</span></div>
+    <div class="vf-box">重排后的九维<div class="vf-dim">(1, 13, 12, 2, 2, 3, 2, 16, 16)</div></div>
+    <div class="vf-arrow"><span class="lbl">reshape(rows·cols, -1):每个 patch 展平成一行</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>输出:每行 = 一个 patch 向量</b><div class="vf-sub">每行内部结构 = (C=3, T=2, 16, 16) 展平</div><div class="vf-dim">(624, 1536)</div></div>
+  </div>
+
+  <h3 id="split-fig">九维视图图解:(3, 1, 2, 13, 2, 16, 12, 2, 16) 每一维是什么</h3>
+  <table>
+    <tr><th>轴</th><th>值</th><th>含义</th><th>空间?</th></tr>
+    <tr><td>0</td><td>3</td><td><b>C</b>:RGB 颜色通道</td><td>✗ 非空间</td></tr>
+    <tr><td>1</td><td>1</td><td><b>grid_t</b>:时间步数(单张图像恒为 1;视频 = 帧数 ÷ 2)</td><td>✗ 非空间</td></tr>
+    <tr><td>2</td><td>2</td><td><b>T</b>:每个时间步打包的帧数(单帧输入 = 同一帧复制 2 份)</td><td>✗ 非空间</td></tr>
+    <tr><td>3</td><td><b>13</b></td><td><b>块行数</b>:高方向 32×32 块的个数 = 416 ÷ 32</td><td>✓ 空间(H)</td></tr>
+    <tr><td>4</td><td>2</td><td><b>合并行</b>:2×2 合并在 H 方向的一半</td><td>✓ 空间(H)</td></tr>
+    <tr><td>5</td><td>16</td><td><b>patch 内像素行</b>(patch_size)</td><td>✓ 空间(H)</td></tr>
+    <tr><td>6</td><td><b>12</b></td><td><b>块列数</b>:宽方向 32×32 块的个数 = 384 ÷ 32</td><td>✓ 空间(W)</td></tr>
+    <tr><td>7</td><td>2</td><td><b>合并列</b>:2×2 合并在 W 方向的一半</td><td>✓ 空间(W)</td></tr>
+    <tr><td>8</td><td>16</td><td><b>patch 内像素列</b></td><td>✓ 空间(W)</td></tr>
+  </table>
+  <p class="dim-label center">前 3 个轴(C、grid_t、T)不是空间——它们只是把同一份空间切分复制成 3×1×2 = 6 份"通道 × 时刻";后 6 个轴才是空间:H 方向 13×2×16 连乘 = 416,W 方向 12×2×16 连乘 = 384。下图把这前 3 个轴略去,只画这 6 个空间轴(即"忽略 C 与 T,只看空间")。</p>
+  <div class="center">
+  <svg viewBox="0 0 760 402" width="100%" style="max-width:760px;height:auto" role="img" aria-label="空间切分图解:12×13 个 32×32 块,每块 2×2 个 16×16 patch,每个 patch 16×16 像素">
+    <defs>
+      <pattern id="pxgrid" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="#f8fafc"/>
+        <path d="M8,0 L0,0 L0,8" fill="none" stroke="#cbd5e1" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <text x="70" y="18" font-size="12" font-weight="600">① 整图(历史帧 384×416):13 块行 × 12 块列(13 = 416÷32,12 = 384÷32),每块 32×32 px</text>
+    <rect x="70" y="40" width="264" height="286" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <path d="M92,40 V326 M114,40 V326 M136,40 V326 M158,40 V326 M180,40 V326 M202,40 V326 M224,40 V326 M246,40 V326 M268,40 V326 M290,40 V326 M312,40 V326" stroke="#94a3b8" stroke-width=".6"/>
+    <path d="M70,62 H334 M70,84 H334 M70,106 H334 M70,128 H334 M70,150 H334 M70,172 H334 M70,194 H334 M70,216 H334 M70,238 H334 M70,260 H334 M70,282 H334 M70,304 H334" stroke="#94a3b8" stroke-width=".6"/>
+    <rect x="114" y="62" width="22" height="22" fill="#fcd34d" fill-opacity=".65" stroke="#d97706" stroke-width="1.2"/>
+    <path d="M125,62 V84 M114,73 H136" stroke="#dc2626" stroke-width="1"/>
+    <text x="70" y="344" font-size="11" fill="var(--muted)">W = 384 = 12 块列 × 2 合并列 × 16 像素列</text>
+    <text x="70" y="360" font-size="11" fill="var(--muted)">12 = 384 ÷ 32:宽方向 32×32 块的个数</text>
+    <text x="14" y="183" font-size="11" fill="var(--muted)" transform="rotate(-90 14 183)" text-anchor="middle">H = 416 = 13 块行 × 2 合并行 × 16 像素行</text>
+    <text x="34" y="183" font-size="11" fill="var(--muted)" transform="rotate(-90 34 183)" text-anchor="middle">13 = 416 ÷ 32:高方向 32×32 块的个数</text>
+    <path d="M136,73 L400,130" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M136,73 L400,210" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="400" y="78" font-size="12" font-weight="600">② 一个 32×32 块</text>
+    <rect x="400" y="90" width="128" height="128" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <rect x="464" y="154" width="64" height="64" fill="#fcd34d" fill-opacity=".65" stroke="#d97706" stroke-width="1"/>
+    <path d="M464,90 V218 M400,154 H528" stroke="#dc2626" stroke-width="1.2"/>
+    <text x="432" y="125" font-size="10.5" text-anchor="middle" fill="var(--muted)">16×16 px</text>
+    <text x="496" y="125" font-size="10.5" text-anchor="middle" fill="var(--muted)">16×16 px</text>
+    <text x="432" y="190" font-size="10.5" text-anchor="middle" fill="var(--muted)">16×16 px</text>
+    <text x="496" y="190" font-size="10.5" text-anchor="middle" fill="#b45309">16×16 px</text>
+    <text x="400" y="236" font-size="11" fill="var(--muted)">2×2 = 4 个 patch(一个合并组)</text>
+    <path d="M496,186 L576,130" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M496,186 L576,210" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="576" y="78" font-size="12" font-weight="600">③ 一个 16×16 patch</text>
+    <rect x="576" y="90" width="128" height="128" fill="url(#pxgrid)" stroke="#334155" stroke-width="1.5"/>
+    <text x="576" y="236" font-size="11" fill="var(--muted)">16×16 = 256 像素位置</text>
+  </svg>
+  </div>
+  <p class="dim-label center">层级:12×13 块 = 156 token → 每块 2×2 = 4 patch → 共 624 个 patch,每个 16×16 像素;C、T 不占空间,patch 内再乘 ×3×2 = 1536 维(见下方图解)。</p>
+  <p class="dim-label">注意:(3, 2, 16, 16) 是每行 patch 向量的内部结构;expand 后的整图是 (3, 2, H, W)——零拷贝,不复制内存。</p>
+
+  <p>下面用一张 <b>128×96 像素</b>的小图演示(8×6 = 48 个 patch;<b>悬停任意方格</b>:方格放大,左侧以竖排列展示这个 patch 的 1536 维输入向量排布):</p>
+
+  <div class="patch-demo">
+    <div class="dim-col" id="dimCol">
+      <div class="dim-seg" style="background:#dc2626" title="Red 通道 · 时刻 0(复制出的第 1 份,深色)· 维 0–255:patch 内 16×16 像素,行主序 (0,0)→(15,15)"><b>Red·时刻0</b><span>0–255</span></div>
+      <div class="dim-seg" style="background:#f87171" title="Red 通道 · 时刻 1(复制出的第 2 份,浅色,单帧输入时内容与时刻 0 完全相同;视频输入时是真实相邻帧)· 维 256–511:patch 内 16×16 像素,行主序"><b>Red·时刻1</b><span>256–511</span></div>
+      <div class="dim-seg" style="background:#059669" title="Green 通道 · 时刻 0 · 维 512–767:patch 内 16×16 像素,行主序 (0,0)→(15,15)"><b>Green·时刻0</b><span>512–767</span></div>
+      <div class="dim-seg" style="background:#34d399" title="Green 通道 · 时刻 1(单帧输入时内容与时刻 0 相同;视频输入时是真实相邻帧)· 维 768–1023"><b>Green·时刻1</b><span>768–1023</span></div>
+      <div class="dim-seg" style="background:#1d4ed8" title="Blue 通道 · 时刻 0 · 维 1024–1279:patch 内 16×16 像素,行主序 (0,0)→(15,15)"><b>Blue·时刻0</b><span>1024–1279</span></div>
+      <div class="dim-seg" style="background:#60a5fa" title="Blue 通道 · 时刻 1(单帧输入时内容与时刻 0 相同;视频输入时是真实相邻帧)· 维 1280–1535"><b>Blue·时刻1</b><span>1280–1535</span></div>
+    </div>
+    <div class="demo-img" id="patchGrid"></div>
+  </div>
+  <div class="legend">
+    <span>彩色小块 = 1 个 patch(16×16 px)</span>
+    <span><span class="sw" style="background:linear-gradient(180deg,#dc2626 0 16.6%,#f87171 16.6% 33.3%,#059669 33.3% 50%,#34d399 50% 66.6%,#1d4ed8 66.6% 83.3%,#60a5fa 83.3% 100%)"></span>左侧竖条 = 它的 1536 维(RGB × 时刻 0/1,每段 256)</span>
+    <span>单帧输入:时刻 0/1 = 同一帧复制;视频输入:真实相邻两帧</span>
+  </div>
+  <p class="dim-label center" id="patchInfo">悬停任意方格:方格放大,左侧竖条显示该 patch 的 1536 维。</p>
+  <p class="dim-label center">空间六轴 13 / 2 / 16 / 12 / 2 / 16 的逐轴含义,见本节开头「九维视图图解」。</p>
+
+  <h3>从 1 个像素到 624×1536:1536 维与 624 个 patch 是怎么数出来的</h3>
+  <pre><code>一个 patch = 16 × 16 像素 × 3 通道(RGB) × 2 时刻(时间维)
+           = <span class="num">1536</span> 个数字  →  展平成一个 1536 维向量,这就是 ViT 的"输入字"</code></pre>
+  <div class="center">
+  <svg viewBox="0 0 760 252" width="100%" style="max-width:760px;height:auto" role="img" aria-label="1536 维构成图解:高亮 1 个像素,它贡献 Red/Green/Blue × 时刻 0/1 共 6 个数;256 个像素 × 6 = 1536 维">
+    <text x="24" y="50" font-size="12" font-weight="600">一个 16×16 patch(256 个像素)</text>
+    <rect x="24" y="64" width="128" height="128" fill="url(#pxgrid)" stroke="#334155" stroke-width="1.5"/>
+    <rect x="64" y="88" width="8" height="8" fill="#fcd34d" stroke="#d97706" stroke-width="1"/>
+    <text x="24" y="210" font-size="11" fill="var(--muted)">256 像素位置(黄色 = 高亮的 1 个像素)</text>
+    <path d="M68,92 L250,41" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M68,92 L250,75" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M68,92 L250,109" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M68,92 L250,143" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M68,92 L250,177" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M68,92 L250,211" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <rect x="250" y="28" width="330" height="26" rx="4" fill="#dc2626"/>
+    <text x="258" y="45" font-size="10.5" fill="#fff">Red·时刻 0(复制第 1 份)· 1 个数</text>
+    <rect x="250" y="62" width="330" height="26" rx="4" fill="#f87171"/>
+    <text x="258" y="79" font-size="10.5" fill="#fff">Red·时刻 1(复制第 2 份)· 1 个数</text>
+    <rect x="250" y="96" width="330" height="26" rx="4" fill="#059669"/>
+    <text x="258" y="113" font-size="10.5" fill="#fff">Green·时刻 0 · 1 个数</text>
+    <rect x="250" y="130" width="330" height="26" rx="4" fill="#34d399"/>
+    <text x="258" y="147" font-size="10.5" fill="#fff">Green·时刻 1 · 1 个数</text>
+    <rect x="250" y="164" width="330" height="26" rx="4" fill="#1d4ed8"/>
+    <text x="258" y="181" font-size="10.5" fill="#fff">Blue·时刻 0 · 1 个数</text>
+    <rect x="250" y="198" width="330" height="26" rx="4" fill="#60a5fa"/>
+    <text x="258" y="215" font-size="10.5" fill="#fff">Blue·时刻 1 · 1 个数</text>
+    <text x="250" y="244" font-size="10.5" fill="var(--muted)">单帧输入:时刻 0/1 是同一帧的复制(内容相同);视频输入:真实相邻两帧(内容不同)</text>
+    <rect x="600" y="96" width="140" height="34" rx="6" fill="#eff6ff" stroke="var(--accent)" stroke-width="1.2"/>
+    <text x="670" y="118" font-size="11.5" font-weight="600" text-anchor="middle">1 个像素 = 6 个数</text>
+    <rect x="600" y="140" width="140" height="34" rx="6" fill="#eff6ff" stroke="var(--accent)" stroke-width="1.2"/>
+    <text x="670" y="162" font-size="11.5" font-weight="600" text-anchor="middle">× 256 像素 = 1536 维</text>
+  </svg>
+  </div>
+  <p class="dim-label center">1 个像素贡献 6 个数(Red/Green/Blue × 时刻 0/1);patch 内 256 个像素都同样贡献 → 256 × 6 = <b>1536 维</b>,这就是每一行 patch 向量的长度。</p>
+
+  <div class="center">
+  <svg viewBox="0 0 760 402" width="100%" style="max-width:760px;height:auto" role="img" aria-label="624 的由来图解:整图 13 块行 × 12 块列 = 156 个 32×32 块,每块 2×2 = 4 个 patch,156 × 4 = 624">
+    <text x="70" y="18" font-size="12" font-weight="600">① 整图(历史帧 384×416):13 块行 × 12 块列 = 156 个 32×32 块</text>
+    <rect x="70" y="40" width="264" height="286" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <path d="M92,40 V326 M114,40 V326 M136,40 V326 M158,40 V326 M180,40 V326 M202,40 V326 M224,40 V326 M246,40 V326 M268,40 V326 M290,40 V326 M312,40 V326" stroke="#94a3b8" stroke-width=".6"/>
+    <path d="M70,62 H334 M70,84 H334 M70,106 H334 M70,128 H334 M70,150 H334 M70,172 H334 M70,194 H334 M70,216 H334 M70,238 H334 M70,260 H334 M70,282 H334 M70,304 H334" stroke="#94a3b8" stroke-width=".6"/>
+    <rect x="114" y="62" width="22" height="22" fill="#fcd34d" fill-opacity=".65" stroke="#d97706" stroke-width="1.2"/>
+    <path d="M125,62 V84 M114,73 H136" stroke="#dc2626" stroke-width="1"/>
+    <text x="14" y="183" font-size="11" fill="var(--muted)" transform="rotate(-90 14 183)" text-anchor="middle">H = 416 ÷ 32 = 13 块行</text>
+    <text x="70" y="344" font-size="11" fill="var(--muted)">W = 384 ÷ 32 = 12 块列</text>
+    <path d="M136,73 L400,130" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M136,73 L400,210" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="400" y="78" font-size="12" font-weight="600">② 一个 32×32 块 = 2×2 = 4 个 patch</text>
+    <rect x="400" y="90" width="128" height="128" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <rect x="400" y="90" width="64" height="64" fill="#fcd34d" fill-opacity=".35"/>
+    <rect x="464" y="90" width="64" height="64" fill="#fcd34d" fill-opacity=".35"/>
+    <rect x="400" y="154" width="64" height="64" fill="#fcd34d" fill-opacity=".35"/>
+    <rect x="464" y="154" width="64" height="64" fill="#fcd34d" fill-opacity=".65" stroke="#d97706" stroke-width="1"/>
+    <path d="M464,90 V218 M400,154 H528" stroke="#dc2626" stroke-width="1.2"/>
+    <text x="400" y="236" font-size="11" fill="var(--muted)">每块 2×2 = 4 个 16×16 patch</text>
+    <path d="M528,186 L576,150" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <path d="M528,186 L576,190" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+    <rect x="576" y="90" width="160" height="128" rx="8" fill="#eff6ff" stroke="var(--accent)" stroke-width="1.5"/>
+    <text x="590" y="120" font-size="11.5">13 块行 × 12 块列</text>
+    <text x="590" y="142" font-size="11.5">= 156 个 32×32 块</text>
+    <text x="590" y="170" font-size="11.5">× 每块 2×2 = 4 个 patch</text>
+    <text x="590" y="198" font-size="12.5" font-weight="600">= 624 个 patch</text>
+  </svg>
+  </div>
+  <p class="dim-label center"><b>624 = 13 × 12 × 2 × 2</b>(块行列数 × 每块的合并行列);624 行 × 每行 1536 维 = ViT 的输入张量 <b>(624, 1536)</b>。</p>
+  <div class="note" style="border-left-color: var(--purple); background: var(--purple-soft);">
+    <b>📖 概览。</b>"×2" 的完整拆解见 <a href="03c_video_process.html#tube"><b>03c_video_process.html ⑤《两帧 tube 打包 —— "×2" 里装的是什么》</b></a>。
+  </div>
+</div>
+
+<!-- ============ ⑤ step4 ============ -->
+<h2 id="step4">⑤ Step 4:ViT 自注意力编码<span class="en">vision transformer</span></h2>
+<div class="card">
+  <p>624 个 1536 维的 patch 向量(以历史帧 384×416 为例)一起送进 <b>ViT(视觉 Transformer)</b>。流程图中<b>深色标签就是每一步的张量维度</b>,使用符号:<b>D<sub>VIT</sub> = 1024</b>(ViT 隐层宽度)、<b>h = 16</b>(头数)、<b>d<sub>head</sub> = D<sub>VIT</sub>/h = 64</b>、<b>D<sub>FFN</sub> = 4096</b>(FFN 升维宽度),层数 depth = 24;均取自发布 config.json(vision_config = <code>qwen3_5_vision</code>):</p>
+
+  <div class="vflow">
+    <div class="vf-box"><b>输入:624 个 patch 向量</b><div class="vf-sub">每 patch = (3 通道 × 2 时刻 × 16 × 16) 展平</div><div class="vf-dim">(624, 1536)</div></div>
+
+    <div class="vf-arrow"><span class="lbl">① Patch Embedding:一个可学习的权重矩阵 W<sub>e</sub>(1536 × 1024),整批一次矩阵乘,非查词表</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>线性投影</b><div class="vf-sub">(624, 1536) · W<sub>e</sub>(1536, 1024) → 624 个 patch 共享同一个 W<sub>e</sub>,一步算完(可带偏置)。<br>"非查词表":文字 token 有 id、按行查 embedding 表;patch 是原始像素数据、没有 id,只能投影</div><div class="vf-dim">(624, D<sub>VIT</sub> = 1024)</div></div>
+    <div class="vf-arrow"><span class="lbl">位置信息<b>不在这一步加进向量</b>:只给每个 patch 记录 (行, 列) 号;旋转发生在每层注意力的 Q / K 上(2D RoPE,机制见 <a href="03a_rope.html">03a 篇</a>)</span><span class="down">↓</span></div>
+
+    <div class="vf-arrow"><span class="lbl">② 送入 Transformer 块 × <b>depth = 24</b>:重复 24 轮 —— 24 个<b>权重各自独立</b>的层串联:<br>第 1 层输出 = 第 2 层输入,依次到第 24 层;每层形状都是 (624, 1024) 不变,所以能层层相叠。下面展开其中任意一层</span><span class="down">↓</span></div>
+
+    <div class="vf-nest">
+      <h5>一层 Transformer Block 内部(24 层权重各自独立,结构相同;左侧虚线 = 残差捷径)</h5>
+
+      <div class="res-block">
+        <div class="res-line">
+          <i class="rl-tick top"></i>
+          <b class="rl-lbl from">x 从这里分出</b>
+          <em>x 直连:不经过 RMSNorm、注意力、FFN 任何子层</em>
+          <i class="rl-tick bottom"></i>
+          <b class="rl-lbl into">x 在这里加回</b>
+        </div>
+        <div class="vflow" style="margin:0; flex:1;">
+          <div class="vf-box">输入 x<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+          <div class="vf-arrow"><span class="lbl">RMSNorm(前置归一化,不改变形状)</span><span class="down">↓</span></div>
+          <div class="qk-wrap">
+            <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:36px;">
+              <div class="vf-box stack" style="width:170px; min-width:0; border-color:#3b82f6; --deck:#3b82f6;"><b style="font-size:19px">Q</b><div class="vf-sub">= x·W<sub>Q</sub>,拆成 <b>16 头</b><br>每头 64 列,互相独立</div><div class="vf-dim">每头 (624, 64)</div></div>
+              <div class="vf-box stack" style="width:170px; min-width:0; border-color:#10b981; --deck:#10b981;"><b style="font-size:19px">K</b><div class="vf-sub">= x·W<sub>K</sub>,拆成 <b>16 头</b><br>每头 64 列,互不打扰</div><div class="vf-dim">每头 (624, 64)</div></div>
+              <div class="vf-box stack" style="width:170px; min-width:0; border-color:#f59e0b; --deck:#f59e0b;"><b style="font-size:19px">V</b><div class="vf-sub">= x·W<sub>V</sub>,拆成 <b>16 头</b><br>每头带自己的 64 列内容</div><div class="vf-dim">每头 (624, 64)</div></div>
+            </div>
+            <i class="flowline q"></i>
+            <i class="flowline k"></i>
+            <b class="fl-lbl rope">Q、K 先按各自 patch 的位置(行列)做 2D RoPE 旋转(详情见 <a href="03a_rope.html">03a</a>)</b>
+            <div class="vflow" style="margin:0;">
+              <div class="vf-box" style="width:460px;"><b>注意力矩阵 A = softmax(QK<sup>T</sup>/√64)(中间结果)</b><div class="vf-sub">再相乘打分(每头独立):由 Q、K 算出,每行 = 该 patch 对全部 624 个 patch 的注意力权重,行和 = 1,回答"该看谁";也是 O(L²) 计算量的来源</div><div class="vf-dim">(16, 624, 624)</div></div>
+              <div class="vf-arrow"><span class="lbl">A·V:用 A(来自 Q、K)对 V(橙色轨道引来)加权求和 —— 这一步才带上内容</span><span class="down">↓</span></div>
+              <div class="vf-box"><b>每头输出</b><div class="vf-dim">(16, 624, 64)</div></div>
+            </div>
+            <i class="flowline v"></i>
+            <i class="vstub"></i>
+            <i class="vjoin"></i>
+            <b class="fl-lbl vfrom">V 从这里引出(不参与打分)</b>
+            <b class="fl-lbl vinto">V 在这里被 A 加权</b>
+          </div>
+          <div class="vf-arrow"><span class="lbl">16 头拼接 concat(64 × 16 = 1024;发生在 W<sub>O</sub> 之前)</span><span class="down">↓</span></div>
+          <div class="vf-box"><b>拼接后</b><div class="vf-dim">(624, 1024)</div></div>
+          <div class="vf-arrow"><span class="lbl">输出投影 W<sub>O</sub>(1024 → 1024):让 16 个头的信息互相混合</span><span class="down">↓</span></div>
+          <div class="vf-box">注意力分支输出<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+          <div class="vf-arrow"><span class="lbl">⊕ 与左侧轨道引来的 x 相加</span><span class="down">↓</span></div>
+          <div class="vf-box"><b>⊕ x′ = 注意力分支输出 + x</b><div class="vf-sub">残差相加:x 在本段入口处(输入 x 框)分出,沿左侧轨道直连到这里,与注意力分支输出相加</div><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+        </div>
+      </div>
+
+      <div class="res-block" style="margin-top:6px;">
+        <div class="res-line">
+          <i class="rl-tick top"></i>
+          <b class="rl-lbl from">x′ 从这里分出</b>
+          <em>x′ 直连:不经过 FFN 子层</em>
+          <i class="rl-tick bottom"></i>
+          <b class="rl-lbl into">x′ 在这里加回</b>
+        </div>
+        <div class="vflow" style="margin:0; flex:1;">
+          <div class="vf-arrow"><span class="lbl">RMSNorm(前置归一化,不改变形状)</span><span class="down">↓</span></div>
+          <div class="vf-box"><b>FFN</b>(两层 MLP:intermediate_size = D<sub>FFN</sub> = 4096,先升维再降维)<div class="vf-dim">(624, 4096) → (624, 1024)</div></div>
+          <div class="vf-arrow"><span class="lbl">⊕ 与左侧轨道引来的 x′ 相加 → 本层输出</span><span class="down">↓</span></div>
+          <div class="vf-box"><b>⊕ x″ = FFN 输出 + x′</b><div class="vf-sub">残差相加:x′ 在上一段末尾(x′ 框)分出,沿左侧轨道直连到这里,与 FFN 输出相加</div><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vf-arrow"><span class="down">↓</span><span class="lbl">24 层全部跑完后</span><span class="down">↓</span></div>
+    <div class="vf-box"><b>输出:624 个上下文向量</b><div class="vf-sub"><b>数量不变!</b>每个 patch 已融合全图上下文:<br>"我这块是车轮" + "我在一辆车的前部" → 语义化的区域向量</div><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
+  </div>
+
+  <div class="good">
+  <b>ViT 的权重是训练好的,推理时不"迭代计算":</b>权重初始化自预训练的 Qwen3.5-4B(非从零训练),发布时已是固定参数。推理时整张图只需<b>一次前向传播</b>(24 层顺序各算一遍,层间没有循环反馈)。
+  </div>
+
+  <p class="dim-label">三个常见疑问:<br>
+  ① depth = 24 是<b>串联</b> —— 第 1 层输出喂第 2 层,依次到第 24 层,且 24 层<b>权重各自独立</b>(不是同一层跑 24 遍),不是并联;<br>
+  ② <b>全部 624 个 patch 共享同一个 ViT</b> —— 同一套权重,一次前向里拼成一个序列一起算注意力,不存在"每个 patch 一个网络";<br>
+  ③ <b>注意力矩阵 A = softmax(Q·Kᵀ/√64)</b> 是 softmax 之后的<b>权重</b> (16, 624, 624),还不是输出 —— A·V 加权求和得 (16, 624, 64) 才带内容,16 头 concat 成 (624, 1024) 后再过 W<sub>O</sub>。</p>
+
+  <div class="note">
+  <b>patch 16×16 在这一步的意义:</b>自注意力的"字词表"就是这些小块。切得越小(如 8×8),细节越丰富但计算量平方级暴涨;切得越大,越省但糊。16×16 是 Qwen-VL 系在细节与成本之间的平衡点。Qwen 系 ViT 通常在部分层使用窗口注意力以控制长序列成本,本模型 vision config 未列出窗口参数(deepstack_visual_indexes 为空),以发布权重实现为准。
+  </div>
+  <p class="dim-label">重要:ViT 这一步<b>不改变 patch 的数量</b>。624 个 patch 进去,624 个向量出来(维度在入口的 Embedding 处由 1536 变为 D<sub>VIT</sub> = 1024,之后 24 层形状完全不变)——"变少"发生在下一步(2×2 合并)。</p>
+</div>
+
+<!-- ============ ⑥ step5(含 patch vs token 一句话回答)============ -->
+<h2 id="step5">⑥ Step 5:2×2 合并 —— token 才诞生(32×32)<span class="en">spatial merge</span></h2>
 
 <div class="qa">
   <p><b class="tag">patch 16×16</b> 是 <b>ViT 内部的最小处理单元</b>。把图像切成无数个 16×16 像素的小方块,每个方块展平成一个向量送进 ViT 里的自注意力层。它是 ViT "眼睛看到的最小粒子" —— 相当于 ViT <b>读的"字"</b>。</p>
@@ -224,152 +693,81 @@
   <b>为什么要合并 4 个 patch 再给 LLM?</b> LLM 的注意力计算量随序列长度<b>平方</b>增长。合并后序列长度降为 1/4,计算量约降为 1/16;而 32×32 像素(约为 SD 标准分辨率的粒度)对语言模型理解语义来说足够细腻,细粒度的空间细节由 ViT 在合并前已经消化完毕。
 </div>
 
-<!-- ============ ② pipeline ============ -->
-<h2 id="pipeline">② 全流程总览<span class="en">pipeline</span></h2>
 <div class="card">
-  <div class="flow">
-    <div class="step"><b>原图</b><small>972×1079<br>任意分辨率</small></div>
-    <div class="arrow">→</div>
-    <div class="step"><b>① 动态 Resize</b><small>缩放到 32 的倍数<br>320p / 720p 两档</small></div>
-    <div class="arrow">→</div>
-    <div class="step"><b>② 归一化</b><small>[-1,1]<br>时间维复制 ×2</small></div>
-    <div class="arrow">→</div>
-    <div class="step"><b>③ 切 patch</b><small>16×16/块<br>每块 1536 维</small></div>
-    <div class="arrow">→</div>
-    <div class="step"><b>④ ViT 编码</b><small>自注意力<br>2D 位置编码</small></div>
-    <div class="arrow">→</div>
-    <div class="step"><b>⑤ 2×2 合并</b><small>4 patch → 1 token<br>token = 32×32 px</small></div>
-    <div class="arrow">→</div>
-    <div class="step"><b>⑥ 投影进 LLM</b><small>替换 &lt;image&gt; 占位<br>多模态 RoPE</small></div>
-  </div>
-  <p class="dim-label center">维度变化(以历史帧 384×416 为例):图像 (H,W,3) → patches (624, 1536) → ViT 输出 (624, D<sub>VIT</sub>) → 合并 (156, 4·D<sub>VIT</sub>) → 投影 (156, D<sub>LLM</sub>);实际值 D<sub>VIT</sub> = 1024、D<sub>LLM</sub> = 2560(发布 config.json)</p>
-</div>
+  <p>两个尺寸先分清:<b class="tag">patch = 16×16 像素</b>(ViT 的最小处理单元)、<b class="tag">token = 32×32 像素</b>(LLM 序列的单元)。从 patch 到 token 分三步:</p>
+  <p>① <b>切</b>:一个 32×32 像素块,恰好切出 <b>2×2 = 4 个</b> 16×16 的 patch(左上、右上、左下、右下);</p>
+  <p>② <b>编码</b>:4 个 patch 一起过完 24 层 ViT,出来时<b>仍是 4 个独立的向量</b>(各 D<sub>VIT</sub> = 1024 维)—— 合并不发生在 ViT 内部;</p>
+  <p>③ <b>拼 + 压</b>:把 4 个向量按 <b>左上 → 右上 → 左下 → 右下</b> 的固定顺序在通道维<b>首尾拼接</b>成 1 根 4096 维(4 × 1024)长向量,再经 Projector(MLP)压缩回 2560 维 —— 这 1 根 2560 维向量,才是 LLM 序列里的 <b>1 个 token</b>。</p>
+  <p class="dim-label" style="margin-bottom:8px">关键在理解 ③ 是<b>「拼接后压缩」,不是「求平均/丢弃」</b>:concat 把 4 份 1024 维信息原封不动排成一根 4096 维长向量(信息一点没少,只是换了打包方式),MLP 再把这份打包信息翻译、压缩回 LLM 的工作宽度 2560 维。<b>为什么"取连续 4 个"取到的恰好是同一个 32×32 块?</b> 因为 _patchify 的九维 permute 已让同一块内的 4 个 patch 在展平序列中恰好连续(序号 4k、4k+1、4k+2、4k+3,块内顺序恒为 左上→右上→左下→右下),逐维拆解见 <a href="03d_permute.html"><b>03d_permute.html《permute 张量变换逻辑可视化》</b></a>。</p>
 
-<!-- ============ ③ step1 ============ -->
-<h2 id="step1">③ Step 1:动态分辨率 Resize<span class="en">smart_resize</span></h2>
-<div class="card">
-  <p>Qwen-VL 系不要求固定输入分辨率(不是把所有图强行拉成 448×448),而是<b>保持长宽比、把分辨率吸附到 32 的倍数</b>(32 = patch 16 × 合并 2,这样恰好能被整除切分),同时不超过像素预算:</p>
-  <table>
-    <tr><th>帧类型</th><th>预算/目标</th><th>demo 实际(原图 972×1079)</th><th>为什么</th></tr>
-    <tr><td>历史帧 ×9(t-1.5s~t-0.5s)</td><td>预算 174,080 px(≈320p 档)</td><td><b>384×416</b></td><td>运动历史,少花 token</td></tr>
-    <tr><td>当前帧 ×3(t=0)</td><td>目标 720p 档(demo 给 720×799)</td><td>吸附后 <b>704×800</b></td><td>当前观测,保细节</td></tr>
-  </table>
-  <pre><code><span class="cmt"># scene.py :: smart_resize —— 分辨率四舍五入到 32 的倍数,并缩进预算内</span>
-bar_h = round(h / <span class="num">32</span>) * <span class="num">32</span>;  bar_w = round(w / <span class="num">32</span>) * <span class="num">32</span>
-<span class="cmt"># 超预算 → 按 sqrt(原像素/预算) 等比缩小(floor 取整到 32 倍数)</span></code></pre>
-  <p class="dim-label">验证:972×1079 按历史预算 174,080 → 384×416(与 demo 元数据完全一致);720×799 → round(799/32)×32=800、round(720/32)×32=704。</p>
-  <div class="note">
-  <b>注意区分两条流水线(常与 06 篇对照):</b>本篇是<b>规划流水线</b> —— 12 帧 = 3 视图(前/左前/右前)× 4 时刻,历史帧 ×9 用低分辨率省 token、当前帧 ×3 用 720p 档保细节,分辨率动态可变。而 <b>BEV 感知头(06 篇)是另一条流水线</b>:严格单帧(只有 t-0s 的环视 6/8 相机,没有历史帧),输入<b>固定 896×512</b> —— 那是感知权重训练时的固定相机布局与分辨率。两处尺寸不同不是矛盾,是两个模型各自的输入规范。
-  </div>
-</div>
+  <svg viewBox="0 0 900 208" style="width:100%; max-width:900px; display:block; margin:12px auto 0;" role="img" aria-label="1 个 token 的诞生:切、编码、拼接压缩">
+    <defs>
+      <marker id="tokArr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#5b6472"/>
+      </marker>
+    </defs>
 
-<!-- ============ ④ step2 ============ -->
-<h2 id="step2">④ Step 2:归一化 + 时间维复制<span class="en">normalize &amp; temporal patch</span></h2>
-<div class="card">
-  <pre><code><span class="cmt"># scene.py :: _patchify</span>
-pixels = pil_to_tensor(img).float().div_(<span class="num">255</span>).sub_(<span class="num">0.5</span>).div_(<span class="num">0.5</span>)   <span class="cmt"># → [-1, 1]</span>
-pixels = pixels.unsqueeze(<span class="num">1</span>).expand(<span class="num">-1</span>, <span class="num">2</span>, <span class="num">-1</span>, <span class="num">-1</span>)              <span class="cmt"># 时间维复制成 2 份</span></code></pre>
+    <text x="83" y="44" font-size="12.5" font-weight="700" fill="#1f2430" text-anchor="middle">① 切:1 个 32×32 像素块</text>
+    <g stroke="#fff" stroke-width="2">
+      <rect x="28" y="53" width="54" height="54" fill="#3b82f6"/>
+      <rect x="84" y="53" width="54" height="54" fill="#10b981"/>
+      <rect x="28" y="109" width="54" height="54" fill="#f59e0b"/>
+      <rect x="84" y="109" width="54" height="54" fill="#ef4444"/>
+    </g>
+    <g fill="#fff" text-anchor="middle" font-size="11.5" font-weight="700">
+      <text x="55" y="84">左上</text><text x="111" y="84">右上</text>
+      <text x="55" y="140">左下</text><text x="111" y="140">右下</text>
+    </g>
+    <text x="83" y="182" font-size="11" fill="#5b6472" text-anchor="middle">4 个 16×16 patch</text>
 
-  <h3>这一步的维数变化(易错点)</h3>
-  <div class="vflow">
-    <div class="vf-box">归一化后的<b>整张图</b><div class="vf-dim">(3, H, W)&nbsp;&nbsp;例: (3, 416, 384)</div></div>
-    <div class="vf-arrow"><span class="lbl">unsqueeze(1):在通道维 C 之后插入长度 1 的时间维</span><span class="down">↓</span></div>
-    <div class="vf-box">插入占位时间维<div class="vf-dim">(3, 1, H, W)</div></div>
-    <div class="vf-arrow"><span class="lbl">expand(-1, 2, -1, -1):时间维复制成 2(PyTorch 零拷贝广播视图)</span><span class="down">↓</span></div>
-    <div class="vf-box"><b>结果 = "两帧"整图</b><div class="vf-dim">(3, 2, H, W)&nbsp;&nbsp;例: (3, 2, 416, 384)</div><div class="vf-sub">仍是整张图,所有像素都还在;16×16 的切分发生在下一步 reshape</div></div>
-  </div>
-  <div class="note">易错:expand 之后<b>不是</b> (3, 2, 16, 16)。(3, 2, 16, 16) 是最终输出里<b>每一个 patch 向量</b>的内部结构(见 Step 3 的形状逐行轨迹)。</div>
+    <text x="300" y="24" font-size="12.5" font-weight="700" fill="#1f2430" text-anchor="middle">② 编码:过完 24 层 ViT,仍是 4 个独立向量(各 1024 维)</text>
+    <g stroke="#5b6472" stroke-width="1.5">
+      <line x1="142" y1="108" x2="178" y2="108"/>
+      <line x1="178" y1="108" x2="208" y2="67" marker-end="url(#tokArr)"/>
+      <line x1="178" y1="108" x2="208" y2="105" marker-end="url(#tokArr)"/>
+      <line x1="178" y1="108" x2="208" y2="143" marker-end="url(#tokArr)"/>
+      <line x1="178" y1="108" x2="208" y2="181" marker-end="url(#tokArr)"/>
+    </g>
+    <g font-size="11" fill="#fff" text-anchor="middle">
+      <rect x="214" y="53" width="130" height="28" rx="6" fill="#3b82f6"/>
+      <text x="279" y="71">左上 · 1024 维</text>
+      <rect x="214" y="91" width="130" height="28" rx="6" fill="#10b981"/>
+      <text x="279" y="109">右上 · 1024 维</text>
+      <rect x="214" y="129" width="130" height="28" rx="6" fill="#f59e0b"/>
+      <text x="279" y="147">左下 · 1024 维</text>
+      <rect x="214" y="167" width="130" height="28" rx="6" fill="#ef4444"/>
+      <text x="279" y="185">右下 · 1024 维</text>
+    </g>
 
-  <p><b>为什么要复制成 2 份?</b> <code>image_temporal_patch_size = 2</code>:这套 ViT 是为<b>视频</b>设计的——每次取<b>相邻 2 帧</b>的同一位置 patch 打包处理,让 ViT 能感知帧间运动。输入单张静止图像时,就把同一帧复制两份凑齐时间维,<b>与视频共用同一套权重</b>。这就是每 patch 输入维度里那个"×2"的来源。</p>
-</div>
+    <path d="M352,53 h8 v142 h-8" fill="none" stroke="#5b6472" stroke-width="1.5"/>
+    <line x1="360" y1="124" x2="388" y2="124" stroke="#5b6472" stroke-width="1.5" marker-end="url(#tokArr)"/>
 
-<!-- ============ ⑤ step3 ============ -->
-<h2 id="step3">⑤ Step 3:切成 16×16 的 patch<span class="en">patchify</span></h2>
-<div class="card">
-  <p>把缩放后的图像按 <b>16×16 像素</b>切成网格。下面用一张 <b>128×96 像素</b>的小图演示(8×6 = 48 个 patch;鼠标悬停可看每个 patch):</p>
+    <text x="546" y="88" font-size="12.5" font-weight="700" fill="#1f2430" text-anchor="middle">③ 拼 + 压:concat 首尾相接成 4096 维 → MLP 压回 2560 维</text>
+    <g text-anchor="middle" font-size="10.5" fill="#fff">
+      <rect x="396" y="102" width="75" height="44" fill="#3b82f6"/>
+      <text x="433.5" y="120">4k+0 · 左上</text><text x="433.5" y="136">1024 维</text>
+      <rect x="471" y="102" width="75" height="44" fill="#10b981"/>
+      <text x="508.5" y="120">4k+1 · 右上</text><text x="508.5" y="136">1024 维</text>
+      <rect x="546" y="102" width="75" height="44" fill="#f59e0b"/>
+      <text x="583.5" y="120">4k+2 · 左下</text><text x="583.5" y="136">1024 维</text>
+      <rect x="621" y="102" width="75" height="44" fill="#ef4444"/>
+      <text x="658.5" y="120">4k+3 · 右下</text><text x="658.5" y="136">1024 维</text>
+    </g>
+    <text x="546" y="172" font-size="10.5" fill="#5b6472" text-anchor="middle">顺序固定:左上→右上→左下→右下 = 展平序列中连续的 4 个(序号 4k ~ 4k+3)</text>
 
-  <div class="demo-img" id="patchGrid"></div>
-  <div class="legend">
-    <span><span class="sw" style="background:#f59e0b"></span>普通 patch(16×16 px)</span>
-    <span><span class="sw" style="background:#dc2626"></span>被放大的那个 patch</span>
-  </div>
+    <line x1="700" y1="124" x2="716" y2="124" stroke="#5b6472" stroke-width="1.5" marker-end="url(#tokArr)"/>
+    <rect x="720" y="102" width="66" height="44" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="753" y="128" font-size="12" font-weight="700" fill="#7c3aed" text-anchor="middle">MLP</text>
+    <text x="753" y="160" font-size="10" fill="#5b6472" text-anchor="middle">Projector</text>
+    <line x1="790" y1="124" x2="806" y2="124" stroke="#5b6472" stroke-width="1.5" marker-end="url(#tokArr)"/>
+    <rect x="810" y="102" width="84" height="44" rx="8" fill="#1f2430"/>
+    <text x="852" y="120" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">1 个 token</text>
+    <text x="852" y="137" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">2560 维</text>
+    <text x="852" y="160" font-size="10" fill="#5b6472" text-anchor="middle">→ 进入 LLM 序列</text>
+  </svg>
+  <p class="dim-label center" style="margin:2px 0 0">图中四色 = <b>同一个 token 内部</b>的 4 个 patch(按拼接顺序标注);下方网格中同色 = 同一个 token —— 两处颜色含义不同。</p>
 
-  <h3>一个 patch 怎么变成向量?(1536 维的构成)</h3>
-  <pre><code>一个 patch = 16 × 16 像素 × 3 通道(RGB) × 2 时刻(时间维)
-           = <span class="num">1536</span> 个数字  →  展平成一个 1536 维向量,这就是 ViT 的"输入字"</code></pre>
-  <table>
-    <tr><th>因子</th><th>含义</th><th>说明</th></tr>
-    <tr><td>16 × 16 = 256</td><td>像素位置</td><td>一个补丁块内有 256 个像素位置</td></tr>
-    <tr><td>× 3</td><td>RGB 颜色通道</td><td>每个像素由红/绿/蓝 3 个数值描述</td></tr>
-    <tr><td>× 2</td><td><b>时间维</b>(temporal patch size = 2)</td><td>为<b>视频</b>设计:打包<b>相邻两帧</b>同一位置的 patch,让 ViT 能感知运动;输入单张图片时<b>把同一帧复制 2 份</b>凑齐,不带来新信息,只为与视频共用同一套权重(Qwen-Drive 需支持"Driving videos"输入)</td></tr>
-  </table>
-  <p class="dim-label">256 位置 × 3 通道 × 2 时刻 = 1536。代码出处:scene.py:240(<code>expand(-1, 2, -1, -1)</code> 即时间维复制)。</p>
-  <pre><code>排列顺序(scene.py:241-252):按 (行块/2, 列块/2, 块内行2, 块内列2) 排列
-—— 即 <b>每 4 个连续的 patch 恰好属于同一个 32×32 像素块</b>,
-   为 Step⑤ 的 2×2 合并提前排好队。</code></pre>
-
-  <h3>张量形状逐行轨迹(以历史帧 384×416 为例,已用 numpy 复算验证)</h3>
-  <pre><code>pil_to_tensor 后        : (3, 416, 384)          ← (C, H, W) 整张图
-unsqueeze(1) 后         : (3, 1, 416, 384)       ← H 前插入长度 1 的时间维
-.expand(-1, 2, -1, -1) 后: (3, 2, 416, 384)       ← 时间维复制成 2,仍是<b>整张图</b>,16×16 还没出现
-.reshape(3,1,2,13,2,16,12,2,16)                   ← 16×16 在这一步才被切开:
-                                                     13×12 = patch 块网格, 2×2 = 合并组, 16×16 = 块内像素
-.permute(1,3,6,4,7,0,2,5,8)  → (1, 13, 12, 2, 2, 3, 2, 16, 16)
-.reshape(rows*cols, -1)      → (624, 1536)        ← 每行 = 一个 patch = (C=3, T=2, 16, 16) 展平</code></pre>
-  <p class="dim-label">注意:(3, 2, 16, 16) 描述的是<b>最终输出中每一行(patch 向量)的内部结构</b>,不是 expand 之后整张张量的形状——expand 之后是 (3, 2, H, W)。另外 PyTorch 的 <code>expand</code> 是零拷贝广播视图,不复制内存。</p>
-</div>
-
-<!-- ============ ⑥ step4 ============ -->
-<h2 id="step4">⑥ Step 4:ViT 自注意力编码<span class="en">vision transformer</span></h2>
-<div class="card">
-  <p>624 个 1536 维的 patch 向量(以历史帧 384×416 为例)一起送进 <b>ViT(视觉 Transformer)</b>。流程图中<b>深色标签就是每一步的张量维度</b>,使用符号:<b>D<sub>VIT</sub> = 1024</b>(ViT 隐层宽度)、<b>h = 16</b>(头数)、<b>d<sub>head</sub> = D<sub>VIT</sub>/h = 64</b>、<b>D<sub>FFN</sub> = 4096</b>(FFN 升维宽度),层数 depth = 24;均取自发布 config.json(vision_config = <code>qwen3_5_vision</code>):</p>
-
-  <div class="vflow">
-    <div class="vf-box"><b>输入:624 个 patch 向量</b><div class="vf-sub">每 patch = (3 通道 × 2 时刻 × 16 × 16) 展平</div><div class="vf-dim">(624, 1536)</div></div>
-
-    <div class="vf-arrow"><span class="lbl">① Patch Embedding:Linear <b>1536 → D<sub>VIT</sub></b>(= 1024;矩阵投影,非查词表)+ 2D RoPE 位置编码(行、列)</span><span class="down">↓</span></div>
-    <div class="vf-box"><b>嵌入序列</b><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
-
-    <div class="vf-arrow"><span class="lbl">② 送入 Transformer 块 × <b>depth = 24</b> 层 —— 下面展开的是其中任意一层,每层输出回到顶部再进下一层</span><span class="down">↓</span></div>
-
-    <div class="vf-nest">
-      <h5>一层 Transformer Block 内部(24 层中的每一层都长这样,维数完全相同)</h5>
-      <div class="vflow" style="margin:0">
-        <div class="vf-box">输入 x<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
-        <div class="vf-arrow"><span class="lbl">RMSNorm(前置归一化,不改变形状)</span><span class="down">↓</span></div>
-        <div class="vf-box"><b>QKV 投影(多头!)</b>:x·W<sub>Q</sub>、x·W<sub>K</sub>、x·W<sub>V</sub>,拆成 <b>h = 16 个头 × 每头 d<sub>head</sub> = 64 维</b>(D<sub>VIT</sub> = h × d<sub>head</sub> = 16×64)<div class="vf-dim">Q, K, V 各 (h, 624, d<sub>head</sub>)</div></div>
-        <div class="vf-arrow"><span class="lbl">多头自注意力:softmax(Q·K<sup>T</sup>/√d<sub>head</sub>)·V —— h = 16 个头各自独立算一遍</span><span class="down">↓</span></div>
-        <div class="vf-box"><b>注意力矩阵</b> = 每个 patch 对全部 624 个 patch 的打分,每头一份<div class="vf-dim">(h, 624, 624)</div><div class="vf-sub">← 注意力计算量 O(L²) 的来源;h 个头的结果拼接回</div><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
-        <div class="vf-arrow"><span class="lbl">输出投影 W<sub>O</sub>(D<sub>VIT</sub> → D<sub>VIT</sub>)+ 残差连接(加上输入 x)</span><span class="down">↓</span></div>
-        <div class="vf-box">注意力输出 x′<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
-        <div class="vf-arrow"><span class="lbl">RMSNorm → FFN(两层 MLP:先升维再降维)</span><span class="down">↓</span></div>
-        <div class="vf-box"><b>FFN</b>(intermediate_size = D<sub>FFN</sub> = 4096)<div class="vf-dim">(624, D<sub>FFN</sub>) → (624, D<sub>VIT</sub>)</div></div>
-        <div class="vf-arrow"><span class="lbl">残差连接(加上 x′)→ 本层输出</span><span class="down">↓</span></div>
-        <div class="vf-box">x″<div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
-      </div>
-    </div>
-
-    <div class="vf-arrow"><span class="down">↓</span><span class="lbl">24 层全部跑完后</span><span class="down">↓</span></div>
-    <div class="vf-box"><b>输出:624 个上下文向量</b><div class="vf-sub"><b>数量不变!</b>每个 patch 已融合全图上下文:<br>"我这块是车轮" + "我在一辆车的前部" → 语义化的区域向量</div><div class="vf-dim">(624, D<sub>VIT</sub>)</div></div>
-  </div>
-
-  <div class="good">
-  <b>ViT 的权重是训练好的,推理时不"迭代计算":</b>权重初始化自预训练的 Qwen3.5-4B(非从零训练),发布时已是固定参数。推理时整张图只需<b>一次前向传播</b>(24 层顺序各算一遍,层间没有循环反馈)。
-  </div>
-
-  <p class="dim-label">两个常见疑问:① depth = 24 是<b>串联</b> —— 第 1 层输出喂第 2 层,依次到第 24 层(上面流程图里"每层输出回到顶部再进下一层"就是这个意思),不是并联;② <b>全部 624 个 patch 共享同一个 ViT</b> —— 同一套权重,一次前向里拼成一个序列一起算注意力,不存在"每个 patch 一个网络"。</p>
-
-  <div class="note">
-  <b>patch 16×16 在这一步的意义:</b>自注意力的"字词表"就是这些小块。切得越小(如 8×8),细节越丰富但计算量平方级暴涨;切得越大,越省但糊。16×16 是 Qwen-VL 系在细节与成本之间的平衡点。Qwen 系 ViT 通常在部分层使用窗口注意力以控制长序列成本,本模型 vision config 未列出窗口参数(deepstack_visual_indexes 为空),以发布权重实现为准。
-  </div>
-  <p class="dim-label">重要:ViT 这一步<b>不改变 patch 的数量</b>。624 个 patch 进去,624 个向量出来(维度在入口的 Embedding 处由 1536 变为 D<sub>VIT</sub> = 1024,之后 24 层形状完全不变)——"变少"发生在下一步(2×2 合并)。</p>
-</div>
-
-<!-- ============ ⑦ step5 ============ -->
-<h2 id="step5">⑦ Step 5:2×2 合并 —— token 才诞生(32×32)<span class="en">spatial merge</span></h2>
-<div class="card">
-  <p>ViT 输出后,把 <b>相邻 2×2 的 4 个 patch 向量在通道维拼接</b>成 1 个长向量,再经投影层压回 LLM 的隐层维度。这 4 个 patch 合起来覆盖的正是 <b>32×32 像素</b>:</p>
-
+  <p style="margin:10px 0 0">落到一张 <b>128×96</b> 的小图上(8×6 = 48 个 patch,维度仍按真实模型标注):每 4 个同色 patch = LLM 序列里的 1 个 token:</p>
   <div class="demo-img" id="mergeGrid"></div>
   <div class="legend">
     <span><span class="sw" style="background:#3b82f6"></span>token 1(4 个 patch 合并)</span>
@@ -378,27 +776,12 @@ unsqueeze(1) 后         : (3, 1, 416, 384)       ← H 前插入长度 1 的时
     <span><span class="sw" style="background:#ef4444"></span>token 4</span>
     <span style="color:#94a3b8">…… 每 4 个同色 patch(32×32 px)→ LLM 序列里的 1 个 token</span>
   </div>
-
-  <pre><code><span class="cmt"># 合并 + 计数(scene.py)</span>
-token_count = rows * cols // merge_size**<span class="num">2</span>      <span class="cmt"># merge_size = 2</span>
-<span class="cmt"># 384×416:  (24×26) ÷ 4 = 156 个 token</span>
-<span class="cmt"># 704×800:  (44×50) ÷ 4 = 550 个 token</span>
-
-<span class="cmt"># 维度变化:每 patch 向量 D<sub>VIT</sub>(= 1024)维 → 4 个拼接 → 4·D<sub>VIT</sub>(= 4096)维</span>
-<span class="cmt">#   → Projector(MLP)→ D<sub>LLM</sub>(= 2560)维 = LLM hidden_size(与文字 embedding 同宽)</span>
-
-<span class="cmt"># config 默认(configuration_qwen_drive.py:128-130)</span>
-image_patch_size          = <span class="num">16</span>   <span class="cmt"># ViT 内部 patch 边长 → "字"的粒度</span>
-image_spatial_merge_size  = <span class="num">2</span>    <span class="cmt"># 2×2 合并 → "词"由 4 个"字"组成</span>
-image_temporal_patch_size = <span class="num">2</span>    <span class="cmt"># 时间维打包(视频用,单帧复制)</span></code></pre>
-
-  <div class="good">
-  <b>效果:</b>LLM 要处理的视觉序列长度直接 ÷4。以上面小图为例:48 个 patch → <b>12 个 token</b>。真实历史帧 624 patch → 156 token;注意力是 O(L²),序列短 4 倍 ≈ 计算量省 16 倍,而每个 token 仍完整保留了 32×32 区域经 ViT 精细编码后的全部信息。
-  </div>
+  <p class="dim-label center" style="margin:8px 0 0">👆 <b>点击</b>任一 patch:高亮它所在的 token(4 格描边),下方展示这 4 个向量如何拼成 1 个 token;再点一次收起。</p>
+  <div id="mergeConcatPanel" style="display:none; margin:10px auto 0; max-width:640px; padding:10px 12px; border:1.5px dashed #cbd5e1; border-radius:10px; background:#f8fafc; text-align:center;"></div>
 </div>
 
-<!-- ============ ⑧ step6 ============ -->
-<h2 id="step6">⑧ Step 6:投影并插入 LLM 序列<span class="en">projector &amp; insertion</span></h2>
+<!-- ============ ⑦ step6 ============ -->
+<h2 id="step6">⑦ Step 6:投影并插入 LLM 序列<span class="en">projector &amp; insertion</span></h2>
 <div class="card">
   <pre><code><span class="cmt"># prompt 中的占位(scene.py:296):预处理时就已经知道要放多少个</span>
 &lt;vision_start&gt; [image] [image] … [image] &lt;vision_end&gt;
@@ -513,8 +896,8 @@ vlm(input_ids, pixel_values=patches, image_grid_thw=…)
   </div>
 </div>
 
-<!-- ============ ⑨ numbers ============ -->
-<h2 id="numbers">⑨ 实际数字计算(Qwen-Drive-1.0 一个规划场景)<span class="en">real numbers</span></h2>
+<!-- ============ ⑧ numbers ============ -->
+<h2 id="numbers">⑧ 实际数字计算(Qwen-Drive-1.0 一个规划场景)<span class="en">real numbers</span></h2>
 <div class="card">
   <table>
     <tr><th>帧</th><th>ViT 输入 (W×H)</th><th>patch 网格 (cols×rows)</th><th>patch 数</th><th>token 数 (÷4)</th><th>每 token 覆盖</th></tr>
@@ -528,8 +911,8 @@ vlm(input_ids, pixel_values=patches, image_grid_thw=…)
   </div>
 </div>
 
-<!-- ============ ⑩ faq ============ -->
-<h2 id="faq">⑩ 常见疑问<span class="en">FAQ</span></h2>
+<!-- ============ ⑨ faq ============ -->
+<h2 id="faq">⑨ 常见疑问<span class="en">FAQ</span></h2>
 <div class="card">
   <h3>Q1:"取 32×32 的数据作为一个 token"这个说法对吗?</h3>
   <p>方向对,但机制上不是"直接取"——不是把 32×32 的像素块直接喂给 LLM。实际是:<b>先按 16×16 切成 4 个 patch 分别过 ViT</b>(精细编码),<b>再把这 4 个 patch 的输出向量合并</b>成 1 个 token。这 1 个 token 在 LLM 眼里"负责"的区域恰好是 32×32 像素,所以说"1 token ↔ 32×32 px",它是<b>信息覆盖范围</b>,不是<b>采样方式</b>。</p>
@@ -546,12 +929,12 @@ vlm(input_ids, pixel_values=patches, image_grid_thw=…)
   <h3>Q5:ViT 的 24 层是并联还是串联?每个 patch 有独立的 ViT 吗?</h3>
   <p><b>串联。</b>第 1 层的输出是第 2 层的输入,一层接一层到第 24 层 —— "depth = 24" 就是这个含义(与 LLM 的 32 层同理)。同时<b>所有 patch 共享同一个 ViT</b>:它们拼成一个长度 624 的序列,过同一套 Patch Embedding 与 24 层权重;层内自注意力让每个 patch 看到其余 623 个,所以一次前向就融合了全图上下文。权重只有一份,patch 之间不各配网络。</p>
 
-  <h3>Q6:历史帧 384×416、当前帧 704×800,和 06 篇感知头的 896×512 什么关系?</h3>
-  <p>两条流水线、两套输入规范,数字互不换算:<b>本篇(规划)</b>是 12 帧动态分辨率 —— 历史帧 ×9 @384×416(预算 174,080 px)、当前帧 ×3 @704×800(720p 档,预算 921,600 px);<b>06 篇(感知)</b>是严格单帧、固定 896×512(6/8 相机环视),感知权重按这个固定布局训练。详见 06 篇 ① 节的对照表。</p>
+  <h3>Q6:历史帧 384×416、当前帧 704×800,和 <a href="06_bev_head_architecture.html">06 篇《BEV Perception Head 全架构解读》</a>感知头的 896×512 什么关系?</h3>
+  <p>两条流水线、两套输入规范,数字互不换算:<b>本篇(规划)</b>是 12 帧动态分辨率 —— 历史帧 ×9 @384×416(预算 174,080 px)、当前帧 ×3 @704×800(720p 档,预算 921,600 px);<b><a href="06_bev_head_architecture.html">06 篇(感知)</a></b>是严格单帧、固定 896×512(6/8 相机环视),感知权重按这个固定布局训练。详见 <a href="06_bev_head_architecture.html">06 篇</a> ① 节的对照表。</p>
 </div>
 
-<!-- ============ ⑪ attention ============ -->
-<h2 id="attention">⑪ 澄清:两次注意力、两次 QKV 发生在哪?<span class="en">where attention happens</span></h2>
+<!-- ============ ⑩ attention ============ -->
+<h2 id="attention">⑩ 澄清:两次注意力、两次 QKV 发生在哪?<span class="en">where attention happens</span></h2>
 <div class="card">
   <p>常见误解:"patch 合并成 token 之后再做注意力"。实际顺序相反——<b>自注意力发生在合并之前(ViT 内,对象是 patch);合并之后,LLM 里还有第二次注意力(对象是 token)</b>。完整时间线:</p>
   <pre><code>624 个 patch 向量(各 1536 维 = 16×16×3通道×2时刻)
@@ -594,7 +977,7 @@ vlm(input_ids, pixel_values=patches, image_grid_thw=…)
 </div>
 
 <footer>
-  来源:论文《Qwen-Drive-1.0》(arXiv:2609.00111)§2.1/§2.3;仓库 QwenLM/Qwen-Drive-1.0 @ 28091c1 — src/qwen_drive/scene.py(smart_resize / _patchify / build_input_ids)、src/qwen_drive/configuration_qwen_drive.py、docs/model.md;demo 数据 data/demo(planning_scenes.jsonl、972×1079 原图)。所有 token 数已按仓库同款逻辑复算验证。Transformer 维度实际数值取自 ModelScope 发布的 Qwen/Qwen-Drive-1.0-4B config.json(vision_config: depth 24 / hidden_size 1024 / num_heads 16 / intermediate_size 4096;text_config: hidden_size 2560 / 32 层,3×linear_attention+1×full_attention ×8 组)。
+  来源:论文《Qwen-Drive-1.0》(arXiv:2609.00111)§2.1/§2.3;仓库 QwenLM/Qwen-Drive-1.0 @ 28091c1 — src/qwen_drive/scene.py(smart_resize / _patchify / build_input_ids)、src/qwen_drive/configuration_qwen_drive.py、docs/model.md、docs/data.md;demo 数据 data/demo(planning_scenes.jsonl;972×1079 为 WOD-E2E 官方发布帧的原生尺寸,原样引用,arXiv:2510.26125)。所有 token 数已按仓库同款逻辑复算验证。Transformer 维度实际数值取自 ModelScope 发布的 Qwen/Qwen-Drive-1.0-4B config.json(vision_config: depth 24 / hidden_size 1024 / num_heads 16 / intermediate_size 4096;text_config: hidden_size 2560 / 32 层,3×linear_attention+1×full_attention ×8 组)。
 </footer>
 </div>
 
@@ -614,20 +997,59 @@ vlm(input_ids, pixel_values=patches, image_grid_thw=…)
       g.appendChild(d);
     }
   }
-  // 合并演示:同一张图,每 2×2 patch 染成一色 = 1 个 token
+  // 合并演示:同一张图,每 2×2 patch 染成一色 = 1 个 token;点击看 4 向量怎么拼
   var g2 = document.getElementById('mergeGrid');
   g2.style.gridTemplateColumns = 'repeat(' + cols + ', ' + cell + 'px)';
   var palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#84cc16', '#ec4899', '#6366f1', '#a855f7'];
+  // 与机制 SVG 一致的四方位色:token 内 4 个 patch 的拼接顺序 左上|右上|左下|右下
+  var QUAD = [['左上', 0, 0, '#3b82f6'], ['右上', 0, 1, '#10b981'], ['左下', 1, 0, '#f59e0b'], ['右下', 1, 1, '#ef4444']];
+  var cells2 = [];
   for (var r2 = 0; r2 < rows; r2++) {
     for (var c2 = 0; c2 < cols; c2++) {
       var d2 = document.createElement('div');
       d2.className = 'cell';
       var ti = Math.floor(r2/2) * (cols/2) + Math.floor(c2/2);
       d2.style.background = palette[ti % palette.length];
-      d2.title = '属于 token #' + (ti+1) + '\n该 token 覆盖 32×32 px\n(4 个 patch 合并)';
+      d2.style.cursor = 'pointer';
+      d2.dataset.ti = ti;
+      d2.title = '属于 token #' + (ti+1) + '\n该 token 覆盖 32×32 px\n= 4 个 16×16 patch 的向量拼接(左上|右上|左下|右下)\n点击高亮并查看拼接';
       g2.appendChild(d2);
+      cells2.push(d2);
     }
   }
+  var panel = document.getElementById('mergeConcatPanel');
+  var selected = -1;
+  function clearHi() {
+    for (var i = 0; i < cells2.length; i++) { cells2[i].style.boxShadow = ''; cells2[i].style.zIndex = ''; }
+  }
+  g2.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t.dataset || t.dataset.ti === undefined) return;
+    var ti = +t.dataset.ti;
+    if (ti === selected) { selected = -1; clearHi(); panel.style.display = 'none'; return; }
+    selected = ti; clearHi();
+    var R = Math.floor(ti / (cols/2)), C = ti % (cols/2);
+    var segs = '', idxs = [];
+    for (var q = 0; q < 4; q++) {
+      var pr = R*2 + QUAD[q][1], pc = C*2 + QUAD[q][2], si = ti*4 + q;
+      idxs.push(si);
+      segs += '<div style="flex:1; background:' + QUAD[q][3] + '; color:#fff; padding:7px 2px; text-align:center; font-size:12px; line-height:1.45;">'
+           +  '<b>patch #' + si + '</b><br>' + QUAD[q][0] + ' (' + pr + ',' + pc + ')<br>1024 维</div>';
+    }
+    panel.innerHTML =
+        '<div style="font-size:13.5px; margin-bottom:8px;"><b>token #' + (ti+1) + '</b> = concat(patch #'
+      + idxs[0] + ', #' + idxs[1] + ', #' + idxs[2] + ', #' + idxs[3]
+      + ') —— 序列中连续的 4 个(序号 ' + (ti*4) + ' ~ ' + (ti*4+3) + ',0 基)</div>'
+      + '<div style="display:flex; gap:2px; max-width:420px; margin:0 auto; border-radius:8px; overflow:hidden;">' + segs + '</div>'
+      + '<div style="font-size:13px; margin-top:8px;">→ 拼成 <b>4096 维</b>(4 × 1024)长向量 → Projector(MLP)→ <b>2560 维</b> = LLM 序列里的 <b>1 个 token</b></div>';
+    panel.style.display = 'block';
+    for (var q2 = 0; q2 < 4; q2++) {
+      var pr2 = R*2 + QUAD[q2][1], pc2 = C*2 + QUAD[q2][2];
+      var el = cells2[pr2*cols + pc2];
+      el.style.boxShadow = 'inset 0 0 0 3px #1f2430';
+      el.style.zIndex = 2;
+    }
+  });
 })();
 </script>
 </body>
