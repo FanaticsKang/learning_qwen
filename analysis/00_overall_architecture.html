@@ -157,7 +157,7 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 
 <!-- ============ 特征边:Fv / Fm / KV / 条件 ============ -->
 <path d="M340,150 L340,124 L676,124" class="edge" marker-end="url(#arw)"/>
-<text x="672" y="112" text-anchor="end" class="tiny muted" font-weight="500">Fᵥ patch 级特征(2×2 合并前 · 16 px 格)</text>
+<text x="672" y="112" text-anchor="end" class="tiny muted" font-weight="500">Fᵥ ViT 输出 patch 特征(2×2 合并前 · 16 px 格)</text>
 <path d="M500,332 L646,332 L646,188 L676,188" class="edge" marker-end="url(#arw)"/>
 <text x="510" y="324" class="tiny muted" font-weight="500">Fₘ LLM 末层隐状态</text>
 <path d="M460,360 L460,556 L676,556" class="edge" marker-end="url(#arw)"/>
@@ -174,7 +174,7 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 
 <div style="margin-top:28px;border-top:1px solid var(--border);padding-top:18px">
 <h3 style="margin:0 0 8px;color:var(--blue)">② Vision Encoder:一张图怎么变成 32×32 token</h3>
-<svg id="vit-pipe" viewBox="0 0 1160 352" width="100%" style="height:auto;display:block" role="img" aria-label="ViT 数据流水线:图像切 16×16 patch,相邻两帧打包成 1536 维,经 24 层 ViT(2D RoPE),2×2 合并成 32×32 像素的 token,投影 2560 维进入语言模型;合并前的 patch 级特征 Fᵥ 分叉进 BEV 感知头">
+<svg id="vit-pipe" viewBox="0 0 1160 352" width="100%" style="height:auto;display:block" role="img" aria-label="ViT 数据流水线:图像切 16×16 patch,相邻两帧打包成 1536 维,经 24 层 ViT(2D RoPE)后分叉:patch 逐格进 BEV 感知头;相邻 4 patch 合并成 32×32 像素的 token,投影 2560 维进入语言模型">
 <title>ViT 数据流水线:图像 → 16×16 patch → 32×32 token</title>
 <style>
 #vit-pipe text{font-family:inherit;fill:var(--foreground)}
@@ -206,11 +206,16 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 <text x="257" y="222" class="lbl">① patch 化:24×26 = 624 patch</text>
 <text x="257" y="239" class="sub">每格 = 16×16 px · 单 patch 1536 维</text>
 <text x="257" y="256" class="sub">(相邻两帧沿时间维打包)</text>
-<path d="M330,188 L330,292" class="edge" stroke-dasharray="5 4" marker-end="url(#arw2)"/>
-<text x="345" y="285" class="glabel">Fᵥ:patch 级特征(2×2 合并前 · 16 px 格)</text>
-<rect x="240" y="298" width="200" height="40" rx="8" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
-<text x="250" y="315" class="glabel">BEV 感知头(几何流)</text>
-<text x="250" y="331" class="sub">DepthNet 估深度 → 撒进 3D 体素</text>
+<path d="M525,184 L525,220" class="edge" stroke-dasharray="5 4"/>
+<rect x="499" y="225" width="16" height="16" rx="2" fill="var(--muted)" stroke="var(--border)"/>
+<rect x="517" y="225" width="16" height="16" rx="2" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-width="1.2"/>
+<rect x="535" y="225" width="16" height="16" rx="2" fill="var(--muted)" stroke="var(--border)"/>
+<path d="M525,247 L525,292" class="edge" stroke-dasharray="5 4" marker-end="url(#arw2)"/>
+<text x="510" y="270" text-anchor="end" class="glabel">Fᵥ:ViT 输出的 patch 特征</text>
+<text x="510" y="288" text-anchor="end" class="sub">(每格独立 · 1024 维 · 16 px)</text>
+<rect x="425" y="298" width="200" height="40" rx="8" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="435" y="315" class="glabel">BEV 感知头(几何流)</text>
+<text x="435" y="331" class="sub">DepthNet 估深度 → 撒进 3D 体素</text>
 <path d="M410,130 L455,130" class="edge" marker-end="url(#arw2)"/>
 
 <!-- 站 3:ViT -->
@@ -219,34 +224,34 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 <text x="525" y="124" text-anchor="middle" class="sub">hidden 1024 · 16 头</text>
 <text x="525" y="144" text-anchor="middle" class="sub">每层 2D RoPE:</text>
 <text x="525" y="160" text-anchor="middle" class="sub">(行,列) 旋进 Q/K</text>
-<path d="M595,130 L650,130" class="edge" marker-end="url(#arw2)"/>
+<path d="M595,94 L636,94" class="edge" marker-end="url(#arw2)"/>
 
-<!-- 站 4:2×2 合并成 token -->
-<g>
-<rect x="657" y="67" width="36" height="36" rx="3" fill="none" stroke="var(--border)"/><path class="grid" d="M675,67V103M657,85H693"/>
-<rect x="696" y="67" width="36" height="36" rx="3" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
-<rect x="697" y="68" width="17" height="17" fill="var(--blue)" fill-opacity=".35"/><rect x="715" y="68" width="17" height="17" fill="var(--green)" fill-opacity=".35"/><rect x="697" y="86" width="17" height="17" fill="var(--orange)" fill-opacity=".35"/><rect x="715" y="86" width="17" height="17" fill="var(--purple)" fill-opacity=".35"/>
-<rect x="735" y="67" width="36" height="36" rx="3" fill="none" stroke="var(--border)"/><path class="grid" d="M753,67V103M735,85H771"/>
-<rect x="657" y="106" width="36" height="36" rx="3" fill="none" stroke="var(--border)"/><path class="grid" d="M675,106V142M657,124H693"/>
-<rect x="696" y="106" width="36" height="36" rx="3" fill="none" stroke="var(--border)"/><path class="grid" d="M714,106V142M696,124H732"/>
-<rect x="735" y="106" width="36" height="36" rx="3" fill="none" stroke="var(--border)"/><path class="grid" d="M753,106V142M735,124H771"/>
-</g>
-<text x="657" y="222" class="lbl">③ 2×2 合并 → 156 token</text>
-<text x="657" y="239" class="sub">1 token = 32×32 px</text>
-<text x="657" y="256" class="sub">一格 = 相邻 4 patch 拼接(12×13 网格)</text>
-<path d="M815,130 L833,130" class="edge" marker-end="url(#arw2)"/>
+<!-- 站 4:相邻 4 patch 合并成 1 个 token -->
+<rect x="640" y="72" width="44" height="44" rx="6" fill="none" stroke="var(--blue)" stroke-dasharray="4 3"/>
+<rect x="643" y="75" width="19" height="19" rx="2" fill="var(--blue)" fill-opacity=".35" stroke="var(--border)"/>
+<rect x="664" y="75" width="19" height="19" rx="2" fill="var(--green)" fill-opacity=".35" stroke="var(--border)"/>
+<rect x="643" y="96" width="19" height="19" rx="2" fill="var(--orange)" fill-opacity=".35" stroke="var(--border)"/>
+<rect x="664" y="96" width="19" height="19" rx="2" fill="var(--purple)" fill-opacity=".35" stroke="var(--border)"/>
+<text x="640" y="134" class="sub">merge 的 2×2 窗口</text>
+<path d="M692,94 L726,94" class="edge" marker-end="url(#arw2)"/>
+<rect x="730" y="76" width="36" height="36" rx="3" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
+<rect x="731" y="77" width="17" height="17" fill="var(--blue)" fill-opacity=".35"/><rect x="749" y="77" width="17" height="17" fill="var(--green)" fill-opacity=".35"/><rect x="731" y="95" width="17" height="17" fill="var(--orange)" fill-opacity=".35"/><rect x="749" y="95" width="17" height="17" fill="var(--purple)" fill-opacity=".35"/>
+<path d="M770,94 L834,94" class="edge" marker-end="url(#arw2)"/>
+<text x="640" y="222" class="lbl">③ 2×2 合并:4 patch → 1 token</text>
+<text x="640" y="239" class="sub">12×13 = 156 token · 32×32 px</text>
+<text x="640" y="256" class="sub">四分色 = 拼进同一 token 的 4 个 patch</text>
 
 <!-- 站 5:投影 → LLM -->
-<text x="840" y="106" class="step">④ Linear 投影 2560 维</text>
-<rect x="840" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<rect x="867" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<rect x="894" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<rect x="921" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<rect x="948" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<rect x="975" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<rect x="1002" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<rect x="1029" y="118" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
-<path d="M945,144 L945,192" class="edge" marker-end="url(#arw2)"/>
+<text x="840" y="74" class="step">④ Linear 投影 2560 维</text>
+<rect x="840" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<rect x="867" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<rect x="894" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<rect x="921" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<rect x="948" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<rect x="975" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<rect x="1002" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<rect x="1029" y="84" width="20" height="20" rx="3" fill="var(--blue)" fill-opacity=".18" stroke="var(--blue)" stroke-opacity=".5"/>
+<path d="M945,110 L945,192" class="edge" marker-end="url(#arw2)"/>
 <rect x="840" y="198" width="300" height="48" rx="8" fill="var(--purple)" fill-opacity=".09" stroke="var(--purple)" stroke-opacity=".6"/>
 <text x="845" y="218" class="lbl" fill="var(--purple)">进 Qwen3.5-4B 语言模型</text>
 <text x="845" y="236" class="sub">视觉 token 与文本拼序 · 12 帧共 3054 token</text>
