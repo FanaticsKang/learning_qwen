@@ -16,8 +16,8 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 <body><div id="wrap">
 <div id="qwen-drive-arch">
 <h3>Qwen-Drive-1.0 整体框架</h3>
-<svg viewBox="0 0 1160 820" width="100%" style="height:auto;display:block" role="img" aria-label="Qwen-Drive-1.0 architecture diagram">
-<title>Qwen-Drive-1.0 整体架构:观测图像与文本经 Vision Encoder 与 Qwen3.5-4B 语言模型,外挂 BEV 感知头(3D 检测、占据、地图分割)与规划专家(流匹配生成轨迹)</title>
+<svg viewBox="0 0 1160 940" width="100%" style="height:auto;display:block" role="img" aria-label="Qwen-Drive-1.0 architecture diagram">
+<title>Qwen-Drive-1.0 整体架构:观测图像与文本经 Vision Encoder 与 Qwen3.5-4B 语言模型,外挂 BEV 感知头(深度视图变换几何先验并入 BEV Query,特征金字塔作 K/V,输出 3D 检测、占据、地图分割)与规划专家(流匹配生成轨迹)</title>
 <defs>
 <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted-foreground)"/></marker>
 </defs>
@@ -58,9 +58,9 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 
 <!-- ============ ② Vision Encoder ============ -->
 <g>
-<rect x="60" y="150" width="320" height="70" class="box" fill="var(--blue)" fill-opacity=".08" stroke="var(--blue)" stroke-opacity=".55"/>
-<text x="220" y="179" text-anchor="middle" class="blk-title" fill="var(--blue)">② Vision Encoder</text>
-<text x="220" y="200" text-anchor="middle" class="tiny muted">16×16 patch → ViT → 2×2 合并 → 32×32 token</text>
+<rect x="180" y="150" width="320" height="70" class="box" fill="var(--blue)" fill-opacity=".08" stroke="var(--blue)" stroke-opacity=".55"/>
+<text x="340" y="179" text-anchor="middle" class="blk-title" fill="var(--blue)">② Vision Encoder</text>
+<text x="340" y="200" text-anchor="middle" class="tiny muted">16×16 patch → ViT → 2×2 合并 → 32×32 token</text>
 </g>
 <path d="M220,220 L220,264" class="edge" marker-end="url(#arw)"/>
 <text x="232" y="240" class="elabel">图像 token</text>
@@ -73,10 +73,10 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 <text x="280" y="320" text-anchor="middle" class="tiny muted">共享 VLM</text>
 </g>
 <g>
-<rect x="424" y="161" width="112" height="48" class="box" fill="var(--muted)" stroke="var(--border)"/>
-<text x="480" y="190" text-anchor="middle" class="blk-title-s">文本 Prompt</text>
+<rect x="40" y="161" width="112" height="48" class="box" fill="var(--muted)" stroke="var(--border)"/>
+<text x="96" y="190" text-anchor="middle" class="blk-title-s">文本 Prompt</text>
 </g>
-<path d="M480,209 L480,260" class="edge" marker-end="url(#arw)"/>
+<path d="M96,209 L96,260" class="edge" marker-end="url(#arw)"/>
 <g>
 <rect x="60" y="400" width="200" height="48" class="box" fill="var(--purple)" fill-opacity=".18" stroke="var(--purple)" stroke-opacity=".6"/>
 <text x="160" y="420" text-anchor="middle" class="blk-title-s">文本回复</text>
@@ -84,91 +84,94 @@ body { margin: 0; padding: 24px; background: var(--background, #fff); color: var
 </g>
 <path d="M160,360 L160,400" class="edge" marker-end="url(#arw)"/>
 
-<!-- ============ ④ BEV 感知头面板(双流上下堆叠)============ -->
+<!-- ============ ④ BEV 感知头面板(几何流与 ② 并排,语义流与 ③ 平齐)============ -->
 <g>
-<rect x="660" y="30" width="460" height="428" class="panel" fill="var(--green)" fill-opacity=".04" stroke="var(--green)" stroke-opacity=".45"/>
-<text x="676" y="56" class="blk-title" fill="var(--green)">④ BEV 感知头</text>
+<rect x="660" y="112" width="460" height="470" class="panel" fill="var(--green)" fill-opacity=".04" stroke="var(--green)" stroke-opacity=".45"/>
+<text x="676" y="138" class="blk-title" fill="var(--green)">④ BEV 感知头</text>
 </g>
 <g>
-<rect x="676" y="96" width="284" height="56" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
-<text x="818" y="118" text-anchor="middle" class="blk-title-s">深度视图变换</text>
-<text x="818" y="139" text-anchor="middle" class="tiny muted">几何流</text>
+<rect x="676" y="157" width="284" height="56" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="818" y="179" text-anchor="middle" class="blk-title-s">深度视图变换</text>
+<text x="818" y="200" text-anchor="middle" class="tiny muted">几何流</text>
 </g>
 <g>
-<rect x="676" y="160" width="284" height="56" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
-<text x="818" y="182" text-anchor="middle" class="blk-title-s">特征金字塔</text>
-<text x="818" y="203" text-anchor="middle" class="tiny muted">语义流</text>
+<rect x="676" y="284" width="284" height="56" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="818" y="306" text-anchor="middle" class="blk-title-s">特征金字塔</text>
+<text x="818" y="327" text-anchor="middle" class="tiny muted">语义流</text>
 </g>
-<path d="M960,124 L1030,124 L1030,228" class="edge" marker-end="url(#arw)"/>
-<path d="M960,188 L1000,188 L1000,228" class="edge" marker-end="url(#arw)"/>
+<path d="M960,185 L1030,185 L1030,352" class="edge" marker-end="url(#arw)"/>
+<path d="M960,312 L1000,312 L1000,352" class="edge" marker-end="url(#arw)"/>
+<text x="1030" y="177" text-anchor="end" class="tiny" font-weight="500">Query</text>
+<text x="1000" y="304" text-anchor="end" class="tiny" font-weight="500">K/V</text>
 <g>
-<rect x="676" y="232" width="428" height="52" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
-<text x="890" y="264" text-anchor="middle" class="name">BEV Transformer</text>
+<rect x="676" y="356" width="428" height="52" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="890" y="388" text-anchor="middle" class="name">BEV Transformer</text>
 </g>
-<path d="M890,284 L890,296 L744,296 L1036,296" class="edge"/>
-<path d="M744,296 L744,316" class="edge" marker-end="url(#arw)"/>
-<path d="M890,296 L890,316" class="edge" marker-end="url(#arw)"/>
-<path d="M1036,296 L1036,316" class="edge" marker-end="url(#arw)"/>
+<path d="M890,408 L890,420 L744,420 L1036,420" class="edge"/>
+<path d="M744,420 L744,440" class="edge" marker-end="url(#arw)"/>
+<path d="M890,420 L890,440" class="edge" marker-end="url(#arw)"/>
+<path d="M1036,420 L1036,440" class="edge" marker-end="url(#arw)"/>
 <g>
-<rect x="676" y="320" width="136" height="68" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
-<text x="744" y="359" text-anchor="middle" class="name">3D 检测</text>
-</g>
-<g>
-<rect x="822" y="320" width="136" height="68" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
-<text x="890" y="359" text-anchor="middle" class="name">占据预测</text>
+<rect x="676" y="444" width="136" height="68" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="744" y="483" text-anchor="middle" class="name">3D 检测</text>
 </g>
 <g>
-<rect x="968" y="320" width="136" height="68" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
-<text x="1036" y="359" text-anchor="middle" class="name">地图分割</text>
+<rect x="822" y="444" width="136" height="68" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="890" y="483" text-anchor="middle" class="name">占据预测</text>
 </g>
-<path d="M744,388 L744,402" class="edge" marker-end="url(#arw)"/>
-<path d="M890,388 L890,402" class="edge" marker-end="url(#arw)"/>
-<path d="M1036,388 L1036,402" class="edge" marker-end="url(#arw)"/>
 <g>
-<rect x="676" y="406" width="428" height="40" class="box" fill="var(--green)" fill-opacity=".22" stroke="var(--green)" stroke-opacity=".6"/>
-<text x="890" y="431" text-anchor="middle" class="small" font-weight="500">输出:3D 框 · 占据 · BEV 地图</text>
+<rect x="968" y="444" width="136" height="68" class="box" fill="var(--green)" fill-opacity=".10" stroke="var(--green)" stroke-opacity=".5"/>
+<text x="1036" y="483" text-anchor="middle" class="name">地图分割</text>
+</g>
+<path d="M744,512 L744,526" class="edge" marker-end="url(#arw)"/>
+<path d="M890,512 L890,526" class="edge" marker-end="url(#arw)"/>
+<path d="M1036,512 L1036,526" class="edge" marker-end="url(#arw)"/>
+<g>
+<rect x="676" y="530" width="428" height="40" class="box" fill="var(--green)" fill-opacity=".22" stroke="var(--green)" stroke-opacity=".6"/>
+<text x="890" y="555" text-anchor="middle" class="small" font-weight="500">输出:3D 框 · 占据 · BEV 地图</text>
 </g>
 
 <!-- ============ ④⑤ 关系注记 ============ -->
-<text x="676" y="476" class="tiny muted">④ ⑤ 并联外挂,互不读对方输出 —— 专家只读 VLM 的 K/V 缓存</text>
-<text x="676" y="492" class="tiny muted">训练时感知损失经 Fₘ/Fᵥ 回传塑造共享表征,即论文所称 "3D probe"</text>
+<text x="676" y="600" class="tiny muted">BEV Transformer:Query = 可学习 query + 深度变换几何先验 · K/V = 特征金字塔</text>
+<text x="676" y="616" class="tiny muted">④ ⑤ 并联外挂,互不读对方输出 · 感知损失经 Fₘ/Fᵥ 回传塑造共享表征,即论文所称 "3D probe"</text>
 
 <!-- ============ ⑤ Planning Expert 面板 ============ -->
 <g>
-<rect x="660" y="500" width="460" height="176" class="panel" fill="var(--orange)" fill-opacity=".04" stroke="var(--orange)" stroke-opacity=".45"/>
-<text x="676" y="526" class="blk-title" fill="var(--orange)">⑤ Planning Expert</text>
+<rect x="660" y="624" width="460" height="176" class="panel" fill="var(--orange)" fill-opacity=".04" stroke="var(--orange)" stroke-opacity=".45"/>
+<text x="676" y="650" class="blk-title" fill="var(--orange)">⑤ Planning Expert</text>
 </g>
 <g>
-<rect x="676" y="540" width="428" height="56" class="box" fill="var(--orange)" fill-opacity=".10" stroke="var(--orange)" stroke-opacity=".5"/>
-<text x="890" y="574" text-anchor="middle" class="name">流匹配扩散 Transformer</text>
+<rect x="676" y="664" width="428" height="56" class="box" fill="var(--orange)" fill-opacity=".10" stroke="var(--orange)" stroke-opacity=".5"/>
+<text x="890" y="698" text-anchor="middle" class="name">流匹配扩散 Transformer</text>
 </g>
-<path d="M890,596 L890,612" class="edge" marker-end="url(#arw)"/>
+<path d="M890,720 L890,736" class="edge" marker-end="url(#arw)"/>
 <g>
-<rect x="676" y="616" width="428" height="44" class="box" fill="var(--orange)" fill-opacity=".22" stroke="var(--orange)" stroke-opacity=".6"/>
-<text x="890" y="643" text-anchor="middle" class="small" font-weight="500">轨迹 · 50 路点 (x, y, heading) · 5s @ 10Hz</text>
+<rect x="676" y="740" width="428" height="44" class="box" fill="var(--orange)" fill-opacity=".22" stroke="var(--orange)" stroke-opacity=".6"/>
+<text x="890" y="767" text-anchor="middle" class="small" font-weight="500">轨迹 · 50 路点 (x, y, heading) · 5s @ 10Hz</text>
 </g>
 
 <!-- ============ 规划侧条件输入(直线直达)============ -->
 <g>
-<rect x="60" y="536" width="360" height="64" class="box" fill="var(--muted)" stroke="var(--border)"/>
-<text x="240" y="562" text-anchor="middle" class="blk-title-s">规划条件</text>
-<text x="240" y="584" text-anchor="middle" class="tiny muted">导航指令 · 自车状态 · 历史轨迹</text>
+<rect x="60" y="674" width="360" height="64" class="box" fill="var(--muted)" stroke="var(--border)"/>
+<text x="240" y="700" text-anchor="middle" class="blk-title-s">规划条件</text>
+<text x="240" y="722" text-anchor="middle" class="tiny muted">导航指令 · 自车状态 · 历史轨迹</text>
 </g>
 
 <!-- ============ 特征边:Fv / Fm / KV / 条件 ============ -->
-<path d="M340,150 L340,124 L676,124" class="edge" marker-end="url(#arw)"/>
-<text x="672" y="112" text-anchor="end" class="tiny muted" font-weight="500">Fᵥ ViT 输出 patch 特征(2×2 合并前 · 16 px 格)</text>
-<path d="M500,332 L646,332 L646,188 L676,188" class="edge" marker-end="url(#arw)"/>
-<text x="510" y="324" class="tiny muted" font-weight="500">Fₘ LLM 末层隐状态</text>
-<path d="M460,360 L460,556 L676,556" class="edge" marker-end="url(#arw)"/>
+<path d="M500,185 L676,185" class="edge" marker-end="url(#arw)"/>
+<text x="580" y="161" text-anchor="middle" class="tiny muted" font-weight="500">Fᵥ ViT 输出 patch 特征</text>
+<text x="580" y="177" text-anchor="middle" class="tiny muted" font-weight="500">(2×2 合并前 · 16 px 格)</text>
+<path d="M500,312 L676,312" class="edge" marker-end="url(#arw)"/>
+<text x="510" y="304" class="tiny muted" font-weight="500">Fₘ LLM 末层隐状态</text>
+<path d="M460,360 L460,680 L676,680" class="edge" marker-end="url(#arw)"/>
 <text x="472" y="470" class="tiny muted" font-weight="500">K/V 缓存</text>
-<path d="M420,580 L676,580" class="edge" marker-end="url(#arw)"/>
+<path d="M420,706 L676,706" class="edge" marker-end="url(#arw)"/>
 
 <!-- ============ 底部:图例 + 训练四阶段 ============ -->
-<rect x="40" y="700" width="1080" height="88" fill="var(--muted)" fill-opacity=".4" class="box" stroke="var(--border)"/>
-<text x="58" y="726" class="small muted">图例:<tspan fill="var(--blue)" font-weight="500">■ 蓝 = 共享视觉-语言通路</tspan>　<tspan fill="var(--green)" font-weight="500">■ 绿 = BEV 感知头</tspan>　<tspan fill="var(--orange)" font-weight="500">■ 橙 = 规划专家</tspan>　▶ 数据流</text>
-<text x="58" y="750" class="small"><tspan font-weight="500">训练四阶段(论文图 4):</tspan>① BEV 感知头单独训练(冻结 VLM)→ ② 感知 + VQA 联合训练(解冻 ViT 与 VLM)→ ③ 规划专家流匹配模仿学习 planner-sft → ④ GRPO 强化学习 planner-rl</text>
-<text x="58" y="774" class="tiny muted">框图仅保留模块名与数据流 · 校验基准:Qwen-Drive-1.0 源码 + 论文 arXiv:2609.00111 图 2 / 图 4 / §2</text>
+<rect x="40" y="824" width="1080" height="88" fill="var(--muted)" fill-opacity=".4" class="box" stroke="var(--border)"/>
+<text x="58" y="850" class="small muted">图例:<tspan fill="var(--blue)" font-weight="500">■ 蓝 = 共享视觉-语言通路</tspan>　<tspan fill="var(--green)" font-weight="500">■ 绿 = BEV 感知头</tspan>　<tspan fill="var(--orange)" font-weight="500">■ 橙 = 规划专家</tspan>　▶ 数据流</text>
+<text x="58" y="874" class="small"><tspan font-weight="500">训练四阶段(论文图 4):</tspan>① BEV 感知头单独训练(冻结 VLM)→ ② 感知 + VQA 联合训练(解冻 ViT 与 VLM)→ ③ 规划专家流匹配模仿学习 planner-sft → ④ GRPO 强化学习 planner-rl</text>
+<text x="58" y="898" class="tiny muted">框图仅保留模块名与数据流 · 校验基准:Qwen-Drive-1.0 源码 + 论文 arXiv:2609.00111 图 2 / 图 3 / 图 4 / §2</text>
 </svg>
 </div>
 
