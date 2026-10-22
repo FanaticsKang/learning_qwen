@@ -284,114 +284,29 @@
 
 <div class="card">
   <h3>两条推路线长什么样:LSS 与 UVTR 机制图</h3>
-  <p>把上面的流水线拆成两张机制图。同一副骨架(特征 × 深度分布,撒进 3D),两种工程化:<b>LSS 物化外积、拍扁成 2D</b>;<b>UVTR 查表散射、码放成 3D</b> —— 本仓库的推路是后者。逐项对比与内存账见 <a href="05_uvtr_frustum.html">05_uvtr_frustum.html(UVTR vs LSS 对比)</a>。</p>
+  <p>把上面的流水线拆成两张机制图。同一副骨架(特征 × 深度分布,撒进 3D),两种工程化:<b>LSS 物化外积、拍扁成 2D</b>;<b>UVTR 查表散射、码放成 3D</b> —— 本仓库的推路是后者。两张图做成<b>可拖拽旋转的 3D 场景</b>(自绘透视投影,零外部库,离线可开;几何用 ③ 节同一份真实标定)。逐项对比与内存账见 <a href="05_uvtr_frustum.html">05_uvtr_frustum.html(UVTR vs LSS 对比)</a>。</p>
   <p style="font-weight:700;margin:18px 0 2px;color:#b45309">LSS:Lift → Splat(思想源头;外积机制本仓库未采用)</p>
-  <svg viewBox="0 0 860 300" width="100%" style="max-width:860px">
-    <defs>
-      <marker id="la" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#ea580c"/></marker>
-      <marker id="lg" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker>
-    </defs>
-    <text x="30" y="26" font-size="13" font-weight="bold" fill="#1f2430">① Lift:图像格 × 深度分布 → 外积</text>
-    <rect x="30" y="46" width="96" height="72" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.4"/>
-    <g stroke="#fde68a" stroke-width="1">
-      <line x1="54" y1="46" x2="54" y2="118"/><line x1="78" y1="46" x2="78" y2="118"/><line x1="102" y1="46" x2="102" y2="118"/>
-      <line x1="30" y1="70" x2="126" y2="70"/><line x1="30" y1="94" x2="126" y2="94"/>
-    </g>
-    <rect x="78" y="94" width="24" height="24" fill="#ea580c" opacity="0.9"/>
-    <circle cx="146" cy="82" r="13" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
-    <text x="146" y="88" text-anchor="middle" font-size="18" fill="#ea580c">×</text>
-    <rect x="168" y="96" width="16" height="22" fill="#f59e0b" opacity="0.5"/>
-    <rect x="192" y="80" width="16" height="38" fill="#f59e0b" opacity="0.7"/>
-    <rect x="216" y="58" width="16" height="60" fill="#f59e0b" opacity="0.95"/>
-    <rect x="240" y="88" width="16" height="30" fill="#f59e0b" opacity="0.6"/>
-    <rect x="264" y="102" width="16" height="16" fill="#f59e0b" opacity="0.4"/>
-    <line x1="164" y1="118" x2="284" y2="118" stroke="#cbd5e1" stroke-width="1"/>
-    <text x="30" y="142" font-size="11.5" fill="#5b6472">特征 F(每格 256 维)× 深度分布 D(118 档,Σ = 1)</text>
-    <line x1="140" y1="152" x2="140" y2="178" stroke="#64748b" stroke-width="1.5" marker-end="url(#lg)"/>
-    <circle cx="108" cy="196" r="5" fill="#ea580c" opacity="0.5"/>
-    <circle cx="126" cy="204" r="8" fill="#ea580c" opacity="0.95"/>
-    <circle cx="144" cy="210" r="4" fill="#ea580c" opacity="0.45"/>
-    <circle cx="160" cy="218" r="6" fill="#ea580c" opacity="0.7"/>
-    <circle cx="174" cy="226" r="3" fill="#ea580c" opacity="0.4"/>
-    <circle cx="186" cy="234" r="5" fill="#ea580c" opacity="0.6"/>
-    <text x="30" y="262" font-size="11.5" fill="#5b6472">该格的 118 个带权 3D 点:特征 = D(d) × F,深度未定全谱复制</text>
-    <text x="30" y="282" font-size="11.5" fill="#b45309">外积张量 ≈ 5,413 万元素 / 相机(LSS 著名瓶颈)</text>
-    <text x="330" y="26" font-size="13" font-weight="bold" fill="#1f2430">② Splat:按 (x, y) 拍扁,高度丢失</text>
-    <circle cx="428" cy="96" r="8" fill="#ea580c" opacity="0.9"/>
-    <text x="442" y="100" font-size="11" fill="#9a3412">z ≈ 8 m</text>
-    <circle cx="428" cy="150" r="8" fill="#f59e0b" opacity="0.85"/>
-    <text x="442" y="154" font-size="11" fill="#9a3412">z ≈ 2 m</text>
-    <line x1="428" y1="108" x2="428" y2="210" stroke="#ea580c" stroke-width="1.6" marker-end="url(#la)"/>
-    <line x1="428" y1="162" x2="428" y2="210" stroke="#ea580c" stroke-width="1.6" marker-end="url(#la)"/>
-    <rect x="330" y="216" width="60" height="26" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.2"/>
-    <rect x="398" y="216" width="60" height="26" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
-    <rect x="466" y="216" width="60" height="26" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.2"/>
-    <text x="428" y="258" text-anchor="middle" font-size="11" fill="#b45309">BEV pillar 格(俯视一排)</text>
-    <text x="330" y="286" font-size="11.5" fill="#b45309">3 m 高与 0.5 m 高的点堆进同一格 —— 高度在 Splat 一步永久丢失</text>
-    <text x="610" y="26" font-size="13" font-weight="bold" fill="#1f2430">③ 输出 / Shoot</text>
-    <rect x="610" y="50" width="220" height="110" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6"/>
-    <text x="720" y="84" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#9a3412">2D BEV 特征图</text>
-    <text x="720" y="108" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">[C=256, H, W]</text>
-    <text x="720" y="134" text-anchor="middle" font-size="11" fill="#5b6472">pillar 内求和池化</text>
-    <text x="720" y="184" text-anchor="middle" font-size="11.5" fill="#5b6472">原论文第三步 Shoot = 在 BEV 上跑规划器,</text>
-    <text x="720" y="202" text-anchor="middle" font-size="11.5" fill="#5b6472">与本感知头无关(本仓库规划走 VLM KV 缓存)</text>
-  </svg>
+  <div class="demo" style="margin:10px 0 4px">
+    <h4 style="margin-top:0">LSS 3D 场景 · 拖拽旋转 / 滚轮缩放 / 双击复位</h4>
+    <div style="margin-bottom:6px">
+      <button class="btn ghost" id="lss-reset">复位视角</button>
+      <button class="btn ghost" id="lss-top">俯视(看 Splat 拍扁)</button>
+      <label style="font-size:13px;margin-left:8px"><input type="checkbox" id="lss-splat" checked> 显示拍扁投影(射线上各档 → z=0 平面)</label>
+    </div>
+    <canvas id="cv3-lss" width="860" height="430" style="width:100%;cursor:grab;touch-action:none;border:1px solid var(--border);border-radius:8px;background:#fff"></canvas>
+    <p class="tip" style="margin:6px 0 0">四棱台 = CAM_F0 经内外参张成的<b>视锥</b>(近端四边形为图像平面示意,置于 d = 12 m;远端 60 m);橙色小格 = 选中的 patch(第 29 列、第 29 行);沿射线由大到小的橙点 = 该格 118 档深度假设(大小、透明度 ∝ 概率,峰值 ≈ 5.1 m);勾选项打开时,各档假设点沿竖直虚线被压到 z=0 平面 —— 同一 (x, y) 堆进同一 pillar,高度在 Splat 一步丢弃。</p>
+  </div>
   <div class="note"><b>LSS 在本仓库的身份:</b>思想源头(论文引用致敬),外积机制<b>未采用</b> —— 8 相机若按原文物化外积 ≈ 824 MB / 帧临时张量;高度在 Splat 一步丢失,也正是它接不了占用任务的原因。后续实现(含 UVTR)纷纷把"先造 118 份再投影"改成"现乘现累加"。</div>
   <p style="font-weight:700;margin:18px 0 2px;color:#0f766e">UVTR:视锥查表 + 体素池化(本仓库推路采用,view_transform.py)</p>
-  <svg viewBox="0 0 860 300" width="100%" style="max-width:860px">
-    <defs>
-      <marker id="ug" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker>
-    </defs>
-    <text x="30" y="26" font-size="13" font-weight="bold" fill="#1f2430">① 视锥地址表(预生成常量)</text>
-    <rect x="40" y="58" width="90" height="60" fill="#f0fdfa" stroke="#5eead4" stroke-width="1.3"/>
-    <g stroke="#99f6e4" stroke-width="1">
-      <line x1="70" y1="58" x2="70" y2="118"/><line x1="100" y1="58" x2="100" y2="118"/>
-      <line x1="40" y1="78" x2="130" y2="78"/><line x1="40" y1="98" x2="130" y2="98"/>
-    </g>
-    <rect x="64" y="82" width="90" height="60" fill="none" stroke="#14b8a6" stroke-width="1.3" stroke-dasharray="4 3"/>
-    <g stroke="#99f6e4" stroke-width="1" stroke-dasharray="3 3">
-      <line x1="94" y1="82" x2="94" y2="142"/><line x1="124" y1="82" x2="124" y2="142"/>
-      <line x1="64" y1="102" x2="154" y2="102"/><line x1="64" y1="122" x2="154" y2="122"/>
-    </g>
-    <g stroke="#99f6e4" stroke-width="1">
-      <line x1="40" y1="58" x2="64" y2="82"/><line x1="130" y1="58" x2="154" y2="82"/>
-      <line x1="40" y1="118" x2="64" y2="142"/><line x1="130" y1="118" x2="154" y2="142"/>
-    </g>
-    <rect x="94" y="102" width="30" height="20" fill="#0d9488" opacity="0.9"/>
-    <text x="30" y="164" font-size="11.5" fill="#5b6472">(u, v, d) 三维格网:56 × 32 × 118,每格预存地址</text>
-    <rect x="30" y="176" width="224" height="28" rx="6" fill="#0f172a"/>
-    <text x="40" y="195" font-size="11.5" fill="#7dd3fc" font-family="Consolas,monospace">(448, 448, 6.0 m) → 体素 (114, 100, 7)</text>
-    <text x="30" y="226" font-size="11.5" fill="#5b6472">常量 ≈ 2.4 MB;示例即 ③ 节实测格点</text>
-    <text x="300" y="26" font-size="13" font-weight="bold" fill="#1f2430">② 反投影 + 截断量化,逐格入座</text>
-    <line x1="300" y1="84" x2="560" y2="84" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
-    <text x="304" y="78" font-size="10.5" fill="#94a3b8">体素上界 z = 5.4 m</text>
-    <line x1="300" y1="224" x2="560" y2="224" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>
-    <text x="304" y="240" font-size="10.5" fill="#94a3b8">体素下界 z = −5 m</text>
-    <rect x="380" y="96" width="96" height="128" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.4"/>
-    <g stroke="#99f6e4" stroke-width="1">
-      <line x1="412" y1="96" x2="412" y2="224"/><line x1="444" y1="96" x2="444" y2="224"/>
-      <line x1="380" y1="128" x2="476" y2="128"/><line x1="380" y1="160" x2="476" y2="160"/><line x1="380" y1="192" x2="476" y2="192"/>
-    </g>
-    <rect x="412" y="128" width="32" height="32" fill="#0d9488" opacity="0.85"/>
-    <text x="486" y="148" font-size="11" fill="#0f766e">体素 (114, 100, 7)</text>
-    <line x1="376" y1="196" x2="490" y2="104" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="3 4"/>
-    <text x="494" y="98" font-size="10.5" fill="#94a3b8">虚线:反投影射线</text>
-    <circle cx="396" cy="180" r="4" fill="#0d9488"/>
-    <circle cx="424" cy="157" r="5.5" fill="#0d9488"/>
-    <circle cx="452" cy="134" r="4.5" fill="#0d9488"/>
-    <circle cx="352" cy="258" r="3.5" fill="none" stroke="#f87171" stroke-width="1.5"/>
-    <text x="300" y="284" font-size="11" fill="#b91c1c">越界点(如 z &lt; −5)被掩码拦下,不入格</text>
-    <text x="610" y="26" font-size="13" font-weight="bold" fill="#1f2430">③ fused CUDA 核:现取现乘</text>
-    <rect x="610" y="50" width="220" height="104" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="1.6"/>
-    <text x="720" y="80" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f766e">取 F → 取 D → 乘 → 加</text>
-    <text x="720" y="104" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">V[x,y,z] += D(u,v,d) · F(u,v)</text>
-    <text x="720" y="130" text-anchor="middle" font-size="11" fill="#5b6472">无外积中间张量;同格跨相机自动 sum</text>
-    <line x1="720" y1="158" x2="720" y2="180" stroke="#64748b" stroke-width="1.5" marker-end="url(#ug)"/>
-    <rect x="610" y="184" width="220" height="84" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.8"/>
-    <text x="720" y="212" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#0f766e">3D 体素体积(ego 系)</text>
-    <text x="720" y="234" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">[256, 200, 200, 16]</text>
-    <text x="720" y="256" text-anchor="middle" font-size="11" fill="#5b6472">高度保留 → 占用;压平 → BEV 先验</text>
-  </svg>
+  <div class="demo" style="margin:10px 0 4px">
+    <h4 style="margin-top:0">UVTR 3D 场景 · 拖拽旋转 / 滚轮缩放 / 双击复位</h4>
+    <div style="margin-bottom:6px">
+      <button class="btn ghost" id="uv-reset">复位视角</button>
+      <button class="btn ghost" id="uv-zoom">拉近看体素</button>
+    </div>
+    <canvas id="cv3-uv" width="860" height="430" style="width:100%;cursor:grab;touch-action:none;border:1px solid var(--border);border-radius:8px;background:#fff"></canvas>
+    <p class="tip" style="margin:6px 0 0">大框 = ego 体素空间 200×200×16(102.4 × 102.4 × 10.4 m,下底 z = −5 m、上盖 z = 5.4 m);同一视锥、同一射线:青色小方块 = 落入体素格的深度假设(摆在体素中心,边长 0.512 m),红色空心 = 越界(如 z &lt; −5 m)被掩码拦下;高亮的深青色立方即 ③ 节实测的体素 (114, 100, 7)。点「拉近看体素」放大到单个立方的尺度。</p>
+  </div>
   <div class="good"><b>两图对照读:</b>地址表替掉外积(5,413 万个中间元素 → 0),3D 体素替掉 2D pillar(高度保住,占用分支才有输入)——这就是 05 篇说的"本质差异只有一条:输出空间是 2D 还是 3D"。拉路(BEVFormer)的取证视角示意图见 <a href="08_uvtr_lss_bevformer.html">08_uvtr_lss_bevformer.html(三方关系)</a> §④。</div>
 </div>
 
@@ -939,6 +854,232 @@ function f2(x){ return (Math.abs(x)<0.005?0:x).toFixed(2); }
   }
   document.getElementById("sl-d").addEventListener("input",function(){ draw(parseFloat(this.value)); });
   draw(12);
+})();
+
+/* ============ 3D 机制图(自绘透视投影,零依赖;几何用真实标定) ============ */
+(function(){
+  const inv0 = inv4(L2I[0]);
+  const CAM = [inv0[0][3], inv0[1][3], inv0[2][3]];
+  function unproj(u, v, d){
+    const q = applyM(inv0, [u*d, v*d, d, 1]);
+    return [q[0]/q[3], q[1]/q[3], q[2]/q[3]];
+  }
+  const CORNERS = [[0,0],[896,0],[896,512],[0,512]];
+  function planeCorners(d){ return CORNERS.map(function(c){ return unproj(c[0], c[1], d); }); }
+  function makeViewer(cv, st0, build){
+    const ctx = cv.getContext("2d");
+    const st = { yaw:st0.yaw, pitch:st0.pitch, dist:st0.dist, target:st0.target.slice() };
+    const extra = {};
+    let raf = 0;
+    function render(){
+      raf = 0;
+      const W = cv.width, H = cv.height;
+      const cp = Math.cos(st.pitch), sp = Math.sin(st.pitch);
+      const eye = [ st.target[0] - st.dist*cp*Math.cos(st.yaw),
+                    st.target[1] + st.dist*cp*Math.sin(st.yaw),
+                    st.target[2] + st.dist*sp ];
+      let fw = [ st.target[0]-eye[0], st.target[1]-eye[1], st.target[2]-eye[2] ];
+      const fl = Math.hypot(fw[0],fw[1],fw[2]); fw = [fw[0]/fl, fw[1]/fl, fw[2]/fl];
+      let rr = [fw[1], -fw[0], 0];
+      const rl = Math.hypot(rr[0], rr[1]); rr = [rr[0]/rl, rr[1]/rl, 0];
+      const up = [ rr[1]*fw[2]-rr[2]*fw[1], rr[2]*fw[0]-rr[0]*fw[2], rr[0]*fw[1]-rr[1]*fw[0] ];
+      function pj(p){
+        const dx=p[0]-eye[0], dy=p[1]-eye[1], dz=p[2]-eye[2];
+        const cz = dx*fw[0]+dy*fw[1]+dz*fw[2];
+        if(cz < 0.2) return null;
+        const cx = dx*rr[0]+dy*rr[1]+dz*rr[2];
+        const cy = dx*up[0]+dy*up[1]+dz*up[2];
+        return { x: W/2 + 820*cx/cz, y: H/2 - 820*cy/cz, s: 820/cz, z: cz };
+      }
+      const prims = [], labels = [];
+      const api = {
+        seg(a,b,o){ const A=pj(a),B=pj(b); if(!A||!B) return;
+          prims.push({t:1, d:(A.z+B.z)/2, A:A, B:B, o:o||{}}); },
+        quad(ps,o){ const P=[]; for(let i=0;i<ps.length;i++){ const q=pj(ps[i]); if(!q) return; P.push(q); }
+          prims.push({t:2, d:(P[0].z+P[1].z+P[2].z+P[3].z)/4, P:P, o:o||{}}); },
+        tri(a,b,c,o){ const A=pj(a),B=pj(b),C=pj(c); if(!A||!B||!C) return;
+          prims.push({t:3, d:(A.z+B.z+C.z)/3, A:A,B:B,C:C, o:o||{}}); },
+        ball(p,wr,o){ const A=pj(p); if(!A) return;
+          prims.push({t:4, d:A.z, A:A, r:Math.max(wr*A.s,0.7), o:o||{} }); },
+        txt(p,s,o){ labels.push({ p:pj(p), s:s, o:o||{} }); },
+        opt: extra
+      };
+      build(api, st, extra);
+      prims.sort(function(a,b){ return b.d-a.d; });
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,W,H);
+      for(let i=0;i<prims.length;i++){
+        const p = prims[i];
+        if(p.t===1){
+          ctx.globalAlpha = p.o.op==null?1:p.o.op;
+          ctx.strokeStyle = p.o.color||"#94a3b8"; ctx.lineWidth = p.o.width||1.2;
+          ctx.setLineDash(p.o.dash||[]);
+          ctx.beginPath(); ctx.moveTo(p.A.x,p.A.y); ctx.lineTo(p.B.x,p.B.y); ctx.stroke();
+          ctx.setLineDash([]);
+        } else if(p.t===4){
+          ctx.globalAlpha = p.o.op==null?1:p.o.op;
+          ctx.beginPath(); ctx.arc(p.A.x,p.A.y,p.r,0,6.2832);
+          if(p.o.fill){ ctx.fillStyle=p.o.fill; ctx.fill(); }
+          if(p.o.stroke){ ctx.strokeStyle=p.o.stroke; ctx.lineWidth=p.o.width||1.4; ctx.stroke(); }
+        } else {
+          const P = p.t===2 ? p.P : [p.A,p.B,p.C];
+          ctx.beginPath(); ctx.moveTo(P[0].x,P[0].y);
+          for(let k=1;k<P.length;k++) ctx.lineTo(P[k].x,P[k].y);
+          ctx.closePath();
+          if(p.o.fill){ ctx.globalAlpha=p.o.op==null?1:p.o.op; ctx.fillStyle=p.o.fill; ctx.fill(); }
+          if(p.o.stroke){ ctx.globalAlpha=1; ctx.strokeStyle=p.o.stroke; ctx.lineWidth=p.o.width||1; ctx.stroke(); }
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.font = "11.5px 'Microsoft YaHei','PingFang SC',sans-serif";
+      for(let i=0;i<labels.length;i++){
+        const L = labels[i]; if(!L.p) continue;
+        const tx = L.p.x + (L.o.dx||8), ty = L.p.y + (L.o.dy||-8);
+        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.88)";
+        ctx.strokeText(L.s, tx, ty);
+        ctx.fillStyle = L.o.color||"#334155"; ctx.fillText(L.s, tx, ty);
+      }
+    }
+    function kick(){ if(!raf) raf = requestAnimationFrame(render); }
+    cv.addEventListener("pointerdown", function(e){
+      cv._px=e.clientX; cv._py=e.clientY; cv._drag=true;
+      try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+    });
+    cv.addEventListener("pointermove", function(e){
+      if(!cv._drag) return;
+      st.yaw += (e.clientX-cv._px)*0.0075;
+      st.pitch = Math.max(-0.12, Math.min(1.45, st.pitch + (e.clientY-cv._py)*0.006));
+      cv._px=e.clientX; cv._py=e.clientY; kick();
+    });
+    cv.addEventListener("pointerup", function(){ cv._drag=false; });
+    cv.addEventListener("wheel", function(e){
+      e.preventDefault();
+      st.dist = Math.max(5, Math.min(280, st.dist*Math.exp(e.deltaY*0.001)));
+      kick();
+    }, { passive:false });
+    cv.addEventListener("dblclick", function(){
+      st.yaw=st0.yaw; st.pitch=st0.pitch; st.dist=st0.dist; st.target=st0.target.slice(); kick();
+    });
+    render();
+    return {
+      set: function(o){ const t = o.target? o.target.slice() : null;
+        if(t) st.target = t;
+        if(o.yaw!=null) st.yaw=o.yaw; if(o.pitch!=null) st.pitch=o.pitch; if(o.dist!=null) st.dist=o.dist;
+        kick(); },
+      opt: function(o){ Object.assign(extra,o); kick(); }
+    };
+  }
+  /* 射线共用:CAM_F0 · 第 29 列、第 29 行(u=448, v=448)· 深度分布 μ=5.1m σ=1.5m */
+  const casts = cellPoints(0, 28, 28);
+  const w118 = casts.map(function(p){ return Math.exp(-Math.pow(p.d-5.1,2)/(2*1.5*1.5)); });
+  const wmax = Math.max.apply(null, w118);
+  for(let i=0;i<w118.length;i++) w118[i] /= wmax;
+  const NEAR = planeCorners(12), FARC = planeCorners(60);
+  function frustum(api, tint, light){
+    api.quad(NEAR, { fill:tint, op:0.10, stroke:light, width:1.3 });
+    api.quad(FARC, { fill:tint, op:0.045, stroke:light, width:1 });
+    for(let i=0;i<4;i++){
+      const j = (i+1)%4;
+      api.tri(CAM, NEAR[i], NEAR[j], { fill:tint, op:0.05 });
+      api.tri(CAM, FARC[i], FARC[j], { fill:tint, op:0.04 });
+      api.seg(NEAR[i], FARC[i], { color:light, width:1 });
+    }
+  }
+  function voxelCenter(vx,vy,vz){
+    return [ (vx+0.5)*0.512-51.2, (vy+0.5)*0.512-51.2, -5+(vz+0.5)*0.65 ];
+  }
+
+  /* ---- LSS:视锥 + Lift 软分配 + Splat 拍扁 ---- */
+  function buildLSS(api, st, extra){
+    for(let gx=0; gx<=60; gx+=10) api.seg([gx,-30,0],[gx,30,0],{color:"#e2e8f0", width:1});
+    for(let gy=-30; gy<=30; gy+=10) api.seg([0,gy,0],[60,gy,0],{color:"#e2e8f0", width:1});
+    api.txt([58,30,0], "地面 z = 0(BEV 平面)", { color:"#94a3b8" });
+    frustum(api, "#ea580c", "#fbbf24");
+    for(let gi=0; gi<=14; gi++)
+      api.seg(unproj(gi*64,0,12), unproj(gi*64,512,12), { color:"#fcd34d", width:0.7, op:0.8 });
+    for(let gj=0; gj<=8; gj++)
+      api.seg(unproj(0,gj*64,12), unproj(896,gj*64,12), { color:"#fcd34d", width:0.7, op:0.8 });
+    const c00=unproj(448,448,12), c10=unproj(464,448,12), c11=unproj(464,464,12), c01=unproj(448,464,12);
+    api.quad([c00,c10,c11,c01], { fill:"#ea580c", op:0.92 });
+    api.txt(unproj(430,-16,12), "图像平面(d = 12 m 示意,14×8 格)", { color:"#b45309" });
+    api.txt(c01, "选中 patch(第 29 列,第 29 行)", { color:"#9a3412", dy:-14, dx:-40 });
+    api.seg(CAM, unproj(448,448,30), { color:"#fbbf24", dash:[4,4], width:1.2 });
+    for(let k=0;k<casts.length;k++){
+      const p = casts[k]; if(p.d > 30) break;
+      api.ball([p.ex,p.ey,p.ez], 0.10+0.52*w118[k], { fill:"#ea580c", op:0.2+0.78*w118[k] });
+    }
+    const peak = casts[8];
+    api.txt([peak.ex, peak.ey, peak.ez], "深度峰值 ≈ 5.1 m(Lift:118 档软分配)", { color:"#b45309", dy:16 });
+    if(extra.splat){
+      for(let k=0;k<casts.length;k++){
+        const p = casts[k];
+        if(p.d < 1.5 || p.d > 24 || (Math.round(p.d*2)%4)) continue;
+        api.seg([p.ex,p.ey,p.ez],[p.ex,p.ey,0],{ color:"#94a3b8", dash:[3,3], width:1 });
+        api.ball([p.ex,p.ey,0], 0.32, { fill:"#f59e0b", op:0.75 });
+      }
+      const x0 = 114*0.512-51.2, y0 = 100*0.512-51.2;
+      api.quad([[x0,y0,0],[x0+0.512,y0,0],[x0+0.512,y0+0.512,0],[x0,y0+0.512,0]],
+               { fill:"#ea580c", op:0.55, stroke:"#b45309", width:1.5 });
+      api.txt([x0+0.3, y0-3, 0], "Splat:同 (x,y) 堆进同一 pillar,高度丢弃", { color:"#b45309", dy:4 });
+    }
+  }
+  const v1 = makeViewer(document.getElementById("cv3-lss"),
+    { yaw:0.85, pitch:0.42, dist:52, target:[13,1,0.5] }, buildLSS);
+  document.getElementById("lss-reset").addEventListener("click", function(){
+    v1.set({ yaw:0.85, pitch:0.42, dist:52, target:[13,1,0.5] });
+  });
+  document.getElementById("lss-top").addEventListener("click", function(){
+    v1.set({ yaw:0, pitch:1.35, dist:85, target:[20,0,0] });
+  });
+  document.getElementById("lss-splat").addEventListener("change", function(){
+    v1.opt({ splat: this.checked });
+  });
+
+  /* ---- UVTR:体素 slab + 射线入格 ---- */
+  function cube(api, vx,vy,vz, style){
+    const x0=vx*0.512-51.2, y0=vy*0.512-51.2, z0=-5+vz*0.65;
+    const p = [
+      [x0,y0,z0],[x0+0.512,y0,z0],[x0+0.512,y0+0.512,z0],[x0,y0+0.512,z0],
+      [x0,y0,z0+0.65],[x0+0.512,y0,z0+0.65],[x0+0.512,y0+0.512,z0+0.65],[x0,y0+0.512,z0+0.65]
+    ];
+    api.quad([p[4],p[5],p[6],p[7]], { fill:style.fill, op:style.op });
+    api.quad([p[0],p[1],p[5],p[4]], { fill:style.fill, op:style.op*0.8 });
+    api.quad([p[0],p[3],p[7],p[4]], { fill:style.fill, op:style.op*0.65 });
+    const E=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    for(let i=0;i<E.length;i++)
+      api.seg(p[E[i][0]], p[E[i][1]], { color:style.stroke, width:style.width||1 });
+  }
+  function buildUV(api, st, extra){
+    const X=-51.2, P=51.2, Z0=-5, Z1=5.4;
+    api.quad([[X,X,Z0],[P,X,Z0],[P,P,Z0],[X,P,Z0]], { fill:"#f0fdfa", op:0.5 });
+    api.quad([[X,X,Z1],[P,X,Z1],[P,P,Z1],[X,P,Z1]], { fill:"#f0fdfa", op:0.22 });
+    const C8=[[X,X,Z0],[P,X,Z0],[P,P,Z0],[X,P,Z0],[X,X,Z1],[P,X,Z1],[P,P,Z1],[X,P,Z1]];
+    const E12=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    for(let i=0;i<E12.length;i++)
+      api.seg(C8[E12[i][0]], C8[E12[i][1]], { color:"#5eead4", width:1.2 });
+    api.txt([P,P,Z0], "体素空间 200×200×16(102.4 × 102.4 × 10.4 m)", { color:"#0f766e", dy:14 });
+    frustum(api, "#0d9488", "#2dd4bf");
+    api.seg(CAM, unproj(448,448,30), { color:"#2dd4bf", dash:[4,4], width:1.2 });
+    for(let k=0;k<casts.length;k++){
+      const p = casts[k];
+      if(p.ok){
+        cube(api, p.vx, p.vy, p.vz,
+             { fill:"#0d9488", op:0.14+0.34*w118[k], stroke:"#14b8a6", width:0.7 });
+      } else if(p.d <= 30){
+        api.ball([p.ex,p.ey,p.ez], 0.26, { stroke:"#f87171", width:1.4, op:0.85 });
+      }
+    }
+    cube(api, 114, 100, 7, { fill:"#0d9488", op:0.4, stroke:"#0f766e", width:1.6 });
+    api.txt(voxelCenter(114,100,7), "体素 (114, 100, 7) ← d = 6.0 m 档落格", { color:"#0f766e", dy:-10 });
+    api.txt(unproj(430,-16,12), "同一视锥、同一射线 —— UVTR 直接以体素为家(查表入座)", { color:"#0f766e" });
+  }
+  const v2 = makeViewer(document.getElementById("cv3-uv"),
+    { yaw:0.85, pitch:0.45, dist:82, target:[12,0,0] }, buildUV);
+  document.getElementById("uv-reset").addEventListener("click", function(){
+    v2.set({ yaw:0.85, pitch:0.45, dist:82, target:[12,0,0] });
+  });
+  document.getElementById("uv-zoom").addEventListener("click", function(){
+    v2.set({ yaw:0.9, pitch:0.32, dist:9, target:voxelCenter(114,100,7) });
+  });
 })();
 
 /* ================= 验证 1 · 单格复算 ================= */
