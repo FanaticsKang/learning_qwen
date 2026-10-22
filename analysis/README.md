@@ -16,6 +16,7 @@
 | [05_uvtr_frustum.html](05_uvtr_frustum.html) | 可视化详解:UVTR vs LSS 两种深度视图变换的对比 —— Lift/Splat/Shoot 与视锥体素池化、外积内存账、输出空间 2D/3D 之别、本仓库为何选 UVTR(浏览器打开) |
 | [06_bev_head_architecture.html](06_bev_head_architecture.html) | 可视化详解:图 3(a) BEV 感知头全架构 —— ViT→UVTR/LLM 两路的维数地图、BEV Transformer(6 层注意力)与 UVTR 的分工、检测/占用/建图三头(浏览器打开) |
 | [07_image_journey.html](07_image_journey.html) | 可视化详解:一张图像的旅程 —— 当前/历史帧进 VLM、同帧 896×512 进感知路、ViT 前后尺寸、UVTR 前后(图像平面→视锥→3D 体素)、BEV Transformer 的 embedding/query/K·V,Qwen3.5-4B 为黑盒(浏览器打开) |
+| [positional_encoding.html](positional_encoding.html) | 可视化详解:位置编码培训 v1.1.0 —— 从正弦波到 Qwen3.5 的几何直觉:1D → 2D → 3D → 2.5D,含交互式演示组件(浏览器打开) |
 | [09_linear_attention.html](09_linear_attention.html) | 可视化详解:线性注意力机制 —— 从 O(N²) Softmax 到 O(N) 递归。标准注意力的成本账(softmax 三步逐行拆解:打分→exp→归一化→加权求和,配 NumPy 代码与逐步实算演示、β 锐度滑杆)、结合律与核函数替换(数字实算演示)、RNN 视角与三种计算排布、KV Cache vs 固定状态显存计算器(Qwen3.5-4B 真实几何)、变体谱系(Linear Transformer/Performer/RetNet/RWKV/Mamba/GLA/DeltaNet/GDN)、与标准注意力逐项对比、精确回忆命门与 Delta Rule 状态热图步进器,以及 Qwen3.5 "1×GQA+3×GDN" 混合的动机(规划专家的 8 份缓存为何恰来自 GQA 层)(浏览器打开) |
 
 代码位置速查:
