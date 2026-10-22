@@ -12,6 +12,7 @@
 | [01b_mrope.html](01b_mrope.html) | 可视化详解:多模态 RoPE(M-RoPE)专题 —— 一维位置的展平/跨结构碰撞(实时算分对比)、(t,h,w) 三轴分配交互演示、mrope_section [11,11,10] 三段维度与打分分解、get_rope_index 位置表代码、设计取舍与 FAQ(浏览器打开) |
 | [01c_video_process.html](01c_video_process.html) | 可视化详解:如果输入是视频文件?—— expand(-1,2,-1,-1) 的"另一条路":解码→2fps 采样(交互帧采样器)→统一 resize→相邻两帧 3D tube 打包(交互演示)→同一套 ViT,video_grid_thw 的 T 与绝对时间 RoPE;10s 视频 token 账单、Qwen-Drive 为何走帧序列(资料原文摘录在 [../reference/](../reference/README.md))(浏览器打开) |
 | [01d_permute.html](01d_permute.html) | 可视化详解:_patchify 的 permute(1,3,6,4,7,0,2,5,8) 张量变换逻辑 —— 地址轴 vs 内容轴、为什么"取连续 4 个"恰好是同一个 32×32 块、1536 维 patch 内部解剖与 dim(c,t,i,j) 下标公式验证(浏览器打开) |
+| [03_pixel_to_bev.html](03_pixel_to_bev.html) | 可视化详解:从像素到 BEV —— "压缩后投影,怎么保证每个像素被有效利用?"patch 化是划分不是采样、感知路用合并前 56×32 特征、推(LSS/UVTR 软分配)与拉(BEVFormer camera-aware 采样)的双向覆盖、demo 帧 8 相机真实标定实测账(56.6% 假设点落格、80.2% BEV 柱被点亮、每命中体素平均 2.53 份投掷 / 23.3% 双相机交界、空洞 98.9% 在 30 m 外)、patch 地面足迹 vs BEV 格宽(交叉点 ≈23 m)、页内 JS 用真实 lidar2img 复算对账(浏览器打开) |
 | [04_view_transform.html](04_view_transform.html) | 可视化详解:BEV 感知头的深度视图变换(论文 Eq. 2)——DepthNet/ASPP、深度分布如何把图像特征撒进 3D 体素、无深度监督、代码 scatter 实现(浏览器打开) |
 | [05_uvtr_frustum.html](05_uvtr_frustum.html) | 可视化详解:UVTR vs LSS 两种深度视图变换的对比 —— Lift/Splat/Shoot 与视锥体素池化、外积内存账、输出空间 2D/3D 之别、本仓库为何选 UVTR(浏览器打开) |
 | [06_bev_head_architecture.html](06_bev_head_architecture.html) | 可视化详解:图 3(a) BEV 感知头全架构 —— ViT→UVTR/LLM 两路的维数地图、BEV Transformer(6 层注意力)与 UVTR 的分工、检测/占用/建图三头(浏览器打开) |

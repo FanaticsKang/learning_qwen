@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>从像素到 BEV:压缩之后,每一份图像信息都去了哪里?</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --teal: #0d9488;
+    --teal-soft: #ccfbf1;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #134e4a 0%, #0d9488 55%, #0ea5e9 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 26px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .key { margin-top: 12px; background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.35);
+    border-radius: 10px; padding: 10px 16px; font-size: 14.5px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 12px; }
+  h2 { font-size: 21px; margin: 42px 0 6px; padding-left: 12px; border-left: 5px solid #0d9488; }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 16.5px; margin: 22px 0 4px; color: #0f766e; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  .vf-dim {
+    display: inline-block; background: var(--code-bg); color: #7dd3fc;
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+    border-radius: 6px; padding: 2px 10px; margin-top: 6px;
+  }
+  pre.codeblock {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 14px 18px; font-size: 12.8px; line-height: 1.6; overflow-x: auto;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  pre.codeblock .cm { color: #94a3b8; }
+  pre.codeblock .kw { color: #f472b6; }
+  pre.codeblock .st { color: #fbbf24; }
+  .formula {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 14px 18px; text-align: center; margin: 12px 0; font-size: 15px;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  .formula i { color: #fbbf24; font-style: italic; }
+  .formula b { color: #7dd3fc; font-weight: normal; }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .bad {
+    border-left: 4px solid var(--red); background: var(--red-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .toc { font-size: 14px; }
+  .toc a { color: #0f766e; text-decoration: none; }
+  .toc a:hover { text-decoration: none; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .center { text-align: center; }
+  svg text { font-family: inherit; }
+  .qa { background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px 20px; margin: 12px 0; font-size: 14px; }
+  .qa b.tag { color: var(--accent); }
+  .pill {
+    display: inline-block; border-radius: 999px; padding: 2px 12px; font-size: 12.5px; margin: 2px 4px 2px 0;
+  }
+  .pill.teal  { background: var(--teal-soft);  color: #0f766e; border: 1px solid #5eead4; }
+  .pill.blue  { background: var(--accent-soft); color: #1d4ed8; border: 1px solid #93c5fd; }
+  .pill.orange{ background: var(--orange-soft); color: #b45309; border: 1px solid #fcd34d; }
+  .pill.purple{ background: var(--purple-soft); color: #6d28d9; border: 1px solid #c4b5fd; }
+  /* 双栏对比 */
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  @media (max-width: 800px) { .vs { grid-template-columns: 1fr; } }
+  .vs-box { border-radius: 12px; padding: 16px 20px; height: 100%; font-size: 13.8px; }
+  .vs-box.a { background: #f0fdfa; border: 1.5px solid #5eead4; }
+  .vs-box.b { background: #eff6ff; border: 1.5px solid #93c5fd; }
+  .vs-box h4 { margin: 0 0 6px; font-size: 15.5px; }
+  .vs-box p { font-size: 13.5px; margin: 4px 0; }
+  /* 垂直流程图(vflow) */
+  .vflow { display: flex; flex-direction: column; align-items: center; margin: 16px 0 4px; }
+  .vf-box {
+    background: var(--card); border: 1.5px solid #5eead4; border-radius: 10px;
+    padding: 8px 16px; text-align: center; min-width: 340px; max-width: 700px;
+    box-shadow: 0 1px 4px rgba(13,148,136,.10); font-size: 14px;
+  }
+  .vf-box .vf-sub { font-size: 12.5px; color: var(--muted); }
+  .vf-arrow { display: flex; flex-direction: column; align-items: center; padding: 3px 0; }
+  .vf-arrow .lbl {
+    background: var(--teal-soft); color: #0f766e; border: 1px solid #5eead4;
+    font-size: 12px; border-radius: 999px; padding: 1px 12px; margin: 2px 0; text-align: center;
+  }
+  .vf-arrow .down { color: #94a3b8; font-size: 16px; line-height: 1; }
+  /* 交互 demo */
+  .demo { border: 1.5px dashed #14b8a6; background: #f0fdfa; border-radius: 12px; padding: 14px 18px; margin: 14px 0; }
+  .demo h4 { margin: 2px 0 8px; color: #0f766e; font-size: 15px; }
+  .demo p.tip { font-size: 13px; color: var(--muted); margin: 2px 0 8px; }
+  .btn {
+    background: #0d9488; color: #fff; border: none; border-radius: 8px;
+    padding: 5px 14px; font-size: 13px; cursor: pointer; margin: 2px 6px 2px 0; font-family: inherit;
+  }
+  .btn:hover { background: #0f766e; }
+  .btn.active { background: #134e4a; box-shadow: 0 0 0 2px #5eead4; }
+  .btn.ghost { background: #fff; color: #0f766e; border: 1.5px solid #14b8a6; }
+  .btn.ghost:hover { background: #ccfbf1; }
+  .demo canvas { border: 1px solid var(--border); border-radius: 8px; background: #fff; cursor: crosshair; }
+  .readout { font-size: 13.5px; margin-top: 8px; }
+  .readout b { color: #0f766e; }
+  .sliderline { font-size: 13.5px; margin: 6px 0; }
+  .sliderline input[type=range] { vertical-align: middle; width: 260px; }
+  .camrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .cambox { width: 106px; }
+  .cambox .frame { position: relative; width: 106px; height: 61px; border: 1.5px solid #cbd5e1; border-radius: 6px; background: #f8fafc; overflow: hidden; }
+  .cambox.hit .frame { border-color: #0d9488; background: #f0fdfa; }
+  .cambox .cl { font-size: 11px; color: var(--muted); text-align: center; margin-top: 2px; font-family: Consolas, monospace; }
+  .cambox .dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; transform: translate(-50%, -50%); border: 1.5px solid #fff; box-shadow: 0 0 2px rgba(0,0,0,.4); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>从像素到 BEV:压缩之后,每一份图像信息都去了哪里？</h1>
+  <p>一张 896×512 的图像被 ViT 按 16×16 patch 压成 1,792 个格点,再撒进 200×200 的 BEV 网格 —— 本篇逐段追踪这次"压缩 → 投影",并把 LSS(推)与 BEVFormer(拉)放在同一个问题下对照。</p>
+  <div class="key"><b>关键问题:</b>图像压缩后再投影到 BEV 空间,怎么保证图像中每一个像素都在 BEV 空间中被有效利用?</div>
+  <p class="sub">依据:Qwen-Drive-1.0 仓库 modeling_perception.py / view_transform.py / bev_encoder.py / attention.py / heads.py / geometry.py;所有覆盖率与坐标数字按 <span class="mono">data/demo/perception/4d0d1ccbb1035a90</span>(nuPlan 8 相机帧)的真实标定实算,体素量化严格对齐代码的 .int() 截断语义;机制细节见姊妹篇 04_view_transform.html(视图变换)、05_uvtr_frustum.html(UVTR vs LSS)、06_bev_head_architecture.html(感知头全架构)、07_image_journey.html(端到端旅程)、01_vit_process.html(patch 化)。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#s1">① 压缩的第一课:划分,不是采样</a> ·
+  <a href="#s2">② 2D→BEV:一个天生病态的投影</a> ·
+  <a href="#s3">③ 推:软分配保证"格点全覆盖"</a> ·
+  <a href="#s4">④ 拉:主动采样保证"格格有货"</a> ·
+  <a href="#s5">⑤ 双流合流:推不丢,拉不空</a> ·
+  <a href="#s6">⑥ 正面回答:有效利用的三层含义</a> ·
+  <a href="#s7">⑦ 总账与代码验证</a> ·
+  <a href="#s8">⑧ 常见疑问</a>
+</div>
+
+<!-- ================= ① ================= -->
+<h2 id="s1">① 压缩的第一课:划分,不是采样<span class="en">patchify is partition, not sampling</span></h2>
+<div class="card">
+  <p>故事的起点是一张<b>感知路</b>的相机图像。训练与推理都固定在 <b>896×512</b>(<span class="mono">configuration_perception.py:120</span>;demo 原始帧 1920×1080,resize 的两个方向比例被折进投影矩阵,见 <span class="mono">geometry.py:56-61</span>)。它有:</p>
+  <div class="formula">896 × 512 = <b>458,752</b> 个像素</div>
+  <p>ViT 的 patch 化是一个 stride=16、kernel=16 的卷积(<span class="mono">image_patch_size = 16</span>,<span class="mono">configuration_qwen_drive.py:128</span>)。卷积窗一格一格滑过去,<b>不重叠、不留缝、不跳格</b>,于是:</p>
+  <div class="formula">458,752 像素 → (56 × 32) = <b>1,792</b> 个 patch,每个 patch 恰好吞掉 16×16 = <b>256</b> 个像素</div>
+  <p>这就是"压缩"的准确含义:256 : 1 的<b>打包比</b>,而不是抽稀 —— 没有任何像素被扔掉,每个像素恰好属于一个 patch;patch embedding 权重 W 把这 256 个像素的取值线性混合成一个 1,024 维向量:</p>
+  <div class="formula">token<sub>i,j</sub> = <i>W</i> · vec( X[16i : 16i+16, 16j : 16j+16] ) + <i>b</i>   <b>// 覆盖完整,混合有损</b></div>
+  <p>损失的到底是什么?是<b>像素级的身份</b> —— 混合之后,再也分不清"这个 patch 里第 3 行第 5 列那个像素原来是多少"。保住的是什么?是<b>覆盖性</b> —— 每一份像素信息都进了某一个 patch,总量不丢。后文所有"保证"都建立在这个区别上。</p>
+</div>
+
+<div class="card">
+  <h3>点一个 patch,看它吞掉哪些像素</h3>
+  <div class="demo">
+    <h4>demo 1 · patch 与像素的对应账</h4>
+    <p class="tip">左图是 896×512 按 56×32 个 patch 缩略显示(合成驾驶场景);<b>点击任意 patch</b>,右侧放大它吞掉的 16×16 个像素。</p>
+    <canvas id="cv-grid" width="448" height="256"></canvas>
+    <canvas id="cv-zoom" width="192" height="192" style="margin-left:12px; vertical-align:top"></canvas>
+    <div class="readout" id="ro-patch">点击左侧网格选择 patch。</div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>关键澄清:投影路拿的不是"最粗"的那份压缩</h3>
+  <p>ViT 输出之后,特征立刻分成两路(<span class="mono">modeling_perception.py:244-278</span>:同一次 VLM 前向,两个水龙头放水):</p>
+  <div class="vs">
+    <div class="vs-box a">
+      <h4>感知路(本篇主角):<b>合并前</b>的 patch 网格</h4>
+      <p>在 patch merger 的输入端挂 hook,抓 2×2 合并<b>之前</b>的 patch 特征,重排回平面网格:</p>
+      <p class="mono">img_vit_feats = [N_cam, 32, 56, 1024]</p>
+      <p>每相机仍是 <b>1,792 个格点</b>,每格 1,024 维 —— 与 patch 一一对应,空间粒度最细。BEV 投影用的就是这份。</p>
+    </div>
+    <div class="vs-box b">
+      <h4>语言路:2×2 合并后的 image token</h4>
+      <p>相邻 2×2 patch 合并成一个 token,序列长度减 4,进 LLM:</p>
+      <p class="mono">img_llm_feats = [N_cam, 16, 28, 2560]</p>
+      <p>每相机 <b>448 个 token</b>。它是给语言模型看的语义压缩,空间粒度粗了 4 倍。</p>
+    </div>
+  </div>
+  <div class="good"><b>所以第一个保证已经成立:</b>投影到 BEV 之前的"压缩"是 256:1 的 patch 打包(每像素必属一个包),而不是更粗的 1024:1 token 合并 —— "压缩后再投影"里的压缩,没有压缩到语言路的程度。两路分工详见 <a href="06_bev_head_architecture.html">06_bev_head_architecture.html(BEV 感知头全架构)</a>。</div>
+</div>
+
+<!-- ================= ② ================= -->
+<h2 id="s2">② 2D→BEV:一个天生病态的投影<span class="en">ill-posed by geometry</span></h2>
+<div class="card">
+  <p>拿着一个 patch 格点去 BEV 里找位置,会立刻撞上一个几何事实:<b>一个 2D 格点 + 相机内外参,确定的不是 3D 空间里的一个点,而是一条射线</b>。射线上的每个深度 d 都可能成为这个格点的真实位置 —— 路面在 5 米,车在 20 米,天在无穷远。反过来说,<b>仅凭 2D 特征,深度是原则上无法确定的</b>;这不是工程缺陷,是投影的数学性质。</p>
+  <svg viewBox="0 0 860 300" width="100%" style="max-width:860px">
+    <defs>
+      <marker id="arrT" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#0d9488"/></marker>
+      <marker id="arrB" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2563eb"/></marker>
+    </defs>
+    <!-- camera -->
+    <rect x="40" y="120" width="70" height="52" rx="8" fill="#e2e8f0" stroke="#64748b" stroke-width="1.5"/>
+    <circle cx="75" cy="146" r="14" fill="#fff" stroke="#475569" stroke-width="2"/>
+    <circle cx="75" cy="146" r="6" fill="#475569"/>
+    <text x="75" y="196" text-anchor="middle" font-size="12.5" fill="#5b6472">相机(外参定方向)</text>
+    <!-- image plane -->
+    <rect x="140" y="96" width="26" height="100" rx="4" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+    <g stroke="#cbd5e1" stroke-width="1">
+      <line x1="140" y1="121" x2="166" y2="121"/><line x1="140" y1="146" x2="166" y2="146"/><line x1="140" y1="171" x2="166" y2="171"/>
+      <line x1="153" y1="96" x2="153" y2="196"/>
+    </g>
+    <rect x="140" y="171" width="13" height="25" fill="#0d9488" opacity="0.85"/>
+    <text x="153" y="86" text-anchor="middle" font-size="12" fill="#0f766e">一个 patch 格点</text>
+    <!-- ray -->
+    <line x1="88" y1="146" x2="700" y2="146" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 4"/>
+    <line x1="153" y1="184" x2="700" y2="146" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 4"/>
+    <!-- depth candidates -->
+    <g>
+      <circle cx="250" cy="176" r="7" fill="#f59e0b"/><text x="250" y="162" text-anchor="middle" font-size="11.5" fill="#b45309">d=3m ?</text>
+      <circle cx="380" cy="167" r="7" fill="#f59e0b"/><text x="380" y="153" text-anchor="middle" font-size="11.5" fill="#b45309">d=10m ?</text>
+      <circle cx="520" cy="157" r="7" fill="#f59e0b"/><text x="520" y="143" text-anchor="middle" font-size="11.5" fill="#b45309">d=25m ?</text>
+      <circle cx="680" cy="148" r="7" fill="#f59e0b"/><text x="680" y="134" text-anchor="middle" font-size="11.5" fill="#b45309">d=55m ?</text>
+    </g>
+    <text x="430" y="228" text-anchor="middle" font-size="13.5" fill="#1f2430">同一个格点,深度不定,就是一整条射线 —— 病态从何而来</text>
+    <!-- push -->
+    <line x1="166" y1="255" x2="240" y2="255" stroke="#0d9488" stroke-width="2.5" marker-end="url(#arrT)"/>
+    <text x="252" y="260" font-size="13" fill="#0f766e"><tspan font-weight="bold">推(push,LSS/UVTR 路):</tspan>把特征按 118 档深度各送一份拷贝,"先都给,再挑"</text>
+    <!-- pull -->
+    <line x1="820" y1="283" x2="746" y2="283" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrB)"/>
+    <text x="734" y="288" font-size="13" fill="#1d4ed8" text-anchor="end"><tspan font-weight="bold">拉(pull,BEVFormer 路):</tspan>BEV 格子投影回图像,"按需取"</text>
+  </svg>
+  <p>病态问题没有唯一解,只有不同的<b>回答姿势</b>。深度视图变换家族(LSS、UVTR,本仓库的 <span class="mono">Uni3D voxel_pool_depth</span> 一族)选择<b>推</b>:既然定不下来,就把射线上 118 个采样深度(1.0 m 到 59.5 m,步长 0.5 m)全部投一遍,用预测的概率加权 —— 信息先不丢,后端自己分辨。BEVFormer 选择<b>拉</b>:BEV 网格上的每个格子反过来投影回图像,主动取证。</p>
+  <div class="note"><b>于是关键问题被精确化成两问:</b>图像侧 —— 每个格点的信息是否<b>都有去处</b>(推路的覆盖性)?BEV 侧 —— 每个格子的信息是否<b>都有来源</b>(拉路的覆盖性)?后面两节分别作答,⑤ 节看它们如何互补。</div>
+</div>
+
+<!-- ================= ③ ================= -->
+<h2 id="s3">③ 推:软分配保证"格点全覆盖"<span class="en">push — soft allocation, no cell left behind</span></h2>
+<div class="card">
+  <p>推路的流水线(<a href="04_view_transform.html">04_view_transform.html(深度视图变换详解)</a>有逐行机制):</p>
+  <div class="vflow">
+    <div class="vf-box" style="border-color:#5eead4"><b>合并前 ViT 特征</b><br><span class="vf-dim">[N_cam, 32, 56, 1024] → vit_neck 1×1 卷积 → [N_cam, 32, 56, 256]</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">DepthNet:对全部 56×32 格点逐格预测深度分布,一格都不跳(view_transform.py:79-100)</span></div>
+    <div class="vf-box"><b>深度分布 D</b><br><span class="vf-dim">softmax 后 [118, 32, 56],每格 118 档概率,Σd = 1(无深度标签监督)</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">外积式软分配:每格特征 × 118 档概率,变成 118 个带权 3D 假设点</span></div>
+    <div class="vf-box"><b>视锥假设点全谱撒出</b><br><span class="vf-dim">56×32×118 = 211,456 点/相机;8 相机合计 1,691,648 点</span></div>
+    <div class="vf-arrow"><span class="down">▼</span><span class="lbl">voxel_pool_depth CUDA 核:逐点反投影 → 量化入格 → 按(相机×深度)概率加权累加</span></div>
+    <div class="vf-box"><b>ego 体素体积</b><br><span class="vf-dim">[256, 200, 200, 16] · 0.512 m/格(x,y) · 0.65 m/层(z) · 同格跨相机自动 sum</span></div>
+  </div>
+  <p>这里有两层<b>覆盖完备性</b>,都是机制性的("保证"二字的确切含义):</p>
+  <p>1.<b>格点级:没有一个格点被跳过。</b>DepthNet 是全卷积,输出与输入格点一一对应 —— 1,792 个格点每格都有 118 档分布,没有"这个格点看着不重要就不投影"的环节;</p>
+  <p>2.<b>深度级:不确定时不赌单点。</b>一个格点不是被硬指到某个深度,而是按概率摊到 118 个假设点上。哪怕分布再平,信息也只是被<b>稀释</b>,不会因为"猜错一个深度"而<b>丢弃</b>。</p>
+  <div class="formula">V[c, x, y, z] = Σ<sub>(u,v,d) → (x,y,z)</sub> <i>D</i><sub>u,v,d</sub> · <i>F</i><sub>u,v</sub>[c]   <b>// 概率加权,同格累加</b>　　Σ<sub>d</sub> <i>D</i><sub>u,v,d</sub> = 1   <b>// 每格信息量守恒</b></div>
+</div>
+
+<div class="card">
+  <h3>一个格点的 118 档,能"摊"到多开?</h3>
+  <div class="demo">
+    <h4>demo 2 · 深度分布 → 射线上的特征云</h4>
+    <p class="tip">取 demo 帧 CAM_F0 的真实标定,格点(第 29 列、第 29 行,即 u=448、v=448 —— 图像正下方偏前的路面)。这条射线在前方约 5 m 处穿过地面。左:118 档深度分布;右:对应的 3D 假设点(侧视图,点越大越实 = 概率越大)。</p>
+    <div>
+      <button class="btn active" id="b-sharp">锐利(路面)</button>
+      <button class="btn" id="b-bimode">双峰(路面 + 远车)</button>
+      <button class="btn" id="b-flat">平坦(完全不确定)</button>
+    </div>
+    <div class="sliderline">温度 T = <span id="ro-T">1.0</span>(T&lt;1 更尖,T&gt;1 更平)<input type="range" id="sl-T" min="0.25" max="4" step="0.05" value="1"></div>
+    <svg id="sv-bars" viewBox="0 0 760 130" width="100%" style="max-width:760px"></svg>
+    <svg id="sv-ray" viewBox="0 0 760 240" width="100%" style="max-width:760px"></svg>
+    <div class="readout" id="ro-depth"></div>
+  </div>
+  <p>衡量"摊多开"的指标是<b>有效参与档数</b>(participation ratio):</p>
+  <div class="formula"><i>N</i><sub>eff</sub> = 1 / Σ<sub>d</sub> <i>p</i><sub>d</sub><sup>2</sup>   <b>// 锐利 ≈ 几档,平坦 → 118 档</b></div>
+  <p>无论怎么拨动分布,Σp<sub>d</sub> 恒为 1:<b>信息总量守恒,软分配只决定"摊到几处"</b>。这就是"保证每一个格点都被利用"在机制层的形态 —— 不是保证投得准(那是网络学出来的),而是保证<b>人人都有出票权</b>。</p>
+</div>
+
+<div class="card">
+  <h3>撒出去之后:多少落进 BEV,多少被合理排除?</h3>
+  <p>用 demo 帧的真实标定逐点实算 CAM_F0(211,456 个假设点,量化对齐代码的 <span class="mono">.int()</span> 截断):<b>117,123 点(55.4%)落入 200×200×16 有效体素</b>,其余被越界掩码拦下(<span class="mono">view_transform.py:231-238</span>)。按图像行看去哪里最多:</p>
+  <table>
+    <tr><th>图像行 v(px)</th><th>0(最上,天空)</th><th>128</th><th>256(中部)</th><th>384</th><th>496(最下,车头前路面)</th></tr>
+    <tr><td><b>落格比例</b></td><td>19.5%</td><td>44.1%</td><td>82.8%</td><td>47.8%</td><td>33.1%</td></tr>
+    <tr><td><b>主要去向</b></td><td>上仰射线很快冲出 z≤5.4 m 上界</td><td>近档在界内,远档出侧界</td><td>近水平射线几乎走满 51.2 m 侧界</td><td>俯射线较早在 z≥−5 m 下界出界</td><td>俯射线更陡,更早出下界</td></tr>
+  </table>
+  <div class="note"><b>注意这 44.6% 不是浪费:</b>落不进 BEV 的假设点,几乎全是"天空、52 米以外、地面以下"三类 —— 它们在几何上就不属于这张 BEV 网格。把不该进的信息挡在外面,本身就是"有效"的一部分(⑥ 节展开)。至于天空那 19.5% 的近档落格,深度分布会学着自己把概率压低 —— 覆盖机制保证人人有出票权,<b>投不投、投多少票,由任务损失教</b>(FAQ Q3)。</div>
+  <p>落格的部分长什么样?取上面那个路面格点,沿深度看它撒出的点(真实坐标):</p>
+  <table>
+    <tr><th>深度档 d</th><th>ego 坐标 (x, y, z)</th><th>体素索引 (x, y, z)</th><th>判定</th></tr>
+    <tr><td>1.0 m</td><td>(2.67, −0.00, 1.21)</td><td>(105, 99, 9)</td><td>✓ 界内(空中,近处)</td></tr>
+    <tr><td>6.0 m</td><td>(7.62, 0.01, −0.24)</td><td>(114, 100, 7)</td><td>✓ 界内 —— 射线约在 5.1 m 穿过地面,这一档已在路面下</td></tr>
+    <tr><td>13.0 m</td><td>(14.54, 0.03, −2.27)</td><td>(128, 100, 4)</td><td>✓ 界内</td></tr>
+    <tr><td>20.0 m</td><td>(21.46, 0.06, −4.30)</td><td>(141, 100, 1)</td><td>✓ 界内(贴近下界)</td></tr>
+    <tr><td>24.5 m</td><td>(25.91, 0.07, −5.61)</td><td>(150, 100, 0)</td><td>✓ 界内,但注意 z 已低于 −5 m:代码用 .int() 向零截断,(−5.61+5)/0.65 = −0.94 被截成第 0 层 —— 真实实现的半格边界带(FAQ Q6)</td></tr>
+    <tr><td>≥ 25.0 m</td><td>z &lt; −6</td><td>z 索引 ≤ −1</td><td>✗ 出下界,掩码拦下</td></tr>
+  </table>
+  <p>这个格点共 <b>48 / 118 档落格</b>:一条射线上的信息被摊进前方约 24 米、逐格下沉的一串体素里 —— 深度分布学得越准,概率就越向真实命中处(地面穿越点 ≈5 m)集中。</p>
+</div>
+
+<!-- ================= ④ ================= -->
+<h2 id="s4">④ 拉:主动采样保证"格格有货"<span class="en">pull — every BEV query reaches back</span></h2>
+<div class="card">
+  <p>推路的视角是"每个图像格点 → 某处";BEVFormer 编码器(<span class="mono">bev_encoder.py:185-347</span>,<span class="mono">attention.py:150-285</span>)把视角翻过来:<b>每个 BEV 格子 → 图像某处</b>。机制分四步(架构与维数见 <a href="06_bev_head_architecture.html">06_bev_head_architecture.html</a>):</p>
+  <p>1.<b>每个 BEV 格自带 4 个高度参考点。</b>200×200 = 40,000 个 query,每个沿 z 方向取 4 个 pillar 参考点 —— 物理高度上约落在 z ≈ −4.5 / −1.4 / +1.8 / +4.9 m(<span class="mono">get_reference_points</span>,num_points_in_pillar=4,把 [−5, 5.4] m 四等分采样)—— 一个格子从"一个点"变成"一根竖着的取样杆";</p>
+  <p>2.<b>参考点投影回全部相机。</b>ego 系 3D 点经 lidar2img 投影到每台相机(fp32、显式关 TF32 保精度,<span class="mono">point_sampling</span>,bev_encoder.py:231-286),落在图像内的记为有效;</p>
+  <p>3.<b>camera-aware:只向看得到你的相机取证。</b>SCA(SpatialCrossAttention)按投影掩码把"有相机可看"的 query 重排(top-k rebatch),只对这些 (query, camera) 对做可变形注意力;每个 query 在每台相机上有 4 锚 × 8 头 × 4 尺度 × 2 点 = <b>256 个采样位置</b>,每头 32 个注意力权重(4 尺度 × 8 点)softmax;</p>
+  <p>4.<b>采不到就守住先验。</b>一台相机都投不进的 query:归一计数被 clamp 到 1、注意力输出为 0,残差直通 —— 它带着自己的初始值(可学习 embedding + 推路先验,见 ⑤)继续往下走,6 层里还有 BEV 自注意力(单帧下 TSA 由 <span class="mono">stack([query, query])</span> 退化而来)可以把邻近格子的信息传给它。</p>
+  <div class="note"><b>一个常被忽略的细节:</b>可变形注意力采样在<b>连续坐标</b>上做双线性插值,采样位置 = 参考点 + 学习到的偏移 —— 不受 patch 网格限制。也就是说,拉路甚至能取到"patch 中心射线没有扫到"的位置;K/V 金字塔最细一层 64×112(每相机 7,168 格,由 16×28 上采样而来),比 patch 网格还密 4 倍 —— 但要诚实:上采样不创造信息,信息上限仍由 ① 节的 patch 化决定,拉路的"细"是取数灵活,不是凭空增补。</div>
+</div>
+
+<div class="card">
+  <h3>点一个 BEV 格,看它向哪些相机伸手</h3>
+  <div class="demo">
+    <h4>demo 3 · 拉路的取证范围(真实标定)</h4>
+    <p class="tip">下方为 200×200 BEV 网格俯视(102.4 m × 102.4 m,前向朝上,△ 为自车)。<b>点击任意格子</b>:它的 4 个高度参考点(红/橙/绿/蓝 = 底层→顶层)投影到 8 台相机的位置见右侧相机框;没有任何参考点投进去的相机,SCA 根本不会把 K/V 分给它。</p>
+    <canvas id="cv-bev" width="400" height="400" style="vertical-align:top"></canvas>
+    <div style="display:inline-block; vertical-align:top; margin-left:14px; max-width:560px">
+      <div class="camrow" id="camrow"></div>
+      <div class="readout" id="ro-pull"></div>
+    </div>
+  </div>
+  <p>拉路的覆盖承诺与推路对偶:推路保证"每个图像格点的信息至少去往一处",拉路保证"每个 BEV 格子至少被询问一次" —— 40,000 个 query 一格不缺地进入编码器,能不能取到货由几何掩码说了算,取不到的也有先验与邻域兜底。</p>
+</div>
+
+<!-- ================= ⑤ ================= -->
+<h2 id="s5">⑤ 双流合流:推不丢,拉不空<span class="en">push for coverage, pull for precision</span></h2>
+<div class="card">
+  <p>两路不是二选一,而是同一感知头里的双流(<span class="mono">BEVFormerModelV2</span>,modeling_perception.py:50-178):</p>
+  <svg viewBox="0 0 880 540" width="100%" style="max-width:880px">
+    <defs>
+      <marker id="fa" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker>
+      <marker id="fg" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#059669"/></marker>
+    </defs>
+    <!-- left chain: push -->
+    <rect x="60" y="20" width="340" height="58" rx="10" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+    <text x="230" y="44" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f766e">推路输入 · ViT 合并前特征</text>
+    <text x="230" y="64" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">[N_cam, 32, 56, 1024] · 1,792 格/相机</text>
+    <line x1="230" y1="78" x2="230" y2="112" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <text x="244" y="102" font-size="11.5" fill="#0f766e">vit_neck 1×1:1024 → 256</text>
+    <rect x="60" y="116" width="340" height="58" rx="10" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+    <text x="230" y="140" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f766e">DepthNet 深度分布(无监督)</text>
+    <text x="230" y="160" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">softmax [118, 32, 56] · 每格 118 档</text>
+    <line x1="230" y1="174" x2="230" y2="208" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <text x="244" y="198" font-size="11.5" fill="#0f766e">外积软分配 + voxel_pool_depth(sum)</text>
+    <rect x="60" y="212" width="340" height="58" rx="10" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.6"/>
+    <text x="230" y="236" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f766e">3D 体素体积(ego 系)</text>
+    <text x="230" y="256" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">[256, 200, 200, 16] · 0.512 m × 0.65 m</text>
+    <!-- fan out from voxel: to BEV token (down) and to occupancy (side dashed) -->
+    <line x1="230" y1="270" x2="230" y2="332" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <text x="244" y="308" font-size="11.5" fill="#0f766e">16 层拼通道 4096 → 1×1 卷积 → 256,展平</text>
+    <line x1="400" y1="241" x2="470" y2="241" stroke="#059669" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#fg)"/>
+    <text x="435" y="232" text-anchor="middle" font-size="11.5" fill="#059669">直连</text>
+    <rect x="474" y="216" width="160" height="50" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="554" y="237" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#047857">占用分支</text>
+    <text x="554" y="254" text-anchor="middle" font-size="11.5" fill="#047857">3D U-Net 细化</text>
+    <rect x="60" y="336" width="340" height="58" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.8"/>
+    <text x="230" y="360" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f766e">压平:BEV 几何先验</text>
+    <text x="230" y="380" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">[40000, 256] · 79.8% 柱被点亮(实测)</text>
+    <!-- right chain: pull -->
+    <rect x="480" y="20" width="340" height="58" rx="10" fill="#eff6ff" stroke="#60a5fa" stroke-width="1.6"/>
+    <text x="650" y="44" text-anchor="middle" font-size="14" font-weight="bold" fill="#1d4ed8">拉路输入 · LLM 合并后 token</text>
+    <text x="650" y="64" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">[N_cam, 16, 28, 2560] · 448 token/相机</text>
+    <line x1="650" y1="78" x2="650" y2="112" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <text x="664" y="102" font-size="11.5" fill="#1d4ed8">SimpleFPN 四尺度</text>
+    <rect x="480" y="116" width="340" height="58" rx="10" fill="#eff6ff" stroke="#60a5fa" stroke-width="1.6"/>
+    <text x="650" y="140" text-anchor="middle" font-size="14" font-weight="bold" fill="#1d4ed8">K/V 特征金字塔</text>
+    <text x="650" y="160" text-anchor="middle" font-size="12" fill="#5b6472" font-family="Consolas,monospace">64×112 / 32×56 / 16×28 / 8×14 · C=256</text>
+    <line x1="650" y1="174" x2="650" y2="392" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <text x="664" y="300" font-size="11.5" fill="#1d4ed8">SCA 逐层取证(camera-aware</text>
+    <text x="664" y="316" font-size="11.5" fill="#1d4ed8">可变形采样,见 ④)</text>
+    <!-- merge -->
+    <rect x="160" y="396" width="560" height="66" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.8"/>
+    <text x="440" y="422" text-anchor="middle" font-size="14.5" font-weight="bold" fill="#5b21b6">BEVFormer 编码器 × 6 层</text>
+    <text x="440" y="444" text-anchor="middle" font-size="12" fill="#5b6472">每层:BEV 自注意力(单帧 TSA 退化)+ 空间交叉注意力(SCA)+ FFN · query = 可学习 embedding + 推路先验</text>
+    <line x1="230" y1="394" x2="230" y2="396" stroke="#0d9488" stroke-width="2"/>
+    <line x1="230" y1="462" x2="230" y2="492" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <line x1="440" y1="462" x2="440" y2="492" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <line x1="650" y1="462" x2="650" y2="492" stroke="#64748b" stroke-width="1.6" marker-end="url(#fa)"/>
+    <rect x="120" y="496" width="640" height="40" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.4"/>
+    <text x="440" y="521" text-anchor="middle" font-size="13" fill="#334155">三个输出头:3D 检测(900 query)· 占用(200×200×16)· 在线建图(60×30 m)</text>
+  </svg>
+  <p>汇合点在 <span class="mono">heads.py:244-245</span> —— 一行加法:</p>
+  <div class="formula">bev_queries = <b>可学习 BEV embedding</b> [40000, 256] + <b>uvtr_bev_feat</b>(推路压平结果)</div>
+  <p>推路的产出不直接当表征用,而是当<b>先验</b>:给每个 query 一个"我这里大概有什么"的初始值,再由 6 层注意力从语言路金字塔里取语义、做修正。占用分支则直接吃带高度的体素 —— 这是选 UVTR 而非 LSS 的原因(<a href="05_uvtr_frustum.html">05_uvtr_frustum.html(UVTR vs LSS 对比)</a>)。</p>
+</div>
+
+<div class="card">
+  <h3>为什么必须两条都要:各自的盲区(实测)</h3>
+  <p>用 demo 帧 8 相机真实标定,把推路完整跑一遍(1,691,648 个假设点,截断量化,复算入口在 ⑦):</p>
+  <table>
+    <tr><th>推路实测账</th><th>数值</th><th>含义</th></tr>
+    <tr><td>落入有效体素的假设点</td><td><b>957,799 / 1,691,648(56.6%)</b></td><td>其余为天空 / 越界 / 地下的合理排除</td></tr>
+    <tr><td>被点亮的体素</td><td><b>378,575 / 640,000(59.2%)</b></td><td>体素网近半被撒到</td></tr>
+    <tr><td>被点亮的 BEV 柱</td><td><b>32,095 / 40,000(80.2%)</b></td><td>五分之四的柱至少收到一次投掷</td></tr>
+    <tr><td>每命中体素平均摊到的投掷份数</td><td><b>2.53 份</b>(最多 504 份)</td><td>同一格被反复投掷:既来自 FOV 交界的跨相机,也来自同相机相邻格点 × 118 深度档 —— sum 累加 = 证据叠加</td></tr>
+    <tr><td>同时被 ≥2 台相机照亮的命中体素</td><td><b>23.3%</b>(平均 1.23 台 / 体素,上限 2 台)</td><td>跨相机重叠集中在环视 FOV 交界带 —— 交界处由两台相机同时作证</td></tr>
+    <tr><td>未被点亮的 7,905 根柱</td><td><b>98.9% 位于 30 m 半径之外</b>;30 m 内仅 0.8% 空</td><td>空洞集中在远角 —— 60 m 深度上限与相机 FOV 合力切出的区域</td></tr>
+  </table>
+  <div class="vs">
+    <div class="vs-box a">
+      <h4>只用推路(LSS/UVTR)会怎样</h4>
+      <p>图像侧无格点被跳过 ✓,但 BEV 侧有 <b>19.8% 的柱收不到任何投掷</b>(远角/盲区),近场柱的<b>高度结构</b>也依赖深度分布学得准。单靠推路,远角只能靠 3D 卷积从近处"糊"过去。</p>
+    </div>
+    <div class="vs-box b">
+      <h4>只用拉路(BEVFormer)会怎样</h4>
+      <p>BEV 侧格格被询问 ✓,但 query 的初始值是纯可学习 embedding —— <b>没有任何几何先验</b>,注意力要从头学"往哪看";图像侧哪些区域被用,完全由学出来的采样偏移决定,没有"人人有出票权"的机制保证。</p>
+    </div>
+  </div>
+  <div class="good"><b>合流的逻辑:</b>推不丢(图像格点全覆盖、按概率软分配)+ 拉不空(40,000 query 全部被询问、取不到货有先验与邻域兜底)。混合架构让"有效利用"在两个方向上都有机制级保证 —— 这正是对关键问题的架构级回答。</div>
+</div>
+
+<!-- ================= ⑥ ================= -->
+<h2 id="s6">⑥ 正面回答:有效利用的三层含义<span class="en">what "effectively utilized" actually means</span></h2>
+<div class="card">
+  <p>现在正面回答关键问题。先给结论,再给三层论据:</p>
+  <div class="good" style="font-size:14.5px"><b>qwen_drive 的保证不是"每个像素都进 BEV",而是三重机制:</b><br>
+  ① 覆盖性 —— patch 化是划分不是采样(每个像素必属一个包),感知路用合并前 1,792 格/相机,DepthNet 逐格出分布、118 档全谱软分配,信息只稀释不丢弃;<br>
+  ② 合理排除 —— 天空 / 越界 / 地下的假设点被掩码拦下(8 相机实测 43.4%),重复投掷被 sum 累积成证据(每命中体素平均 2.53 份投掷,23.3% 同时被 2 台相机照亮),"有效"包含"该挡的挡在外、该叠的叠起来";<br>
+  ③ 分辨率匹配 —— patch 粒度与 BEV 0.512 m/格、与检测/占用任务的分辨率在量级上对齐,"有效"以任务为尺度。</div>
+  <h3>第三层需要算一笔账:patch 的地面足迹 vs BEV 格宽</h3>
+  <div class="demo">
+    <h4>demo 4 · 距离滑杆:一个 patch 在地面上盖多宽?</h4>
+    <div class="sliderline">目标距离 d = <span id="ro-d">12.0</span> m<input type="range" id="sl-d" min="2" max="60" step="0.5" value="12"></div>
+    <svg id="sv-foot" viewBox="0 0 760 150" width="100%" style="max-width:760px"></svg>
+    <div class="readout" id="ro-foot"></div>
+    <p class="tip">口径:demo 帧 CAM_F0 原始焦距 1,545 px(1920 宽),resize 到 896 宽后 f ≈ 721 px;patch 宽 16 px,角宽 ≈ 2·atan(8/f) ≈ 1.27°,地面横向足迹 ≈ d × 16/f(小角近似;纵向另有 1/sin(俯角) 拉伸,路面斜视处更宽)。</p>
+  </div>
+  <p>交叉点在 <b>d ≈ 23 m</b>:比这近,一个 patch 的足迹比 0.512 m 的 BEV 格还窄 —— BEV 格是瓶颈,patch 粒度绰绰有余;比这远,一个 patch 开始盖过几个 BEV 格 —— patch 粒度成为瓶颈。而推路深度上限 60 m、BEV 半径 51.2 m,检测目标(车辆 0.4–2 m 宽)在 50 m 处投影只有 1–2 个 BEV 格宽,patch 的远端粒度与"要分辨的东西"是同一个量级。这不是巧合:分辨率预算是按任务配的。</p>
+  <div class="bad"><b>诚实的边界:</b>"每一个像素都被有效利用"按字面理解是不可能、也不必要的 —— 像素身份在 patch 化时已被线性混合,BEV 里不存在逐像素的对应物。架构的真实承诺是上面三条;<b>像素级细节的上限,在 patch 化那一刻就已确定</b>,后端(推路、拉路)只能在这个上限内做到"不浪费",不能越过它。</div>
+</div>
+
+<!-- ================= ⑦ ================= -->
+<h2 id="s7">⑦ 总账与代码验证<span class="en">the full ledger, recomputed live</span></h2>
+<div class="card">
+  <h3>从像素到 BEV 的完整账本</h3>
+  <table>
+    <tr><th style="width:36%">阶段</th><th style="width:24%">数量(每相机,除注明)</th><th>代码位置(Qwen-Drive-1.0/)</th></tr>
+    <tr><td>感知输入图像</td><td>896×512 = 458,752 像素</td><td>src/qwen_drive_perception/configuration_perception.py:120</td></tr>
+    <tr><td>patch 化(stride 16,划分无遗漏)</td><td>56×32 = 1,792 格(÷256)</td><td>src/qwen_drive/configuration_qwen_drive.py:128;dataset.py:115</td></tr>
+    <tr><td>感知路取合并前特征(hook 抓取)</td><td>[32, 56, 1024]</td><td>src/qwen_drive_perception/modeling_perception.py:244-267,278</td></tr>
+    <tr><td>语言路 2×2 合并(对照)</td><td>[16, 28, 2560] = 448 token(÷4)</td><td>modeling_perception.py:269-277</td></tr>
+    <tr><td>vit_neck 通道投影</td><td>[32, 56, 256]</td><td>modeling_perception.py:66(SimpleFPN scale 1.0)</td></tr>
+    <tr><td>DepthNet 深度分布</td><td>[118, 32, 56],Σd=1</td><td>view_transform.py:79-100;modeling_perception.py:158-161</td></tr>
+    <tr><td>视锥假设点(全谱撒出)</td><td>56×32×118 = 211,456;8 相机 1,691,648</td><td>view_transform.py:15-21,136-156;configuration_perception.py:98-99</td></tr>
+    <tr><td>反投影 + 截断量化 + 越界掩码</td><td>CAM_F0 落格 117,123(55.4%)</td><td>view_transform.py:200-239(coord_preparing)</td></tr>
+    <tr><td>体素池化(sum,跨相机累加)</td><td>[256, 200, 200, 16];8 相机点亮 378,575 体素</td><td>ops/voxel_pool/src/voxel_pool_cuda.cu:166-188;view_transform.py:241-258</td></tr>
+    <tr><td>压平为 BEV 先验</td><td>[40000, 256],32,095 柱(80.2%)非零</td><td>modeling_perception.py:117-122(_uvtr_voxel_to_bev_tokens)</td></tr>
+    <tr><td>先验加到可学习 query</td><td>40,000 query 全部进入编码器</td><td>heads.py:244-245</td></tr>
+    <tr><td>BEVFormer 6 层拉取</td><td>query × 4 锚 × 8 头 × 4 尺度 × 2 点</td><td>bev_encoder.py:197-286;attention.py:150-285</td></tr>
+    <tr><td>三头输出</td><td>检测 900 query / 占用 / 建图</td><td>heads.py:230-260;configuration_perception.py:109-118</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>浏览器复算:与文中每个数字对账</h3>
+  <p>下面不用任何预存结果 —— 用 demo 帧 CAM_F0 的真实 lidar2img 矩阵(内嵌于本页 JS),按 <span class="mono">coord_preparing</span> 的逐步矩阵运算现算。Python 参考实现:</p>
+  <pre class="codeblock"><span class="cm"># view_transform.py · coord_preparing(节选,文字版逐步)</span>
+frustum = (u, v, d, 1)                    <span class="cm"># 视锥格,56×32×118</span>
+frustum[:2] *= d                          <span class="cm"># → (u·d, v·d, d, 1)</span>
+lidar  = inv(lidar2img) @ frustum         <span class="cm"># 反投影 → lidar 系(除以齐次分量)</span>
+ego    = lidar2ego @ lidar                <span class="cm"># → ego 系(demo 帧 lidar2ego = I)</span>
+vox    = ((ego − pc_range) / voxel_size).int()   <span class="cm"># 向零截断(FAQ Q6)</span>
+mask   = (0 ≤ x &lt; 200) &amp; (0 ≤ y &lt; 200) &amp; (0 ≤ z &lt; 16)</pre>
+  <div class="demo">
+    <h4>验证 1 · 单格点复算(自动运行)</h4>
+    <div class="readout" id="v-single">计算中…</div>
+    <table id="tbl-cell" style="margin-top:8px"></table>
+  </div>
+  <div class="demo">
+    <h4>验证 2 · 8 相机全账(约百万次投影,点击运行)</h4>
+    <button class="btn" id="btn-stats">实算 8 相机 × 211,456 假设点</button>
+    <div class="readout" id="v-stats">等待运行…</div>
+    <table id="tbl-stats" style="margin-top:8px; display:none"></table>
+  </div>
+  <div class="good">期望对账:验证 1 应复现 ③ 节表格(48/118 落格,首档 d=1.0 → 体素 (105, 99, 9));验证 2 应复现 ⑤ 节全账(56.6%、378,575、80.2%、2.53、504、23.3%、98.9%)。矩阵以 6 位小数内嵌,与 Python fp32 标定的一致性在十万分之一量级,若末位有 ±个位数出入属正常的浮点舍入。</div>
+</div>
+
+<!-- ================= ⑧ ================= -->
+<h2 id="s8">⑧ 常见疑问<span class="en">FAQ</span></h2>
+<div class="card">
+  <div class="qa"><b class="tag">Q1:</b> patch 化到底丢没丢信息?<br>
+  <b>A:</b> 分两半说:<b>覆盖</b>不丢 —— 划分式打包,每个像素恰好属于一个 patch,458,752 像素一个不少地进入 1,792 个包;<b>身份</b>丢 —— 线性混合后像素级细节不可逆。所以本篇的"保证"从来不是"像素级保真",而是"每一份混合后的信息都进入投影、都有去处"。</div>
+
+  <div class="qa"><b class="tag">Q2:</b> 一个 BEV 格被很多格点、很多相机重复命中(实测单体素最多 504 份投掷),是不是浪费?<br>
+  <b>A:</b> 是<b>证据叠加</b>,不是重复劳动。sum 池化把同一格的多来源投掷累加:23.3% 的命中体素同时收到两台相机的票(环视 FOV 交界带,由双相机互相作证),平均每格 2.53 份、最多 504 份投掷(大头来自同相机相邻格点 × 118 深度档的密集覆盖);后续的 3D 卷积与注意力负责消化累加后的幅值差异。</div>
+
+  <div class="qa"><b class="tag">Q3:</b> 深度分布没有任何监督,撒错了地方怎么办?<br>
+  <b>A:</b> 覆盖机制与投准机制是分开的:机制保证<b>人人有出票权</b>(格点全覆盖、118 档全谱);<b>投得准不准</b>由端到端损失教 —— 检测/占用的梯度穿过 sum 池化反传回 DepthNet,把概率逐步推向任务需要的深度(3 节那条路面射线的 ≈5 m)。撒错不会被"丢掉",只会被下游降权。</div>
+
+  <div class="qa"><b class="tag">Q4:</b> 天空像素去哪了?<br>
+  <b>A:</b> 天空格点的上仰射线很快冲出 z ≤ 5.4 m 的上界(最顶行 19.5% 的近档落格之外全部出界),被掩码拦下 —— BEV 网格里本来就不该有天空;那 19.5% 的近档落格,深度分布会学着把概率压到接近 0。这是"有效利用 = 合理排除"的极端例子。</div>
+
+  <div class="qa"><b class="tag">Q5:</b> 本篇与 04 / 05 / 06 / 07 篇的分工?<br>
+  <b>A:</b> <a href="04_view_transform.html">04_view_transform.html</a> 讲推路的机制本体(Eq. 2、DepthNet、scatter);<a href="05_uvtr_frustum.html">05_uvtr_frustum.html</a> 讲 LSS 与 UVTR 两条路线的取舍; <a href="06_bev_head_architecture.html">06_bev_head_architecture.html</a> 讲感知头全架构与维数; <a href="07_image_journey.html">07_image_journey.html</a> 讲一张图像的端到端旅程;本篇专门回答"压缩 → 投影之后,信息利用率的保证"这一个问题,数字全部按 demo 帧真实标定实算。</div>
+
+  <div class="qa"><b class="tag">Q6:</b> 为什么强调"截断量化"?<br>
+  <b>A:</b> 代码用 <span class="mono">.int()</span> 把体素坐标向零截断(而非向下取整),于是 (−1, 0) 区间的小负坐标会被截成 0 而通过掩码 —— 相当于 BEV 下边界外约半格的薄带仍会被计入(3 节表格 d=24.5 m 那一行)。本篇所有统计严格按此语义实算,复算入口在 ⑦,数字可与官方代码逐位对账。</div>
+
+  <div class="qa"><b class="tag">Q7:</b> 分辨率口径:896×512 和别处见过的 972×1079 是什么关系?<br>
+  <b>A:</b> 本篇全部是<b>感知路</b>口径:训练与推理固定 896×512(patch 16 → 56×32 格)。972×1079 是规划路 WOD-E2E 发布帧的原生分辨率,与感知路的 resize 口径无关;demo 帧原始图为 1920×1080(nuPlan),resize 比例已折进 lidar2img。</div>
+</div>
+
+<footer>
+  依据:QwenLM/Qwen-Drive-1.0(commit 28091c1)— src/qwen_drive_perception/{modeling_perception, view_transform, bev_encoder, attention, heads, geometry, fpn, dataset, configuration_perception}、src/qwen_drive/configuration_qwen_drive.py、ops/voxel_pool/src/voxel_pool_cuda.cu;标定与统计:data/demo/perception/4d0d1ccbb1035a90(calib.npz,nuplan 8 相机,frame 4d0d1ccbb1035a90),Python 侧独立实算与本页 JS 互为对账。姊妹篇:<a href="01_vit_process.html">01_vit_process.html(ViT 编码全过程)</a> · <a href="04_view_transform.html">04_view_transform.html(视图变换机制)</a> · <a href="05_uvtr_frustum.html">05_uvtr_frustum.html(UVTR vs LSS)</a> · <a href="06_bev_head_architecture.html">06_bev_head_architecture.html(感知头全架构)</a> · <a href="07_image_journey.html">07_image_journey.html(一张图像的旅程)</a>。
+</footer>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- 标定数据:data/demo/perception/4d0d1ccbb1035a90 · calib.npz ----------
+   lidar2img 已按 build_lidar2img + apply_image_scale(896/1920, 512/1080) 折算,fp32 后取 6 位小数 */
+var CAMS = ["CAM_F0","CAM_R0","CAM_R1","CAM_R2","CAM_B0","CAM_L2","CAM_L1","CAM_L0"];
+var L2I = [
+ [[450.023499,-719.511963,-18.066904,-736.275391],[234.909149,0.276986,-742.814087,721.666138],[0.999136,0.003312,-0.041429,-1.622006],[0,0,0,1]],
+ [[-337.871521,-778.657288,-8.979521,436.926422],[139.954407,-204.956741,-738.485413,849.042542],[0.569022,-0.821986,-0.023525,-1.035812],[0,0,0,1]],
+ [[-834.415283,-155.680389,-7.735026,965.460876],[-91.314247,-237.969574,-736.197937,992.966553],[-0.362938,-0.931702,-0.01443,-0.127241],[0,0,0,1]],
+ [[-803.622314,273.162659,-10.878628,-230.606064],[-196.078171,-170.691589,-734.420166,831.901917],[-0.773,-0.63436,-0.00767,-0.696584],[0,0,0,1]],
+ [[-453.877869,717.291443,-5.729352,-217.218536],[-265.876556,-8.274362,-732.254395,939.232971],[-0.999966,-0.008168,0.00062,-0.499215],[0,0,0,1]],
+ [[98.702454,843.068542,-6.182333,-380.176025],[-201.6035,159.284119,-735.486084,830.187561],[-0.782226,0.622886,-0.011647,-0.686787],[0,0,0,1]],
+ [[504.584717,682.507996,-11.053536,-1061.271362],[-93.629623,231.532425,-737.957642,1004.838745],[-0.369283,0.92907,-0.021405,-0.077983],[0,0,0,1]],
+ [[847.768127,-42.733665,-2.857288,-1377.140259],[148.016617,202.5457,-737.578186,846.03717],[0.569791,0.821547,-0.019987,-1.021254],[0,0,0,1]]
+];
+var L2E = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];   /* demo 帧 lidar2ego = I */
+var PC = [-51.2,-51.2,-5.0], VS = [0.512,0.512,0.65], SH = [200,200,16];
+var IMG_W = 896, IMG_H = 512, NB = 118;
+var Z_ANCH = [-4.5,-1.3667,1.7667,4.9];   /* 4 个 pillar 参考点的物理高度 */
+var ANCH_COL = ["#dc2626","#d97706","#059669","#2563eb"];
+
+function inv4(m){
+  var a=[],inv=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],r,c,k;
+  for(r=0;r<4;r++){a.push(m[r].slice());}
+  for(c=0;c<4;c++){
+    var p=c;
+    for(r=c+1;r<4;r++){ if(Math.abs(a[r][c])>Math.abs(a[p][c])) p=r; }
+    var t=a[c];a[c]=a[p];a[p]=t; t=inv[c];inv[c]=inv[p];inv[p]=t;
+    var dd=a[c][c];
+    for(k=0;k<4;k++){ a[c][k]/=dd; inv[c][k]/=dd; }
+    for(r=0;r<4;r++){ if(r===c) continue; var f=a[r][c];
+      for(k=0;k<4;k++){ a[r][k]-=f*a[c][k]; inv[r][k]-=f*inv[c][k]; } }
+  }
+  return inv;
+}
+function applyM(m,p){
+  return [ m[0][0]*p[0]+m[0][1]*p[1]+m[0][2]*p[2]+m[0][3]*p[3],
+           m[1][0]*p[0]+m[1][1]*p[1]+m[1][2]*p[2]+m[1][3]*p[3],
+           m[2][0]*p[0]+m[2][1]*p[1]+m[2][2]*p[2]+m[2][3]*p[3],
+           m[3][0]*p[0]+m[3][1]*p[1]+m[3][2]*p[2]+m[3][3]*p[3] ];
+}
+/* coord_preparing 的逐步复现:视锥格 (u,v,d) → lidar → ego → 截断量化 → 掩码 */
+function cellPoints(cam, iu, iv){
+  var inv = inv4(L2I[cam]), out = [], k;
+  for(k=0;k<NB;k++){
+    var d = 1.0 + 0.5*k, u = iu*16, v = iv*16;
+    var q = applyM(inv, [u*d, v*d, d, 1]);
+    var w = q[3], lx = q[0]/w, ly = q[1]/w, lz = q[2]/w;
+    var e = applyM(L2E, [lx, ly, lz, 1]);
+    var vx = Math.trunc((e[0]-PC[0])/VS[0]),
+        vy = Math.trunc((e[1]-PC[1])/VS[1]),
+        vz = Math.trunc((e[2]-PC[2])/VS[2]);
+    var ok = vx>=0 && vx<SH[0] && vy>=0 && vy<SH[1] && vz>=0 && vz<SH[2];
+    out.push({d:d, ex:e[0], ey:e[1], ez:e[2], vx:vx, vy:vy, vz:vz, ok:ok});
+  }
+  return out;
+}
+function f2(x){ return (Math.abs(x)<0.005?0:x).toFixed(2); }
+
+/* ================= demo 1 · patch 吞像素 ================= */
+(function(){
+  var W=896,H=512;
+  var off=document.createElement("canvas"); off.width=W; off.height=H;
+  var o=off.getContext("2d");
+  var sky=o.createLinearGradient(0,0,0,300); sky.addColorStop(0,"#7dd3fc"); sky.addColorStop(1,"#e0f2fe");
+  o.fillStyle=sky; o.fillRect(0,0,W,300);
+  o.fillStyle="#fde68a"; o.beginPath(); o.arc(760,70,42,0,7); o.fill();
+  o.fillStyle="#166534"; o.beginPath(); o.moveTo(0,300); o.lineTo(0,220); o.lineTo(180,240); o.lineTo(240,300); o.closePath(); o.fill();
+  o.fillStyle="#166534"; o.beginPath(); o.moveTo(896,300); o.lineTo(896,210); o.lineTo(700,235); o.lineTo(620,300); o.closePath(); o.fill();
+  o.fillStyle="#64748b"; o.beginPath(); o.moveTo(340,300); o.lineTo(430,180); o.lineTo(466,180); o.lineTo(556,300); o.closePath(); o.fill();
+  o.fillStyle="#334155"; o.fillRect(270,150,14,150);
+  function car(x,y,w,h,c){ o.fillStyle=c; o.fillRect(x,y,w,h); o.fillStyle="#0f172a"; o.fillRect(x+w*0.15,y+h*0.15,w*0.7,h*0.4); o.fillStyle=c; o.fillRect(x,y+h*0.55,w,h*0.45); o.fillStyle="#0f172a"; o.fillRect(x+w*0.1,y+h*0.82,w*0.18,h*0.18); o.fillRect(x+w*0.72,y+h*0.82,w*0.18,h*0.18); }
+  car(120,238,150,62,"#dc2626");
+  car(600,232,130,54,"#2563eb");
+  o.fillStyle="#e2e8f0"; o.fillRect(0,300,W,H-300);
+  o.fillStyle="#cbd5e1"; o.beginPath(); o.moveTo(300,300); o.lineTo(596,300); o.lineTo(896,512); o.lineTo(0,512); o.closePath(); o.fill();
+  o.fillStyle="#f8fafc";
+  o.save(); o.translate(448,406);
+  for(var s=0;s<5;s++){ var w0=16-s*1.5,hh=16-s*1.5,y0=26*s; o.fillRect(-w0/2,y0,w0,hh); }
+  o.restore();
+  var cv=document.getElementById("cv-grid"), ctx=cv.getContext("2d");
+  ctx.drawImage(off,0,0,448,256);
+  ctx.strokeStyle="rgba(15,23,42,0.18)"; ctx.lineWidth=0.5;
+  for(var i=1;i<56;i++){ ctx.beginPath(); ctx.moveTo(i*8,0); ctx.lineTo(i*8,256); ctx.stroke(); }
+  for(var j=1;j<32;j++){ ctx.beginPath(); ctx.moveTo(0,j*8); ctx.lineTo(448,j*8); ctx.stroke(); }
+  var zoom=document.getElementById("cv-zoom"), zctx=zoom.getContext("2d");
+  zctx.fillStyle="#f8fafc"; zctx.fillRect(0,0,192,192);
+  zctx.fillStyle="#94a3b8"; zctx.font="13px sans-serif"; zctx.textAlign="center";
+  zctx.fillText("点击左侧网格",96,100);
+  function sel(iu,iv){
+    ctx.drawImage(off,0,0,448,256);
+    ctx.strokeStyle="rgba(15,23,42,0.18)"; ctx.lineWidth=0.5;
+    for(var i=1;i<56;i++){ ctx.beginPath(); ctx.moveTo(i*8,0); ctx.lineTo(i*8,256); ctx.stroke(); }
+    for(var j=1;j<32;j++){ ctx.beginPath(); ctx.moveTo(0,j*8); ctx.lineTo(448,j*8); ctx.stroke(); }
+    ctx.fillStyle="rgba(13,148,136,0.45)"; ctx.fillRect(iu*8,iv*8,8,8);
+    ctx.strokeStyle="#0d9488"; ctx.lineWidth=2; ctx.strokeRect(iu*8+1,iv*8+1,6,6);
+    zctx.imageSmoothingEnabled=false;
+    zctx.drawImage(off, iu*16, iv*16, 16, 16, 0, 0, 192, 192);
+    zctx.imageSmoothingEnabled=true;
+    zctx.strokeStyle="rgba(255,255,255,0.25)"; zctx.lineWidth=1;
+    for(var k=1;k<16;k++){ zctx.beginPath(); zctx.moveTo(k*12,0); zctx.lineTo(k*12,192); zctx.stroke();
+      zctx.beginPath(); zctx.moveTo(0,k*12); zctx.lineTo(192,k*12); zctx.stroke(); }
+    document.getElementById("ro-patch").innerHTML =
+      "<b>patch(第 "+iu+" 列,第 "+iv+" 行)</b> ← 原图像素 x ∈ ["+(iu*16)+", "+(iu*16+15)+"],y ∈ ["+(iv*16)+", "+(iv*16+15)+
+      "],共 <b>256 个像素</b> → 线性混合为一个 1,024 维向量。458,752 像素 → 1,792 个这样的包,无一遗漏。";
+  }
+  cv.addEventListener("click", function(ev){
+    var r=cv.getBoundingClientRect();
+    var px=(ev.clientX-r.left)*(448/r.width), py=(ev.clientY-r.top)*(256/r.height);
+    var iu=Math.max(0,Math.min(55,Math.floor(px/8))), iv=Math.max(0,Math.min(31,Math.floor(py/8)));
+    sel(iu,iv);
+  });
+  sel(28,24);
+})();
+
+/* ================= demo 2 · 深度分布 → 射线特征云 ================= */
+(function(){
+  var pts = cellPoints(0, 28, 28);          /* u=448, v=448 · CAM_F0 */
+  var mode="sharp", T=1.0;
+  var base = pts.map(function(){
+    return 1;
+  });
+  function setBase(){
+    var k;
+    if(mode==="sharp"){ for(k=0;k<NB;k++){ var d=pts[k].d; base[k]=Math.exp(-Math.pow(d-5.1,2)/(2*1.5*1.5)); } }
+    else if(mode==="bimode"){ for(k=0;k<NB;k++){ var d2=pts[k].d;
+      base[k]=0.55*Math.exp(-Math.pow(d2-4.5,2)/(2*1.2*1.2))+0.45*Math.exp(-Math.pow(d2-22,2)/(2*3.5*3.5)); } }
+    else { for(k=0;k<NB;k++){ base[k]=1; } }
+  }
+  function probs(){
+    setBase(); var p=[],s=0,k;
+    for(k=0;k<NB;k++){ var v=Math.pow(Math.max(base[k],1e-12),1/T); p.push(v); s+=v; }
+    for(k=0;k<NB;k++) p[k]/=s;
+    return p;
+  }
+  function drawBars(p){
+    var svg=document.getElementById("sv-bars"), max=0,k;
+    for(k=0;k<NB;k++) max=Math.max(max,p[k]);
+    var s='<rect x="0" y="0" width="760" height="130" fill="#ffffff"/>';
+    for(k=0;k<NB;k++){
+      var h=Math.max(p[k]/max*96,0.6);
+      s+='<rect x="'+(26+k*6.2)+'" y="'+(108-h)+'" width="5" height="'+h+'" rx="1" fill="#0d9488" opacity="'+(0.35+0.65*p[k]/max)+'"/>';
+    }
+    s+='<line x1="26" y1="109" x2="758" y2="109" stroke="#cbd5e1" stroke-width="1"/>';
+    s+='<text x="26" y="124" font-size="11" fill="#5b6472">d=1 m</text>';
+    s+='<text x="380" y="124" font-size="11" fill="#5b6472" text-anchor="middle">d=30 m</text>';
+    s+='<text x="758" y="124" font-size="11" fill="#5b6472" text-anchor="end">d=59.5 m(118 档)</text>';
+    s+='<text x="26" y="14" font-size="12.5" fill="#0f766e" font-weight="bold">深度分布 p(d) · 118 档,Σ = 1</text>';
+    svg.innerHTML=s;
+  }
+  function drawRay(p){
+    var svg=document.getElementById("sv-ray");
+    var X0=40,X1=730,XR=32, ZT=8,ZB=-7,YT=22,YH=200;
+    function px(x){ return X0+(x/XR)*(X1-X0); }
+    function pz(z){ return YT+((ZT-z)/(ZT-ZB))*YH; }
+    var s='<rect x="0" y="0" width="760" height="240" fill="#ffffff"/>';
+    s+='<line x1="'+X0+'" y1="'+pz(0)+'" x2="'+X1+'" y2="'+pz(0)+'" stroke="#a8a29e" stroke-width="1.5"/>';
+    s+='<text x="'+(X1-4)+'" y="'+(pz(0)-5)+'" font-size="11" fill="#78716c" text-anchor="end">地面 z=0</text>';
+    s+='<line x1="'+X0+'" y1="'+pz(5.4)+'" x2="'+X1+'" y2="'+pz(5.4)+'" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>';
+    s+='<text x="'+(X0+4)+'" y="'+(pz(5.4)-4)+'" font-size="10.5" fill="#94a3b8">体素上界 z=5.4 m</text>';
+    s+='<line x1="'+X0+'" y1="'+pz(-5)+'" x2="'+X1+'" y2="'+pz(-5)+'" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 4"/>';
+    s+='<text x="'+(X0+4)+'" y="'+(pz(-5)+13)+'" font-size="10.5" fill="#94a3b8">体素下界 z=−5 m(虚线外 = 出界,掩码拦下)</text>';
+    s+='<circle cx="'+px(0)+'" cy="'+pz(1.5)+'" r="6" fill="#475569"/>';
+    s+='<text x="'+(px(0)+2)+'" y="'+(pz(1.5)-10)+'" font-size="11.5" fill="#475569">相机(高 1.5 m)</text>';
+    var pmax=0,k; for(k=0;k<NB;k++) pmax=Math.max(pmax,p[k]);
+    for(k=0;k<NB;k++){
+      var pt=pts[k]; if(!pt.ok) continue;
+      var r=1.6+7.5*(p[k]/pmax);
+      s+='<circle cx="'+px(pt.ex)+'" cy="'+pz(pt.ez)+'" r="'+r.toFixed(1)+'" fill="#0d9488" opacity="'+(0.25+0.75*p[k]/pmax).toFixed(2)+'"/>';
+    }
+    for(k=0;k<NB;k++){
+      var pt2=pts[k]; if(pt2.ok) continue;
+      s+='<circle cx="'+px(Math.min(pt2.ex,XR))+'" cy="'+pz(Math.max(Math.min(pt2.ez,ZT),ZB))+'" r="2" fill="none" stroke="#fca5a5" stroke-width="1"/>';
+    }
+    s+='<text x="'+X0+'" y="16" font-size="12.5" fill="#0f766e" font-weight="bold">侧视图:118 个带权假设点(格点 u=448, v=448 · 前向 x / 高度 z)</text>';
+    svg.innerHTML=s;
+  }
+  function update(){
+    var p=probs(), sum=0, ne=0, k;
+    for(k=0;k<NB;k++){ sum+=p[k]; ne+=p[k]*p[k]; }
+    ne=1/ne;
+    drawBars(p); drawRay(p);
+    document.getElementById("ro-T").textContent=T.toFixed(2);
+    var desc;
+    if(mode==="sharp") desc="概率集中于地面命中点(≈5 m)附近 —— 一个格点的信息实质上只进了几个体素,投得准。";
+    else if(mode==="bimode") desc="两团概率(近处路面 + 20 m 上下)—— 特征被复制到两处,深度歧义留给 BEV 侧注意力分辨。";
+    else desc="完全不确定 —— 信息均匀摊满整条射线 118 档,等待下游挑拣;即便如此,也没有任何一份被丢弃。";
+    document.getElementById("ro-depth").innerHTML =
+      "<b>Σp = "+sum.toFixed(3)+"(守恒)</b> · 有效参与档数 N<sub>eff</sub> = <b>"+ne.toFixed(1)+"</b> 档(锐利≈个位数,平坦→118)。"+desc;
+  }
+  function bind(id,m){ document.getElementById(id).addEventListener("click",function(){
+    mode=m;
+    var ids=["b-sharp","b-bimode","b-flat"], ms=["sharp","bimode","flat"], i;
+    for(i=0;i<3;i++) document.getElementById(ids[i]).className = "btn"+(ms[i]===m?" active":"");
+    update();
+  }); }
+  bind("b-sharp","sharp"); bind("b-bimode","bimode"); bind("b-flat","flat");
+  document.getElementById("sl-T").addEventListener("input",function(){ T=parseFloat(this.value); update(); });
+  update();
+})();
+
+/* ================= demo 3 · BEV 格 → 相机取证 ================= */
+(function(){
+  var s=400/102.4, cv=document.getElementById("cv-bev"), ctx=cv.getContext("2d");
+  function drawGrid(hx,hy){
+    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,400,400);
+    ctx.strokeStyle="#e2e8f0"; ctx.lineWidth=1;
+    var m;
+    for(m=-50;m<=50;m+=10){
+      var pxx=(m+51.2)*s, pyy=(51.2-m)*s;
+      ctx.beginPath(); ctx.moveTo(pxx,0); ctx.lineTo(pxx,400); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,pyy); ctx.lineTo(400,pyy); ctx.stroke();
+    }
+    ctx.strokeStyle="#cbd5e1"; ctx.strokeRect(0.5,0.5,399,399);
+    ctx.fillStyle="#94a3b8"; ctx.font="11px sans-serif"; ctx.textAlign="left";
+    ctx.fillText("前向 x ↑(50 m)",6,14);
+    ctx.fillText("左 y ←",6,394);
+    if(hx!==null){
+      ctx.fillStyle="rgba(13,148,136,0.18)";
+      ctx.fillRect((51.2-(hy+2.56))*s, (51.2-(hx+2.56))*s, 5.12*s, 5.12*s);
+      ctx.strokeStyle="#0d9488"; ctx.lineWidth=1.5;
+      ctx.strokeRect((51.2-(hy+2.56))*s, (51.2-(hx+2.56))*s, 5.12*s, 5.12*s);
+    }
+    ctx.fillStyle="#1f2430";
+    ctx.beginPath(); ctx.moveTo(200,192); ctx.lineTo(193,208); ctx.lineTo(207,208); ctx.closePath(); ctx.fill();
+  }
+  var rowEl=document.getElementById("camrow"), boxes=[];
+  CAMS.forEach(function(name){
+    var d=document.createElement("div"); d.className="cambox";
+    d.innerHTML='<div class="frame"></div><div class="cl">'+name+'</div>';
+    rowEl.appendChild(d); boxes.push(d);
+  });
+  function probe(x,y){
+    var hits=0, lines=[], c, a;
+    for(c=0;c<8;c++){
+      var fr=boxes[c].querySelector(".frame");
+      fr.innerHTML=""; var any=false;
+      for(a=0;a<4;a++){
+        var q=applyM(L2I[c],[x,y,Z_ANCH[a],1]);
+        var dep=q[2], u=q[0]/dep, v=q[1]/dep;
+        if(dep>0.01 && u>=0 && u<IMG_W && v>=0 && v<IMG_H){
+          any=true;
+          var dot=document.createElement("div"); dot.className="dot";
+          dot.style.left=(u/IMG_W*100).toFixed(1)+"%";
+          dot.style.top=(v/IMG_H*100).toFixed(1)+"%";
+          dot.style.background=ANCH_COL[a];
+          fr.appendChild(dot);
+        }
+      }
+      boxes[c].className = "cambox"+(any?" hit":"");
+      if(any){ hits++; lines.push(CAMS[c]); }
+    }
+    drawGrid(x,y);
+    document.getElementById("ro-pull").innerHTML =
+      "<b>BEV 格 (x="+x.toFixed(1)+" m, y="+y.toFixed(1)+" m)</b> 的 4 个高度参考点投进了 <b>"+hits+" / 8</b> 台相机:"+
+      (hits? lines.join("、") : "无 —— 该柱暂时只能靠先验与邻域兜底") +
+      "。SCA 只对命中的 (query, camera) 对分配 K/V(点色 = 底层→顶层参考点)。";
+  }
+  cv.addEventListener("click", function(ev){
+    var r=cv.getBoundingClientRect();
+    var pxx=(ev.clientX-r.left)*(400/r.width), pyy=(ev.clientY-r.top)*(400/r.height);
+    var x=51.2-pyy/(400/102.4), y=51.2-pxx/(400/102.4);
+    probe(x,y);
+  });
+  drawGrid(null,null);
+  probe(24,14);
+})();
+
+/* ================= demo 4 · patch 足迹 vs BEV 格 ================= */
+(function(){
+  var F = 1545*896/1920;   /* ≈ 721 px,resize 后焦距 */
+  var PW = 16/F;           /* patch 角宽(小角近似,rad) */
+  function draw(d){
+    var foot=d*PW, k=320, svg=document.getElementById("sv-foot");
+    var w1=Math.min(foot,1.5)*k, w2=0.512*k;
+    var s='<rect x="0" y="0" width="760" height="150" fill="#ffffff"/>';
+    s+='<text x="30" y="30" font-size="12.5" fill="#0f766e" font-weight="bold">一个 16×16 patch 在 '+d.toFixed(1)+' m 处的地面足迹(横向)</text>';
+    s+='<rect x="30" y="40" width="'+w1.toFixed(1)+'" height="26" rx="4" fill="#0d9488" opacity="0.85"/>';
+    s+='<text x="'+(34+w1).toFixed(1)+'" y="58" font-size="12.5" fill="#0f766e">'+foot.toFixed(3)+' m</text>';
+    s+='<text x="30" y="96" font-size="12.5" fill="#1d4ed8" font-weight="bold">一个 BEV 格宽(0.512 m,固定)</text>';
+    s+='<rect x="30" y="106" width="'+w2+'" height="26" rx="4" fill="#2563eb" opacity="0.85"/>';
+    s+='<text x="'+(34+w2)+'" y="124" font-size="12.5" fill="#1d4ed8">0.512 m</text>';
+    s+='<line x1="'+(30+w2)+'" y1="36" x2="'+(30+w2)+'" y2="140" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 4"/>';
+    svg.innerHTML=s;
+    var verdict;
+    if(foot<0.512) verdict="<b>BEV 格是瓶颈</b> —— patch 足迹比 BEV 格更窄,patch 粒度绰绰有余,信息相对过剩。";
+    else verdict="<b>patch 是瓶颈</b> —— 一个 patch 的足迹盖过 "+(foot/0.512).toFixed(1)+" 个 BEV 格,远距信息开始欠采样(交叉点 ≈ 23 m)。";
+    document.getElementById("ro-d").textContent=d.toFixed(1);
+    document.getElementById("ro-foot").innerHTML=verdict;
+  }
+  document.getElementById("sl-d").addEventListener("input",function(){ draw(parseFloat(this.value)); });
+  draw(12);
+})();
+
+/* ================= 验证 1 · 单格复算 ================= */
+(function(){
+  var pts = cellPoints(0, 28, 28);
+  var n = pts.filter(function(p){ return p.ok; }).length;
+  var first = pts[0], lastOk = null, k;
+  for(k=0;k<NB;k++) if(pts[k].ok) lastOk=pts[k];
+  document.getElementById("v-single").innerHTML =
+    "CAM_F0 · 格点 u=448, v=448(第 29 列,第 29 行):118 档中 <b>"+n+" 档落格</b>;首档 d=1.0 m,末档 d="+lastOk.d.toFixed(1)+" m。与 ③ 节表格逐项对照:";
+  var rows=[0,5,12,19,24,30,47,48,60,117].filter(function(i){ return i<NB; });
+  var html='<tr><th>深度档</th><th>ego (x, y, z)</th><th>体素 (x, y, z)</th><th>判定</th></tr>';
+  rows.forEach(function(i){
+    var p=pts[i];
+    html+='<tr><td>d='+p.d.toFixed(1)+' m</td><td class="mono">('+f2(p.ex)+', '+f2(p.ey)+', '+f2(p.ez)+')</td><td class="mono">('+p.vx+', '+p.vy+', '+p.vz+')</td><td>'+(p.ok?"✓ 落格":"✗ 出界,掩码拦下")+'</td></tr>';
+  });
+  document.getElementById("tbl-cell").innerHTML=html;
+})();
+
+/* ================= 验证 2 · 8 相机全账 ================= */
+(function(){
+  document.getElementById("btn-stats").addEventListener("click", function(){
+    var btn=this; btn.disabled=true; btn.textContent="计算中…(约百万次投影)";
+    document.getElementById("v-stats").textContent="逐点反投影 + 截断量化 + 掩码判定中…";
+    setTimeout(function(){
+      var t0=performance.now();
+      var raw=new Int32Array(640000), camHit=new Uint8Array(640000), colHit=new Uint8Array(40000);
+      var total=0, inr=0, c, k, idx;
+      var invs=[]; for(c=0;c<8;c++) invs.push(inv4(L2I[c]));
+      for(c=0;c<8;c++){
+        var inv=invs[c], perCam=new Uint8Array(640000), iu, iv;
+        for(iu=0;iu<56;iu++){
+          var u=iu*16;
+          for(iv=0;iv<32;iv++){
+            var v=iv*16;
+            for(k=0;k<NB;k++){
+              var d=1.0+0.5*k;
+              var q=applyM(inv,[u*d,v*d,d,1]);
+              var w=q[3];
+              var ex=applyM(L2E,[q[0]/w,q[1]/w,q[2]/w,1]);
+              var vx=Math.trunc((ex[0]-PC[0])/VS[0]);
+              if(vx<0||vx>=200){ continue; }
+              var vy=Math.trunc((ex[1]-PC[1])/VS[1]);
+              if(vy<0||vy>=200){ continue; }
+              var vz=Math.trunc((ex[2]-PC[2])/VS[2]);
+              if(vz<0||vz>=16){ continue; }
+              idx=(vx*200+vy)*16+vz;
+              raw[idx]++; perCam[idx]=1; inr++;
+            }
+          }
+        }
+        for(idx=0;idx<640000;idx++) camHit[idx]+=perCam[idx];
+        total+=211456;
+      }
+      var voxHit=0, sumCam=0, ge2=0, mx=0, mxCam=0, missed=0, mFar=0, d30=0, d30m=0, d20=0, d20m=0, sumRaw=0;
+      for(idx=0;idx<640000;idx++){
+        if(raw[idx]>0){
+          voxHit++; sumCam+=camHit[idx]; sumRaw+=raw[idx];
+          if(camHit[idx]>=2) ge2++;
+          if(camHit[idx]>mxCam) mxCam=camHit[idx];
+          if(raw[idx]>mx) mx=raw[idx];
+          colHit[idx>>4]=1;
+        }
+      }
+      for(idx=0;idx<40000;idx++){
+        var xi=(idx/200)|0, yi=idx%200;
+        var gx=(xi+0.5)*0.512-51.2, gy=(yi+0.5)*0.512-51.2;
+        var rad=Math.sqrt(gx*gx+gy*gy);
+        if(rad<30) d30++; if(rad<20) d20++;
+        if(!colHit[idx]){ missed++; if(rad>30) mFar++; if(rad<30) d30m++; if(rad<20) d20m++; }
+      }
+      var ms=(performance.now()-t0).toFixed(0);
+      document.getElementById("v-stats").innerHTML =
+        "8 相机 × 211,456 = 1,691,648 个假设点现算完成(" + ms + " ms)。期望与 ⑤ 节静态账一致:";
+      var tb=document.getElementById("tbl-stats"); tb.style.display="";
+      tb.innerHTML =
+        '<tr><th>指标</th><th>本页现算</th><th>⑤ 节静态账</th></tr>'+
+        '<tr><td>落入有效体素</td><td class="mono">'+inr.toLocaleString()+' / '+total.toLocaleString()+'('+(100*inr/total).toFixed(1)+'%)</td><td class="mono">957,799(56.6%)</td></tr>'+
+        '<tr><td>被点亮的体素</td><td class="mono">'+voxHit.toLocaleString()+' / 640,000</td><td class="mono">378,575</td></tr>'+
+        '<tr><td>被点亮的 BEV 柱</td><td class="mono">'+pillarsNow()+' / 40,000</td><td class="mono">32,095(80.2%)</td></tr>'+
+        '<tr><td>每命中体素平均投掷份数</td><td class="mono">'+(sumRaw/voxHit).toFixed(2)+'</td><td class="mono">2.53</td></tr>'+
+        '<tr><td>单体素最大投掷数</td><td class="mono">'+mx+'</td><td class="mono">504</td></tr>'+
+        '<tr><td>≥2 相机照亮的命中体素占比</td><td class="mono">'+(100*ge2/voxHit).toFixed(1)+'%(平均 '+(sumCam/voxHit).toFixed(2)+' 台,上限 '+mxCam+' 台)</td><td class="mono">23.3%</td></tr>'+
+        '<tr><td>空柱中 30 m 外占比</td><td class="mono">'+(100*mFar/missed).toFixed(1)+'%</td><td class="mono">98.9%</td></tr>'+
+        '<tr><td>30 m 盘内空柱占比</td><td class="mono">'+(100*d30m/d30).toFixed(1)+'%</td><td class="mono">0.8%</td></tr>';
+      function pillarsNow(){ var n=0,i; for(i=0;i<40000;i++) if(colHit[i]) n++; return n.toLocaleString(); }
+      btn.disabled=false; btn.textContent="再算一遍";
+    }, 30);
+  });
+})();
+
+})();
+</script>
+</body>
+</html>
