@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UVTR 之后,体素这么稀,能用吗?—— 把"稀疏"拆成三笔账</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #5b6472;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --teal: #0d9488;
+    --teal-soft: #ccfbf1;
+    --green: #059669;
+    --green-soft: #d1fae5;
+    --orange: #d97706;
+    --orange-soft: #fef3c7;
+    --purple: #7c3aed;
+    --purple-soft: #ede9fe;
+    --red: #dc2626;
+    --red-soft: #fee2e2;
+    --border: #e2e8f0;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #78350f 0%, #d97706 55%, #f59e0b 100%);
+    color: #fff; border-radius: 16px; padding: 36px 36px 30px; margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 26px; letter-spacing: .5px; }
+  header.hero p { margin: 4px 0; opacity: .92; font-size: 15px; }
+  header.hero .key { margin-top: 12px; background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.35);
+    border-radius: 10px; padding: 10px 16px; font-size: 14.5px; }
+  header.hero .sub { font-size: 13px; opacity: .78; margin-top: 12px; }
+  h2 { font-size: 21px; margin: 42px 0 6px; padding-left: 12px; border-left: 5px solid #d97706; }
+  h2 .en { font-size: 13px; color: var(--muted); font-weight: normal; margin-left: 8px; }
+  h3 { font-size: 16.5px; margin: 22px 0 4px; color: #b45309; }
+  p { margin: 8px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 7px 11px; text-align: left; vertical-align: top; }
+  th { background: #eef2f7; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  code, .mono {
+    font-family: Consolas, "Courier New", monospace; font-size: 13px;
+    background: #eef1f6; border-radius: 4px; padding: 1px 6px;
+  }
+  pre.codeblock {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 14px 18px; font-size: 12.8px; line-height: 1.6; overflow-x: auto;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  pre.codeblock .cm { color: #94a3b8; }
+  .formula {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 14px 18px; text-align: center; margin: 12px 0; font-size: 15px;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  .formula i { color: #fbbf24; font-style: italic; }
+  .formula b { color: #7dd3fc; font-weight: normal; }
+  .note {
+    border-left: 4px solid var(--orange); background: var(--orange-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .good {
+    border-left: 4px solid var(--green); background: var(--green-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .bad {
+    border-left: 4px solid var(--red); background: var(--red-soft);
+    border-radius: 0 10px 10px 0; padding: 10px 16px; margin: 12px 0; font-size: 14px;
+  }
+  .toc { font-size: 14px; }
+  .toc a { color: #b45309; text-decoration: none; }
+  .toc a:hover { text-decoration: none; }
+  footer { margin-top: 50px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .center { text-align: center; }
+  svg text { font-family: inherit; }
+  .qa { background: var(--accent-soft); border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px 20px; margin: 12px 0; font-size: 14px; }
+  .qa b.tag { color: var(--accent); }
+  .vs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  @media (max-width: 800px) { .vs { grid-template-columns: 1fr; } }
+  .vs-box { border-radius: 12px; padding: 16px 20px; height: 100%; font-size: 13.8px; }
+  .vs-box.a { background: #fffbeb; border: 1.5px solid #fcd34d; }
+  .vs-box.b { background: #f0fdfa; border: 1.5px solid #5eead4; }
+  .vs-box h4 { margin: 0 0 6px; font-size: 15.5px; }
+  .vs-box p { font-size: 13.5px; margin: 4px 0; }
+  .demo { border: 1.5px dashed #d97706; background: #fffbeb; border-radius: 12px; padding: 14px 18px; margin: 14px 0; }
+  .demo h4 { margin: 2px 0 8px; color: #b45309; font-size: 15px; }
+  .demo p.tip { font-size: 13px; color: var(--muted); margin: 2px 0 8px; }
+  .btn {
+    background: #d97706; color: #fff; border: none; border-radius: 8px;
+    padding: 5px 14px; font-size: 13px; cursor: pointer; margin: 2px 6px 2px 0; font-family: inherit;
+  }
+  .btn:hover { background: #b45309; }
+  .btn.ghost { background: #fff; color: #b45309; border: 1.5px solid #d97706; }
+  .btn.ghost:hover { background: #fef3c7; }
+  .readout { font-size: 13.5px; margin-top: 8px; }
+  .readout b { color: #b45309; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>UVTR 之后,体素这么稀,能用吗?</h1>
+  <p>03 篇的实测账显示:8 相机约 96 万份落格投掷,只点亮 640,000 个体素中的 59.2%,其中一半以上的体素只收到 1 份投掷。直觉会喊"太稀了" —— 本篇把"稀疏"拆成<b>空间、幅值、下游</b>三笔账,逐笔看它是否真是问题。</p>
+  <div class="key"><b>关键问题:</b>ViT 把图像压缩 256 : 1,UVTR 又把特征撒进 200×200×16 的体素网 —— 中间表征这么稀疏,后面的检测 / 占用还能好吗?</div>
+  <p class="sub">依据:Qwen-Drive-1.0 view_transform.py(feat_encoding 的 3 层 Conv3d)、heads.py;统计口径与 <a href="03_pixel_to_bev.html">03_pixel_to_bev.html(像素到 BEV 有效利用)</a> 完全一致 —— demo 帧 4d0d1ccbb1035a90(nuPlan 8 相机)真实标定、.int() 截断量化;LiDAR 对照用同帧 lidar.npy(94,199 点)Python 实算。姊妹篇:05_uvtr_frustum.html(UVTR vs LSS)、08_uvtr_lss_bevformer.html(三方关系)。</p>
+</header>
+
+<div class="card toc">
+  <b>目录:</b>
+  <a href="#s1">① 先量化:"稀疏"到底是多稀</a> ·
+  <a href="#s2">② 修正前提:压缩的是位置,不是容量</a> ·
+  <a href="#s3">③ 撒点不是终点:3 层 Conv3d 把点晕染成场</a> ·
+  <a href="#s4">④ 和"真稀疏"的 LiDAR 比一比</a> ·
+  <a href="#s5">⑤ 最终 BEV 根本不是这份体素</a> ·
+  <a href="#s6">⑥ 诚实的代价清单</a> ·
+  <a href="#s7">⑦ 复算入口</a> ·
+  <a href="#s8">⑧ 常见疑问</a>
+</div>
+
+<!-- ================= ① ================= -->
+<h2 id="s1">① 先量化:"稀疏"到底是多稀<span class="en">quantify before arguing</span></h2>
+<div class="card">
+  <p>把 03 篇的实测账再往下挖一层 —— 不只看"多少体素被点亮",还看<b>每个体素收到几份投掷</b>(8 相机真实标定,截断量化):</p>
+  <table>
+    <tr><th>层</th><th>数量</th><th>口径</th></tr>
+    <tr><td>落格投掷</td><td>957,799 份(占 1,691,648 的 56.6%)</td><td>8 相机 211,456 × 8 中落进有效体素的部分</td></tr>
+    <tr><td>被点亮的体素</td><td>378,575 / 640,000(<b>59.2%</b>)</td><td>收到 ≥1 份投掷的体素</td></tr>
+    <tr><td>被点亮的 BEV 柱</td><td>32,095 / 40,000(<b>80.2%</b>)</td><td>压平后非零的柱</td></tr>
+    <tr><td>每柱平均投掷</td><td>957,799 / 32,095 ≈ <b>29.8 份</b></td><td>z 向 16 层摊开前</td></tr>
+    <tr><td>单相机点亮体素</td><td>CAM_F0:56,758 / 640,000(<b>8.9%</b>)</td><td>稀疏主要在单相机尺度,靠 8 相机拼起来</td></tr>
+  </table>
+  <h3>投掷份数分布:中位数就是 1 份</h3>
+  <table>
+    <tr><th>命中体素收到的投掷</th><th>=1 份</th><th>2–4 份</th><th>5–9 份</th><th>10–49 份</th><th>≥50 份</th></tr>
+    <tr><td><b>体素占比</b></td><td><b>57.1%</b></td><td>34.2%</td><td>5.9%</td><td>2.7%</td><td>0.2%</td></tr>
+  </table>
+  <p>中位数 <b>1</b>、均值 2.53(被长尾拉高)、最大 504。<b>"稀"在两个维度同时发生</b>:空间上 40.8% 的体素颗粒无收;幅值上,收到投掷的体素大多只有孤零零一份 —— 而每份的权重是深度概率(Σ = 1 摊在 118 档上,单份可能只有百分之几的特征能量)。</p>
+  <div class="note"><b>这就是问题摊开后的样子。</b>接下来三节依次回答:① 容量是不是真的被压没了(② 节);② 这些孤点会不会一直孤下去(③ 节);③ 拿它和工业界喂给检测网络的"真稀疏"输入比一比(④ 节);最后看下游网络实际吃的是什么(⑤ 节)。</div>
+</div>
+
+<!-- ================= ② ================= -->
+<h2 id="s2">② 修正前提:压缩的是位置,不是容量<span class="en">what patchify actually compresses</span></h2>
+<div class="card">
+  <p>"ViT 压缩得很厉害"这句话值得掰开。patch 化改变的与未改变的:</p>
+  <table>
+    <tr><th></th><th>原始图像(每相机)</th><th>ViT patch 网格</th><th>变化</th></tr>
+    <tr><td><b>位置数</b></td><td>896 × 512 = 458,752</td><td>56 × 32 = 1,792</td><td><b>÷ 256</b>(真正的压缩)</td></tr>
+    <tr><td><b>每位置载荷</b></td><td>3 通道 × 8 bit 灰度值</td><td>1,024 维语义向量</td><td>3 个标量 → 1,024 个标量(× 341)</td></tr>
+    <tr><td><b>标量总数</b></td><td>1,376,256</td><td>1,835,008</td><td><b>× 1.33 —— 基本持平,还略多</b></td></tr>
+  </table>
+  <p>所以准确的说法是:<b>patch 化压缩的是"位置分辨率",不是"信息容量"</b> —— 45.9 万个"薄位置"(每处 3 个灰度数)换成了 1,792 个"厚位置"(每处 1,024 维、看过全图上下文的语义向量)。每个 patch 的特征是它那 256 个像素 + 全图注意力的联合摘要。</p>
+  <h3>真正的几何瓶颈:源格数 &lt; 目标柱数</h3>
+  <p>UVTR 的稀疏,几何根源不在"压缩狠",而在一张算术账:</p>
+  <div class="formula">8 相机源格:8 × 1,792 = <b>14,336</b> 个　→　目标柱:<b>40,000</b> 根　→　平均 <b>0.36 个源格 / 柱</b></div>
+  <p>就算深度完全确定(一格一点),源格也<strong>不够一人一柱</strong>。lift 家族对此的解法正是"复制":每格沿射线复制 118 份(× 118),源格瞬间变成 1,691,648 份投掷,再靠 8 相机交叠与后续卷积填网 —— <b>撒点机制的"冗余复制"本身就是对抗稀疏的设计</b>,不是疏忽。</p>
+  <div class="good"><b>② 节结论:</b>进 UVTR 的每一份特征都不"瘦" —— 1,024 维、带全局上下文;真正稀缺的是"位置采样数",而这正好由 × 118 复制 + 跨相机 + 卷积扩散(③ 节)+ 拉路采样(⑤ 节)四层机制接力补足。patch 粒度与 BEV 分辨率的匹配账(≈ 23 m 交叉点)见 <a href="03_pixel_to_bev.html">03_pixel_to_bev.html</a> ⑥ 节。</div>
+</div>
+
+<!-- ================= ③ ================= -->
+<h2 id="s3">③ 撒点不是终点:3 层 Conv3d 把点晕染成场<span class="en">sparse splat, dense field</span></h2>
+<div class="card">
+  <p>回到代码:view_transform.py 的 <span class="mono">feat_encoding</span>(:250-258)在体素池化之后<b>立刻</b>接了 3 层 <span class="mono">Conv3d(256, 3×3×3) + BN3d + ReLU</span>。这一步不是可有可无的"平滑",它直接改写稀疏账:</p>
+  <div class="formula">1 层 3×3×3:感受野 27 体素　→　3 层:7×7×7 = <b>343 体素</b>　→　孤点的信息被扩散给整个邻域</div>
+  <p>用 demo 帧真实投掷结果实算"多少体素能在 k³ 邻域内接到至少一份投掷"(k = 1 即体素自身):</p>
+  <table>
+    <tr><th></th><th>全 体 素</th><th>其中原"空"体素(40.8%)</th></tr>
+    <tr><td><b>k = 1</b>(撒点直接命中)</td><td>59.2%</td><td>—</td></tr>
+    <tr><td><b>k = 3</b>(1 层 Conv3d 后)</td><td><b>95.10%</b></td><td>88.00%</td></tr>
+    <tr><td><b>k = 7</b>(3 层 Conv3d 后,即本仓库)</td><td><b>97.41%</b></td><td>93.67%</td></tr>
+    <tr><td>k = 11(再叠 2 层)</td><td>98.62%</td><td>96.63%</td></tr>
+  </table>
+  <svg viewBox="0 0 860 210" width="100%" style="max-width:860px">
+    <text x="30" y="26" font-size="13" font-weight="bold" fill="#1f2430">撒点直击(59.2%)</text>
+    <g>
+      <rect x="30" y="40" width="200" height="120" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.2"/>
+      <g fill="#d97706">
+        <rect x="46" y="58" width="22" height="18"/><rect x="90" y="58" width="22" height="18"/><rect x="158" y="58" width="22" height="18"/>
+        <rect x="68" y="88" width="22" height="18"/><rect x="112" y="88" width="22" height="18"/><rect x="46" y="118" width="22" height="18"/><rect x="158" y="118" width="22" height="18"/>
+      </g>
+    </g>
+    <text x="330" y="26" font-size="13" font-weight="bold" fill="#1f2430">1 层 Conv3d 后(95.1%)</text>
+    <g>
+      <rect x="330" y="40" width="200" height="120" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.2"/>
+      <g fill="#f59e0b" opacity="0.45">
+        <rect x="342" y="50" width="176" height="100"/>
+      </g>
+      <g fill="#d97706">
+        <rect x="346" y="58" width="22" height="18"/><rect x="390" y="58" width="22" height="18"/><rect x="458" y="58" width="22" height="18"/>
+        <rect x="368" y="88" width="22" height="18"/><rect x="412" y="88" width="22" height="18"/><rect x="346" y="118" width="22" height="18"/><rect x="458" y="118" width="22" height="18"/>
+      </g>
+    </g>
+    <text x="630" y="26" font-size="13" font-weight="bold" fill="#1f2430">3 层后 = 本仓库(97.4%)</text>
+    <g>
+      <rect x="630" y="40" width="200" height="120" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.2"/>
+      <g fill="#f59e0b" opacity="0.55">
+        <rect x="636" y="44" width="188" height="110"/>
+      </g>
+      <g fill="#d97706">
+        <rect x="646" y="58" width="22" height="18"/><rect x="690" y="58" width="22" height="18"/><rect x="758" y="58" width="22" height="18"/>
+        <rect x="668" y="88" width="22" height="18"/><rect x="712" y="88" width="22" height="18"/><rect x="646" y="118" width="22" height="18"/><rect x="758" y="118" width="22" height="18"/>
+      </g>
+    </g>
+    <text x="30" y="186" font-size="11.5" fill="#5b6472">示意(每格代表体素截面):深橙 = 直接命中;浅橙 = 经卷积从邻域接入信息的体素。实算口径见上表 —— 深橙只占 59%,浅橙把覆盖推到 95%+</text>
+  </svg>
+  <p>剩下的 2.6% "深冷"体素集中在 30 m 外的远角(03 篇 §⑤ 的空洞柱)—— 而那里同时是相机拍不到、LiDAR 也稀疏的区域,后续由拉路 query 的先验兜底(⑤ 节)。</p>
+  <div class="note"><b>这不是本仓库的独门补丁,而是 lift-splat 家族的共同配方:</b>LSS 原文 Splat 之后同样接多层 BEV 卷积把散点糊成稠密特征;体素检测家族(SECOND / VoxelNet 系)更是直接为稀疏点云设计了稀疏卷积。"撒点 + 卷积填密"从来就是一套两段式动作,没有人直接吃原始稀疏体素。</div>
+</div>
+
+<!-- ================= ④ ================= -->
+<h2 id="s4">④ 和"真稀疏"的 LiDAR 比一比<span class="en">compared to actual sparse input</span></h2>
+<div class="card">
+  <p>"稀"必须有个参照系。最好的参照物是同帧的<b>真实 LiDAR 点云</b>(lidar.npy,32 线级别的一扫)—— 传统 3D 检测网络(VoxelNet / SECOND / CenterPoint 一族)就是吃这种输入长大的。把两者撒进<b>同一个</b> 200×200×16 体素网:</p>
+  <table>
+    <tr><th></th><th>UVTR 投掷(8 相机)</th><th>LiDAR 点云(同帧实测)</th></tr>
+    <tr><td>输入规模</td><td>1,691,648 份假设点 → 落格 957,799</td><td>94,199 个点 → 落格 92,024(97.7%)</td></tr>
+    <tr><td><b>体素占用率</b></td><td><b>59.2%</b>(378,575 / 640,000)</td><td><b>2.07%</b>(13,260 / 640,000)</td></tr>
+    <tr><td><b>BEV 柱覆盖</b></td><td><b>80.2%</b></td><td>20.6%</td></tr>
+    <tr><td>密度比</td><td colspan="2" class="center"><b>UVTR 中间体比一帧 LiDAR 稠密 ≈ 28.6 倍(体素口径)/ 3.9 倍(柱口径)</b></td></tr>
+  </table>
+  <div class="good"><b>参照系换过来之后,"稀"的判断反转了:</b>嫌 UVTR 体素稀之前,先问问整个 LiDAR 检测家族答不答应 —— 它们吃的是 2% 占用率的体素网,照样把 3D 检测做到了工业可用。UVTR 的"稀疏"中间体,比这些网络赖以成名的输入稠密一个数量级;而下游的 3D 卷积、BEV 注意力,正是为这种量级的输入设计的。</div>
+  <div class="note"><b>占用任务更是"要它稀":</b>占据预测的输出本身就是 200×200×16 里大部分为"自由空间"、只有表面薄薄一层被占据 —— 一个 59.2% 被点亮的输入体素网,对"预测哪 5–10% 是占据"的任务来说绰绰有余,甚至比稠密输入更贴近先验(没投到的地方大概率就是空的)。</div>
+</div>
+
+<!-- ================= ⑤ ================= -->
+<h2 id="s5">⑤ 最终 BEV 根本不是这份体素<span class="en">the voxel is a prior, not the product</span></h2>
+<div class="card">
+  <p>最关键的一层:03 篇 §⑤ 的双流结构里,<b>这份体素并不是网络最终输出的表征</b>。它的两个去处:</p>
+  <p>1.<b>占用分支:</b>体素(已经过 3 层 Conv3d,97.4% 有信息)直接喂 3D U-Net —— 这条路要的就是带高度的 3D 几何;</p>
+  <p>2.<b>几何先验:</b>压平成 [40000, 256],<b>加到</b>可学习 BEV query 上(heads.py:244-245)。真正的最终表征 bev_embed,是这 40,000 个带着先验的 query 经过 <b>6 层 BEVFormer 编码器</b>之后的产物 —— 每层每 query 都在做连续坐标的可变形采样(4 锚 × 8 头 × 4 尺度 × 2 点),<b>逐格必有值</b>:采得到货的用新证,采不到的残差直通先验。</p>
+  <div class="vs">
+    <div class="vs-box a">
+      <h4>中间体(体素)</h4>
+      <p>59.2% 被点亮、中位数 1 份投掷 —— <b>确实稀</b></p>
+      <p>但它的角色只是"query 的初始值 + 占用输入"</p>
+    </div>
+    <div class="vs-box b">
+      <h4>最终表征(bev_embed)</h4>
+      <p>40,000 query × 6 层采样精调 —— <b>格格有值的稠密表征</b></p>
+      <p>稀疏被消化在中间,不在输出端</p>
+    </div>
+  </div>
+  <div class="good"><b>⑤ 节结论:</b>"UVTR 输出稀疏 → 检测完蛋"的推理链断在中间 —— 推拉混合架构里,推路负责"把几何信息不丢地放进系统",拉路负责"产出稠密且带语义的最终表征"。稀疏的中间体是<b>燃料</b>,不是<b>成品</b>。推拉双向的覆盖互补见 <a href="03_pixel_to_bev.html">03_pixel_to_bev.html</a> §⑤;BEVFormer 拉路的取证机制见 <a href="08_uvtr_lss_bevformer.html">08_uvtr_lss_bevformer.html(三方关系)</a> §④。</div>
+</div>
+
+<!-- ================= ⑥ ================= -->
+<h2 id="s6">⑥ 诚实的代价清单<span class="en">where sparsity does cost</span></h2>
+<div class="card">
+  <p>前四节说"稀疏不是死刑",这一节说"稀疏确实要付利息" —— 每条代价附系统现有的缓解机制:</p>
+  <table>
+    <tr><th style="width:34%">代价</th><th>表现与缓解</th></tr>
+    <tr><td><b>1. 幅值动态范围大</b>(57.1% 体素只有 1 份投掷,最大 504 份)</td><td>同一体素特征幅值可差两个数量级;BN3d 逐通道归一 + 卷积共享权重把尺度差异学平;检测分类分支对绝对幅值不敏感</td></tr>
+    <tr><td><b>2. 深度分布平摊时单体素能量低</b></td><td>Σp = 1 摊在 118 档,平坦分布下单份权重 ~1/118,信噪比低;无深度监督下靠检测 / 占用损失反传把分布推向尖锐(03 篇 §③)</td></tr>
+    <tr><td><b>3. 远处 patch 粒度粗</b>(≈ 23 m 外 patch 足迹超过 BEV 格)</td><td>远处体素特征是"模糊团",空间精度受限;这是 patch 化的固有代价(② 节),拉路四尺度连续采样可部分弥补</td></tr>
+    <tr><td><b>4. 单相机更稀</b>(CAM_F0 仅 8.9%)</td><td>单目撒点本来就不成气候;8 相机交叠把 8.9% 拼成 59.2%,FOV 交界带由双相机互证(03 篇 §⑤)</td></tr>
+    <tr><td><b>5. 2.6% 深冷体素</b>(7³ 邻域内零投掷)</td><td>集中在 30 m 外远角 —— 相机视锥与 60 m 深度上限合力切出的区域;对应 BEV 柱由可学习 query + 6 层邻域注意力兜底</td></tr>
+  </table>
+  <div class="bad"><b>一句话:</b>稀疏的真实代价是"幅值不均 + 远距欠采样",不是"表征不成立";这些代价被归一化、任务监督、多相机交叠和拉路逐层分摊 —— 而且全部代价都随 ①-⑤ 节的机制设计被系统性兜住,没有一项落在裸露的稀疏体素上。</div>
+</div>
+
+<!-- ================= ⑦ ================= -->
+<h2 id="s7">⑦ 复算入口<span class="en">recompute it live</span></h2>
+<div class="card">
+  <p>与 03 篇同一套数据与口径(demo 帧 8 相机真实 lidar2img、.int() 截断量化),页内现算:投掷份数直方图 + 三种感受野的覆盖率。LiDAR 对照数字(94,199 点 → 2.07% 体素 / 20.6% 柱)为 Python 侧对 lidar.npy 的实算结果,页内不重复加载点云。</p>
+  <div class="demo">
+    <h4>实算:投掷直方图 + Conv3d 感受野覆盖(约 1–2 秒)</h4>
+    <button class="btn" id="btn-run">运行 8 相机全账 + 感受野覆盖</button>
+    <div class="readout" id="v-out">等待运行…</div>
+    <table id="tbl-run" style="margin-top:8px; display:none"></table>
+  </div>
+  <div class="good">期望对账:直方图(=1 份 57.1%、2–4 份 34.2%、5–9 份 5.9%、10–49 份 2.7%、≥50 份 0.2%)、命中率 59.2%、k=3/7/11 覆盖 95.10% / 97.41% / 98.62% 应与 ① ③ 节静态表一致(矩阵 6 位小数内嵌,允许 ±个位数舍入差)。</div>
+  <pre class="codeblock"><span class="cm"># 感受野覆盖的口径:体素 v 的 k³ 邻域内存在 ≥1 份投掷 → "有信息"</span>
+<span class="cm"># 1 层 Conv3d(3×3×3) → k=3;3 层 → k=7;5 层 → k=11( Chebyshev 距离)</span>
+info(k) = { v : ∃ v', |vx−v'x|≤r, |vy−v'y|≤r, |vz−v'z|≤r, raw[v'] ≥ 1 }, r = k//2</pre>
+</div>
+
+<!-- ================= ⑧ ================= -->
+<h2 id="s8">⑧ 常见疑问<span class="en">FAQ</span></h2>
+<div class="card">
+  <div class="qa"><b class="tag">Q1:</b> 既然拉路是稠密采样,为什么不干脆扔掉 UVTR,全用 BEVFormer?<br>
+  <b>A:</b> 因为两路各答半个问题:体素带高度,占用分支没有它就不存在(05 篇);先验让 query 带几何初始值入场,拉路才能"精调"而不是"从零猜"。扔掉 UVTR 省下的是一份稀疏中间体,赔上的是占用任务与几何先验 —— 08 篇 §⑦ 有完整取舍表。</div>
+
+  <div class="qa"><b class="tag">Q2:</b> 把体素网做密一点(分辨率 0.512 → 0.256 m),稀疏感不就轻了?<br>
+  <b>A:</b> 反而更糟:体素数按立方涨(× 8),投掷数不变,占用率跌到 ~7%,且 patch 源格数(② 节的 14,336)一点没变 —— 稀的是源不是网。真正的上游瓶颈是 patch 粒度,调 BEV 分辨率是在下游拧阀门。</div>
+
+  <div class="qa"><b class="tag">Q3:</b> 中位数 1 份投掷的体素,特征为什么还能用?<br>
+  <b>A:</b> 一份投掷 = 一个格点特征 × 该档深度概率,它携带的是完整的 256 维语义(而非标量);之后 BN3d 归一幅值、卷积融合邻域、注意力按内容加权 —— 网络消费的是"方向对不对、语义像什么",不是"收了几份"。</div>
+
+  <div class="qa"><b class="tag">Q4:</b> 本篇与 03 / 05 / 08 篇的分工?<br>
+  <b>A:</b> <a href="03_pixel_to_bev.html">03_pixel_to_bev.html</a> 回答"压缩后投影,信息是否被有效利用"(覆盖性);本篇回答"这份表征是不是太稀"(密度与下游);<a href="05_uvtr_frustum.html">05_uvtr_frustum.html</a> 管 LSS vs UVTR 路线取舍;<a href="08_uvtr_lss_bevformer.html">08_uvtr_lss_bevformer.html</a> 管推 / 拉三方关系。四篇共用同一套 demo 帧实算口径,数字可互相对账。</div>
+</div>
+
+<footer>
+  依据:QwenLM/Qwen-Drive-1.0(commit 28091c1)— src/qwen_drive_perception/{view_transform.py(feat_encoding: 3×Conv3d), heads.py(uvtr 先验加 query), ops/voxel_pool};统计:data/demo/perception/4d0d1ccbb1035a90 的 calib.npz(8 相机真实标定,截断量化,与 03 篇同一实现)与 lidar.npy(94,199 点,Python 实算体素占用 2.07%);卷积感受野覆盖按 Chebyshev 邻域口径实算。姊妹篇:<a href="03_pixel_to_bev.html">03_pixel_to_bev.html(像素到 BEV 有效利用)</a> · <a href="05_uvtr_frustum.html">05_uvtr_frustum.html(UVTR vs LSS)</a> · <a href="08_uvtr_lss_bevformer.html">08_uvtr_lss_bevformer.html(三方关系)</a> · <a href="06_bev_head_architecture.html">06_bev_head_architecture.html(感知头全架构)</a>。
+</footer>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- 与 03 篇同一套标定:data/demo/perception/4d0d1ccbb1035a90 · calib.npz ---------- */
+var L2I = [
+ [[450.023499,-719.511963,-18.066904,-736.275391],[234.909149,0.276986,-742.814087,721.666138],[0.999136,0.003312,-0.041429,-1.622006],[0,0,0,1]],
+ [[-337.871521,-778.657288,-8.979521,436.926422],[139.954407,-204.956741,-738.485413,849.042542],[0.569022,-0.821986,-0.023525,-1.035812],[0,0,0,1]],
+ [[-834.415283,-155.680389,-7.735026,965.460876],[-91.314247,-237.969574,-736.197937,992.966553],[-0.362938,-0.931702,-0.01443,-0.127241],[0,0,0,1]],
+ [[-803.622314,273.162659,-10.878628,-230.606064],[-196.078171,-170.691589,-734.420166,831.901917],[-0.773,-0.63436,-0.00767,-0.696584],[0,0,0,1]],
+ [[-453.877869,717.291443,-5.729352,-217.218536],[-265.876556,-8.274362,-732.254395,939.232971],[-0.999966,-0.008168,0.00062,-0.499215],[0,0,0,1]],
+ [[98.702454,843.068542,-6.182333,-380.176025],[-201.6035,159.284119,-735.486084,830.187561],[-0.782226,0.622886,-0.011647,-0.686787],[0,0,0,1]],
+ [[504.584717,682.507996,-11.053536,-1061.271362],[-93.629623,231.532425,-737.957642,1004.838745],[-0.369283,0.92907,-0.021405,-0.077983],[0,0,0,1]],
+ [[847.768127,-42.733665,-2.857288,-1377.140259],[148.016617,202.5457,-737.578186,846.03717],[0.569791,0.821547,-0.019987,-1.021254],[0,0,0,1]]
+];
+var L2E = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+var PC = [-51.2,-51.2,-5.0], VS = [0.512,0.512,0.65];
+
+function inv4(m){
+  var a=[],inv=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],r,c,k;
+  for(r=0;r<4;r++){a.push(m[r].slice());}
+  for(c=0;c<4;c++){
+    var p=c;
+    for(r=c+1;r<4;r++){ if(Math.abs(a[r][c])>Math.abs(a[p][c])) p=r; }
+    var t=a[c];a[c]=a[p];a[p]=t; t=inv[c];inv[c]=inv[p];inv[p]=t;
+    var dd=a[c][c];
+    for(k=0;k<4;k++){ a[c][k]/=dd; inv[c][k]/=dd; }
+    for(r=0;r<4;r++){ if(r===c) continue; var f=a[r][c];
+      for(k=0;k<4;k++){ a[r][k]-=f*a[c][k]; inv[r][k]-=f*inv[c][k]; } }
+  }
+  return inv;
+}
+function applyM(m,p){
+  return [ m[0][0]*p[0]+m[0][1]*p[1]+m[0][2]*p[2]+m[0][3]*p[3],
+           m[1][0]*p[0]+m[1][1]*p[1]+m[1][2]*p[2]+m[1][3]*p[3],
+           m[2][0]*p[0]+m[2][1]*p[1]+m[2][2]*p[2]+m[2][3]*p[3],
+           m[3][0]*p[0]+m[3][1]*p[1]+m[3][2]*p[2]+m[3][3]*p[3] ];
+}
+function maxfilt(seed, dim, r){
+  var S=[3200,16,1][dim], N=[200,200,16][dim];
+  var out = new Uint8Array(640000);
+  for(var x=0;x<200;x++) for(var y=0;y<200;y++){
+    var base = x*3200+y*16;
+    for(var z=0;z<16;z++){
+      var i = base+z;
+      if(!seed[i]) continue;
+      var c = dim===0?x:(dim===1?y:z);
+      var lo = Math.max(0, c-r), hi = Math.min(N-1, c+r);
+      for(var w=lo;w<=hi;w++){
+        var j = dim===0 ? w*3200+y*16+z : (dim===1 ? x*3200+w*16+z : base+w);
+        out[j]=1;
+      }
+    }
+  }
+  return out;
+}
+document.getElementById("btn-run").addEventListener("click", function(){
+  var btn=this; btn.disabled=true; btn.textContent="计算中…(投掷 + 三档感受野)";
+  document.getElementById("v-out").textContent = "逐点反投影 + 量化 + 掩码 + 三次可分离最大值滤波中…";
+  setTimeout(function(){
+    var t0 = performance.now();
+    var invs=[]; for(var c=0;c<8;c++) invs.push(inv4(L2I[c]));
+    var raw = new Int32Array(640000);
+    var total=0, inr=0;
+    for(c=0;c<8;c++){
+      var inv=invs[c];
+      for(var iu=0;iu<56;iu++){
+        var u=iu*16;
+        for(var iv=0;iv<32;iv++){
+          var v=iv*16;
+          for(var k=0;k<118;k++){
+            var d=1.0+0.5*k;
+            var q=applyM(inv,[u*d,v*d,d,1]);
+            var w=q[3];
+            var e=applyM(L2E,[q[0]/w,q[1]/w,q[2]/w,1]);
+            var vx=Math.trunc((e[0]-PC[0])/VS[0]);
+            if(vx<0||vx>=200) continue;
+            var vy=Math.trunc((e[1]-PC[1])/VS[1]);
+            if(vy<0||vy>=200) continue;
+            var vz=Math.trunc((e[2]-PC[2])/VS[2]);
+            if(vz<0||vz>=16) continue;
+            raw[(vx*200+vy)*16+vz]++; inr++;
+          }
+        }
+      }
+      total+=211456;
+    }
+    var hit = new Uint8Array(640000);
+    var h1=0,h24=0,h59=0,h1049=0,h50=0,sum=0,mx=0, voxHit=0;
+    for(var i=0;i<640000;i++){
+      if(raw[i]>0){
+        hit[i]=1; voxHit++; sum+=raw[i];
+        if(raw[i]>mx) mx=raw[i];
+        var n=raw[i];
+        if(n===1) h1++; else if(n<=4) h24++; else if(n<=9) h59++; else if(n<=49) h1049++; else h50++;
+      }
+    }
+    var cov3 = maxfilt(hit,0,1);  cov3 = maxfilt(cov3,1,1); cov3 = maxfilt(cov3,2,1);
+    var cov7 = maxfilt(hit,0,3);  cov7 = maxfilt(cov7,1,3); cov7 = maxfilt(cov7,2,3);
+    var cov11 = maxfilt(hit,0,5); cov11 = maxfilt(cov11,1,5); cov11 = maxfilt(cov11,2,5);
+    var c3=0,c7=0,c11=0;
+    for(i=0;i<640000;i++){ c3+=cov3[i]; c7+=cov7[i]; c11+=cov11[i]; }
+    var ms=(performance.now()-t0).toFixed(0);
+    document.getElementById("v-out").innerHTML =
+      "8 相机 × 211,456 = 1,691,648 假设点现算完成("+ms+" ms)。期望与 ① ③ 节静态表一致:";
+    var tb=document.getElementById("tbl-run"); tb.style.display="";
+    tb.innerHTML =
+      '<tr><th>指标</th><th>本页现算</th><th>静态表</th></tr>'+
+      '<tr><td>落入有效体素</td><td class="mono">'+inr.toLocaleString()+'('+ (100*inr/total).toFixed(1) +'%)</td><td class="mono">957,799(56.6%)</td></tr>'+
+      '<tr><td>被点亮体素</td><td class="mono">'+voxHit.toLocaleString()+'('+(100*voxHit/640000).toFixed(1)+'%)</td><td class="mono">378,575(59.2%)</td></tr>'+
+      '<tr><td>投掷份数 =1 / 2–4 / 5–9 / 10–49 / ≥50</td><td class="mono">'+(100*h1/voxHit).toFixed(1)+'% / '+(100*h24/voxHit).toFixed(1)+'% / '+(100*h59/voxHit).toFixed(1)+'% / '+(100*h1049/voxHit).toFixed(1)+'% / '+(100*h50/voxHit).toFixed(1)+'%</td><td class="mono">57.1% / 34.2% / 5.9% / 2.7% / 0.2%</td></tr>'+
+      '<tr><td>平均 / 最大投掷份数</td><td class="mono">'+(sum/voxHit).toFixed(2)+' / '+mx+'</td><td class="mono">2.53 / 504</td></tr>'+
+      '<tr><td>1 层 Conv3d 后有信息(k=3)</td><td class="mono">'+c3.toLocaleString()+'('+(100*c3/640000).toFixed(2)+'%)</td><td class="mono">608,630(95.10%)</td></tr>'+
+      '<tr><td>3 层 Conv3d 后有信息(k=7)</td><td class="mono">'+c7.toLocaleString()+'('+(100*c7/640000).toFixed(2)+'%)</td><td class="mono">623,448(97.41%)</td></tr>'+
+      '<tr><td>5 层后有信息(k=11)</td><td class="mono">'+c11.toLocaleString()+'('+(100*c11/640000).toFixed(2)+'%)</td><td class="mono">631,179(98.62%)</td></tr>';
+    btn.disabled=false; btn.textContent="再算一遍";
+  }, 30);
+});
+})();
+</script>
+</body>
+</html>
