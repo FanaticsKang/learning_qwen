@@ -769,8 +769,203 @@
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <!-- 占位：机制总览 SVG 由后续任务绘制（TPV 三平面流水线，区分可学习参数与固定几何） -->
-        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+        <svg viewBox="0 0 1000 872" role="img" aria-label="TPVFormer 机制图：上半为三平面 TPV 表示与正交轴射线拉取（重绘自论文 Fig.3 概念与 Fig.4 采样机制），下半为端到端流水线（重绘自 Fig.4）；三张 query 表、采样偏移/权重与 CVHA 平面门控可学习，平面网格、锚点射线、投影与聚合为固定几何">
+          <!-- ===== A · 三平面 TPV 表示与射线拉取（重绘自论文 Fig.3 概念 ＋ Fig.4 采样机制）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 三平面 TPV 表示与射线拉取（重绘自论文 Fig.3 概念 ＋ Fig.4 采样机制）：query 是学的（橙），锚点射线与投影是标的（蓝）</text>
+
+            <!-- 三平面角：HW 地面 ＋ WZ 前壁 ＋ ZH 侧壁 -->
+            <path class="fixed" d="M 190 300 L 350 300 L 388 276 L 228 276 Z"></path>
+            <rect class="fixed" x="190" y="205" width="160" height="95" rx="2"></rect>
+            <path class="fixed" d="M 190 300 L 228 276 L 228 181 L 190 205 Z"></path>
+
+            <!-- HW 地面网格 -->
+            <line x1="230" y1="300" x2="268" y2="276" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="270" y1="300" x2="308" y2="276" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="310" y1="300" x2="348" y2="276" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="209" y1="288" x2="369" y2="288" stroke="#9DC3E6" stroke-width="1"></line>
+            <!-- WZ 前壁网格 -->
+            <line x1="218" y1="205" x2="218" y2="300" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="246" y1="205" x2="246" y2="300" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="274" y1="205" x2="274" y2="300" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="302" y1="205" x2="302" y2="300" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="330" y1="205" x2="330" y2="300" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="190" y1="281" x2="350" y2="281" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="190" y1="262" x2="350" y2="262" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="190" y1="243" x2="350" y2="243" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="190" y1="224" x2="350" y2="224" stroke="#9DC3E6" stroke-width="1"></line>
+            <!-- ZH 侧壁网格 -->
+            <line x1="209" y1="288" x2="209" y2="193" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="190" y1="281" x2="228" y2="257" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="190" y1="262" x2="228" y2="238" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="190" y1="243" x2="228" y2="219" stroke="#9DC3E6" stroke-width="1"></line>
+
+            <!-- 橙色 query 格（每平面一个） -->
+            <path fill="#FBE3C8" stroke="#D55E00" stroke-width="1" d="M 256 295 L 268 295 L 277 289 L 265 289 Z"></path>
+            <rect x="302" y="262" width="12" height="8" fill="#FBE3C8" stroke="#D55E00" stroke-width="1"></rect>
+            <path fill="#FBE3C8" stroke="#D55E00" stroke-width="1" d="M 211 270 L 219 265 L 219 259 L 211 264 Z"></path>
+
+            <!-- 平面标注 -->
+            <text x="289" y="318" text-anchor="middle" font-size="10.5">HW 平面 200×200 @0.512 m 格</text>
+            <text x="289" y="334" text-anchor="middle" font-size="10" fill="#5a6570">(40000,128)（名片参数）</text>
+            <text x="289" y="350" text-anchor="middle" font-size="10" fill="#D55E00">橙格＝该平面 query（学的）</text>
+            <text x="182" y="240" text-anchor="end" font-size="10.5">ZH 平面 16×200</text>
+            <text x="182" y="255" text-anchor="end" font-size="10" fill="#5a6570">(3200,128) z 格 0.5 m</text>
+            <text x="358" y="212" font-size="10.5">WZ 平面 200×16</text>
+            <text x="358" y="227" font-size="10" fill="#5a6570">(3200,128) z 格 0.5 m</text>
+
+            <!-- 正交轴锚点射线（HW query 沿 Z 取 4 锚） -->
+            <text x="500" y="112" text-anchor="middle" font-size="10.5">每 query 沿本平面正交轴取锚点射线（固定）</text>
+            <text x="500" y="127" text-anchor="middle" font-size="9.5" fill="#5a6570">hw 沿 Z 4 锚；zh/wz 沿水平轴 32 锚（间距 3.27 m，−50.7～+50.7 m）</text>
+            <line x1="500" y1="140" x2="500" y2="284" stroke="#0072B2" stroke-width="2"></line>
+            <rect x="493" y="284" width="14" height="12" fill="#FBE3C8" stroke="#D55E00" stroke-width="1.5"></rect>
+            <circle class="fixed" cx="500" cy="144" r="4.5"></circle>
+            <circle class="fixed" cx="500" cy="191" r="4.5"></circle>
+            <circle class="fixed" cx="500" cy="237" r="4.5"></circle>
+            <circle class="fixed" cx="500" cy="284" r="4.5"></circle>
+            <text x="492" y="148" text-anchor="end" font-size="10" fill="#0072B2">z=2.5 m</text>
+            <text x="492" y="195" text-anchor="end" font-size="10" fill="#0072B2">z=0.167 m</text>
+            <text x="492" y="241" text-anchor="end" font-size="10" fill="#0072B2">z=−2.167 m</text>
+            <text x="492" y="288" text-anchor="end" font-size="10" fill="#0072B2">z=−4.5 m</text>
+            <text x="500" y="312" text-anchor="middle" font-size="10">HW query 格（橙）</text>
+            <text x="500" y="327" text-anchor="middle" font-size="9.5" fill="#5a6570">4 z 锚与 BEVFormer 同式同值</text>
+
+            <!-- lidar2img 投影到命中相机 -->
+            <text x="805" y="140" text-anchor="middle" font-size="10.5" fill="#0072B2">lidar2img 投影（固定·零参数）</text>
+            <rect x="660" y="150" width="290" height="160" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <line class="fixed" x1="500" y1="144" x2="780" y2="180"></line>
+            <line class="fixed" x1="500" y1="191" x2="800" y2="210"></line>
+            <line class="fixed" x1="500" y1="237" x2="820" y2="240"></line>
+            <line class="fixed" x1="500" y1="284" x2="840" y2="270"></line>
+            <circle class="fixed" cx="780" cy="180" r="4"></circle>
+            <circle class="fixed" cx="800" cy="210" r="4"></circle>
+            <circle class="fixed" cx="820" cy="240" r="4"></circle>
+            <circle class="fixed" cx="840" cy="270" r="4"></circle>
+            <line x1="800" y1="210" x2="786" y2="199" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="800" y1="210" x2="814" y2="197" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="800" y1="210" x2="788" y2="224" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="800" y1="210" x2="815" y2="221" stroke="#D55E00" stroke-width="1"></line>
+            <circle class="learnable" cx="786" cy="199" r="3"></circle>
+            <circle class="learnable" cx="814" cy="197" r="3"></circle>
+            <circle class="learnable" cx="788" cy="224" r="3"></circle>
+            <circle class="learnable" cx="815" cy="221" r="3"></circle>
+            <text x="805" y="298" text-anchor="middle" font-size="10" font-weight="600">命中相机 · 多尺度特征 4 层 128ch</text>
+            <text x="805" y="324" text-anchor="middle" font-size="9.5" fill="#0072B2">● 参考点＝锚点经 lidar2img 投影（固定）</text>
+            <text x="805" y="340" text-anchor="middle" font-size="9.5" fill="#D55E00">● 采样点＝参考点＋Δ 偏移（ICA deformable，可学习，2 偏移/锚）</text>
+
+            <!-- CVHA 与采样位置数注记 -->
+            <text x="16" y="368" font-size="10.5">CVHA（每层第一步）：三平面互为 key/value（跨平面 deformable 自注意力）；attention_weights 第 33 个 logit 在 3 平面间 softmax＝层级门控</text>
+            <text x="16" y="386" font-size="10.5">（可学习，初始偏置 10 偏向本平面）——平面间的可学习混合在此，不在聚合处（见 B）</text>
+            <text x="16" y="406" font-size="10" fill="#4a5560">采样位置数：ICA 每 query 每命中相机 hw 8head×4level×8point＝256、zh/wz 8 子查询×256＝2048；CVHA 每查询 8head×3plane×32point＝768</text>
+          </g>
+
+          <line x1="16" y1="428" x2="984" y2="428" stroke="#d0d7de" stroke-width="1"></line>
+
+          <!-- ===== B · 端到端流水线（重绘自论文 Fig.4）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="452" font-size="14" font-weight="600" fill="#37424d">B · 端到端流水线（重绘自论文 Fig.4）：可学习＝三张 query 表＋采样偏移/权重＋CVHA 门控；固定＝锚点射线/投影/聚合</text>
+
+            <rect x="20" y="486" width="112" height="58" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="76" y="508" text-anchor="middle">6 环视图输入</text>
+            <text x="76" y="524" text-anchor="middle" font-size="10.5">(B,6,3,928,1600)</text>
+            <text x="76" y="539" text-anchor="middle" font-size="10">（数据）</text>
+
+            <line class="flow" x1="132" y1="515" x2="150" y2="515"></line>
+
+            <rect class="learnable" x="152" y="480" width="190" height="72" rx="4"></rect>
+            <text x="247" y="500" text-anchor="middle" font-size="11.5">Backbone ＋ FPN</text>
+            <text x="247" y="516" text-anchor="middle" font-size="9.5">ResNet-101-DCN（FCOS3D 预训练）</text>
+            <text x="247" y="530" text-anchor="middle" font-size="9.5">FPN 4 尺度 128ch（/8–/64）</text>
+            <text x="247" y="544" text-anchor="middle" font-size="9.5">＋cams/level embeds 注入（可学习）</text>
+
+            <line class="flow" x1="342" y1="516" x2="636" y2="516"></line>
+
+            <rect x="640" y="484" width="170" height="62" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="725" y="506" text-anchor="middle" font-size="11.5">多相机特征 feat_flatten</text>
+            <text x="725" y="522" text-anchor="middle" font-size="10.5">(6, 30825, B, 128)</text>
+            <text x="725" y="537" text-anchor="middle" font-size="10">（数据）</text>
+
+            <line class="flow" x1="703" y1="546" x2="703" y2="590"></line>
+
+            <rect x="450" y="562" width="410" height="152" rx="6" fill="none" stroke="#8a94a0" stroke-width="1.5" stroke-dasharray="8 5"></rect>
+            <text x="462" y="580" font-size="11" font-weight="600" fill="#37424d">TPVFormerLayer ×5：3 HCAB ＋ 2 HAB</text>
+
+            <rect class="learnable" x="462" y="594" width="76" height="66" rx="4"></rect>
+            <text x="500" y="614" text-anchor="middle" font-size="11">CVHA</text>
+            <text x="500" y="629" text-anchor="middle" font-size="9.5">跨平面混合</text>
+            <text x="500" y="643" text-anchor="middle" font-size="9.5">＋3-way 门控</text>
+            <text x="500" y="656" text-anchor="middle" font-size="8.5">（第 33 logit）</text>
+
+            <line class="flow" x1="538" y1="627" x2="548" y2="627"></line>
+
+            <rect class="fixed" x="548" y="594" width="102" height="66" rx="4"></rect>
+            <text x="599" y="612" text-anchor="middle" font-size="9.5">lidar2img 投影</text>
+            <text x="599" y="626" text-anchor="middle" font-size="9.5">＋hit 掩码</text>
+            <text x="599" y="640" text-anchor="middle" font-size="9">＋正交轴锚点射线</text>
+            <text x="599" y="654" text-anchor="middle" font-size="9">（固定·零参数）</text>
+
+            <line class="flow" x1="650" y1="627" x2="660" y2="627"></line>
+
+            <rect class="learnable" x="660" y="594" width="86" height="66" rx="4"></rect>
+            <text x="703" y="614" text-anchor="middle" font-size="10.5">ICA 采样</text>
+            <text x="703" y="629" text-anchor="middle" font-size="9.5">deformable</text>
+            <text x="703" y="643" text-anchor="middle" font-size="9">offsets/weights</text>
+            <text x="703" y="656" text-anchor="middle" font-size="9">（可学习）</text>
+
+            <line class="flow" x1="746" y1="627" x2="756" y2="627"></line>
+
+            <rect class="learnable" x="756" y="594" width="92" height="66" rx="4"></rect>
+            <text x="802" y="614" text-anchor="middle" font-size="11">FFN</text>
+            <text x="802" y="629" text-anchor="middle" font-size="9">128→256→128</text>
+            <text x="802" y="643" text-anchor="middle" font-size="9">＋LN</text>
+            <text x="802" y="656" text-anchor="middle" font-size="8.5">（每层 1 组）</text>
+
+            <text x="655" y="704" text-anchor="middle" font-size="9.5" fill="#5a6570">HCAB ×3 ＝ CVHA→ICA→FFN；HAB ×2 ＝ CVHA→FFN（ICA 仅前 3 层）</text>
+
+            <rect class="learnable" x="20" y="586" width="414" height="74" rx="4"></rect>
+            <text x="32" y="606" font-size="11">三平面 TPV query 表（可学习·3D 侧，桥的主动方）</text>
+            <text x="32" y="624" font-size="10">hw (40000,128)＋zh (3200,128)＋wz (3200,128)＝46400 条 @128 维（5.94M）</text>
+            <text x="32" y="642" font-size="10">＝同范围稠密 voxel 640000 格的 7.25%；pos 编码逐层注入 CVHA</text>
+
+            <line class="flow" x1="434" y1="623" x2="462" y2="623"></line>
+
+            <line class="flow" x1="848" y1="627" x2="866" y2="627"></line>
+
+            <rect x="868" y="596" width="112" height="58" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="924" y="616" text-anchor="middle" font-size="10.5">三平面 tpv_embed</text>
+            <text x="924" y="632" text-anchor="middle" font-size="10">各 (B,Nq,128)</text>
+            <text x="924" y="646" text-anchor="middle" font-size="10">（数据）</text>
+
+            <line class="flow" x1="924" y1="654" x2="924" y2="664"></line>
+
+            <rect class="fixed" x="868" y="666" width="112" height="66" rx="4"></rect>
+            <text x="924" y="684" text-anchor="middle" font-size="10.5">TPV 聚合</text>
+            <text x="924" y="698" text-anchor="middle" font-size="9.5">广播＋双线性</text>
+            <text x="924" y="712" text-anchor="middle" font-size="9.5">＋等权求和</text>
+            <text x="924" y="726" text-anchor="middle" font-size="8.5">（Eq.5·零参数）</text>
+
+            <line class="flow" x1="924" y1="732" x2="924" y2="742"></line>
+
+            <rect class="learnable" x="868" y="744" width="112" height="56" rx="4"></rect>
+            <text x="924" y="762" text-anchor="middle" font-size="10">分割头（可学习）</text>
+            <text x="924" y="776" text-anchor="middle" font-size="8.5">Linear 128→256→128</text>
+            <text x="924" y="790" text-anchor="middle" font-size="8.5">→Linear(128,17)</text>
+
+            <line class="flow" x1="924" y1="800" x2="924" y2="810"></line>
+
+            <rect x="868" y="812" width="112" height="46" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="924" y="830" text-anchor="middle" font-size="10.5">点/体语义占用</text>
+            <text x="924" y="846" text-anchor="middle" font-size="9.5">（17 类，数据）</text>
+
+            <text x="20" y="682" font-size="10.5" font-weight="600" fill="#37424d">关键纠偏：三平面→体素的聚合＝沿正交轴广播＋双线性＋等权求和（零参数）</text>
+            <text x="20" y="700" font-size="10">（论文 Eq.5 与代码一致，直接求和、全文无学习权重 α）；可学习的平面间混合只在</text>
+            <text x="20" y="718" font-size="10">CVHA 的 3-way 门控（第 33 logit），不在聚合处。深度：无深度头，隐式（同 BEVFormer）。</text>
+
+            <text x="500" y="746" text-anchor="middle" font-size="10.5" fill="#4a5560">形状流：(B,6,3,928,1600) → (6,30825,B,128) → 三平面 (B,46400,128) → 体 (B,128,200,200,16)＋点 (B,C,n)</text>
+            <text x="500" y="766" text-anchor="middle" font-size="10" fill="#5a6570">注：单帧模型，无时序模块；损失＝CE(体)＋lovasz(点)；hit 判定＝任一锚点入像即该相机参与（查询×相机粒度，固定）。</text>
+          </g>
+        </svg>
+        <p>三平面压缩的拉取式桥：主动方是 3D 侧的三张可学习 query 表 <code>tpv_embedding_hw/zh/wz</code>（(40000,128)＋(3200,128)＋(3200,128)＝46400 条<span class="cite">tpvformer10/tpv_head.py:53-55</span>，把 BEVFormer 单平面 40000 条的 query 预算推广到三根正交轴，仅为同范围稠密 voxel 640000 格的 7.25%）。每个平面查询沿本平面正交轴取固定锚点射线——hw 沿 Z 4 锚、zh/wz 沿水平轴 32 锚<span class="cite">tpvformer10/modules/encoder.py:36-47</span>——经 <code>lidar2img</code> 投到 6 相机、以 hit 掩码筛出命中相机<span class="cite">tpvformer10/modules/encoder.py:167-220</span>，再由 ICA 在投影点邻域做可学习偏移的 deformable 采样<span class="cite">tpvformer10/modules/image_cross_attention.py:104-164</span>；三平面之间由 CVHA 互为 key/value，平面间的可学习混合在 attention_weights 第 33 个 logit 的 3-way 门控<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>。而三平面→体素的聚合是广播＋双线性＋等权求和，零参数<span class="cite">tpvformer10/tpv_aggregator.py:69-84</span>（论文 Eq.5 与代码一致）；深度不预测、无深度头，由锚点射线隐式离散。</p>
       </div>
 
       <h3>② 可学习参数清单</h3>
@@ -779,16 +974,131 @@
           <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
         </thead>
         <tbody>
-          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+          <tr>
+            <td><code>tpv_embedding_hw</code>（HW 平面 query 表，本模型的名片参数）</td>
+            <td><code>nn.Embedding(200×200,128)</code>＝(40000,128)，5.12M</td>
+            <td>3D 侧（桥的主动方）</td>
+            <td><span class="cite">tpvformer10/tpv_head.py:53</span> <span class="cite">tpv_lidarseg.py:20-21</span></td>
+          </tr>
+          <tr>
+            <td><code>tpv_embedding_zh</code></td>
+            <td><code>nn.Embedding(16×200,128)</code>＝(3200,128)，0.41M</td>
+            <td>3D 侧</td>
+            <td><span class="cite">tpvformer10/tpv_head.py:54</span></td>
+          </tr>
+          <tr>
+            <td><code>tpv_embedding_wz</code></td>
+            <td><code>nn.Embedding(200×16,128)</code>＝(3200,128)，0.41M</td>
+            <td>3D 侧</td>
+            <td><span class="cite">tpvformer10/tpv_head.py:55</span></td>
+          </tr>
+          <tr>
+            <td>位置编码 <code>h_embed</code>＋<code>w_embed</code>＋<code>z_embed</code>（CustomPositionalEncoding，本仓自研注册）</td>
+            <td>Embedding(200,48)＋Embedding(200,48)＋Embedding(16,32)，输出拼 128 维（忽略轴槽位置零）</td>
+            <td>3D 侧（逐层注入 CVHA，见 ④ 差异）</td>
+            <td><span class="cite">tpvformer10/tpv_head.py:141-143</span> <span class="cite">tpvformer10/tpv_head.py:147-170</span> <span class="cite">tpv_lidarseg.py:159-165</span></td>
+          </tr>
+          <tr>
+            <td><code>cams_embeds</code></td>
+            <td>(6,128)：每相机一个可学习向量，加到所有特征层</td>
+            <td>桥（2D 特征侧注入）</td>
+            <td><span class="cite">tpvformer10/tpv_head.py:51-52</span> <span class="cite">tpvformer10/tpv_head.py:103</span></td>
+          </tr>
+          <tr>
+            <td><code>level_embeds</code></td>
+            <td>(4,128)：每尺度一个可学习向量</td>
+            <td>桥（2D 特征侧注入）</td>
+            <td><span class="cite">tpvformer10/tpv_head.py:49-50</span> <span class="cite">tpvformer10/tpv_head.py:104</span></td>
+          </tr>
+          <tr>
+            <td>CVHA <code>sampling_offsets</code> ×3 平面子模块 ×5 层</td>
+            <td>每子模块 <code>Linear(128, 8×3×32×2=1536)</code>；权重零初始化，bias 初始化为本平面 2D 放射网格 ×(j+1)/2 ＋ 邻平面球面网格（2 极角×4 方位角投影）×2(j+1)</td>
+            <td>3D 侧（跨平面自注意力的学习偏移）</td>
+            <td><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:42-44</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:59-76</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:94-105</span></td>
+          </tr>
+          <tr>
+            <td>CVHA <code>attention_weights</code>（<strong>含平面层级门控</strong>：输出 33＝32 点＋1 门控 logit，门控在 3 平面间 softmax，初始偏置 10 偏向本平面）×3 ×5 层</td>
+            <td>每子模块 <code>Linear(128, 8×3×33=792)</code></td>
+            <td>3D 侧（平面间学习权重所在）</td>
+            <td><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:45-47</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:107-110</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span></td>
+          </tr>
+          <tr>
+            <td>CVHA <code>value_proj</code>/<code>output_proj</code> ×3 ×5 层</td>
+            <td>各 <code>Linear(128,128)</code></td>
+            <td>3D 侧</td>
+            <td><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:39-41</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:48-50</span></td>
+          </tr>
+          <tr>
+            <td>ICA <code>sampling_offsets</code> ×3 平面子模块 ×3 层</td>
+            <td>hw <code>Linear(128, 8×4×8×2=512)</code>；zh/wz <code>Linear(128, 8×4×64×2=4096)</code>；权重零初始化、bias 放射状网格（每锚点 2 偏移）</td>
+            <td>桥（拉取路径上的学习量）</td>
+            <td><span class="cite">tpvformer10/modules/image_cross_attention.py:247-249</span> <span class="cite">tpvformer10/modules/image_cross_attention.py:261-274</span> <span class="cite">tpv_lidarseg.py:28</span></td>
+          </tr>
+          <tr>
+            <td>ICA <code>attention_weights</code> ×3 ×3 层</td>
+            <td>hw <code>Linear(128, 8×4×8=256)</code>；zh/wz <code>Linear(128, 8×4×64=2048)</code>；softmax 覆盖 level×point（hw 32 维、zh/wz 256 维）</td>
+            <td>桥</td>
+            <td><span class="cite">tpvformer10/modules/image_cross_attention.py:251-253</span> <span class="cite">tpvformer10/modules/image_cross_attention.py:275</span> <span class="cite">tpvformer10/modules/image_cross_attention.py:290-293</span></td>
+          </tr>
+          <tr>
+            <td>ICA <code>value_proj</code>（三平面共享 1 个）×3 层</td>
+            <td><code>Linear(128,128)</code></td>
+            <td>桥（2D 特征侧）</td>
+            <td><span class="cite">tpvformer10/modules/image_cross_attention.py:254</span> <span class="cite">tpvformer10/modules/image_cross_attention.py:368</span></td>
+          </tr>
+          <tr>
+            <td>ICA 外壳 <code>output_proj</code> ×3 层</td>
+            <td><code>Linear(128,128)</code></td>
+            <td>桥（聚合后）</td>
+            <td><span class="cite">tpvformer10/modules/image_cross_attention.py:58</span> <span class="cite">tpvformer10/modules/image_cross_attention.py:162</span></td>
+          </tr>
+          <tr>
+            <td>每层 FFN＋LN（HCAB 3 组 norm＋FFN、HAB 2 组）×5 层</td>
+            <td>FFN 128→256→128（2 个 Linear，dropout 0.1）＋LN(128)</td>
+            <td>3D 侧</td>
+            <td><span class="cite">tpv_lidarseg.py:72-74</span> <span class="cite">tpv_lidarseg.py:94</span> <span class="cite">tpvformer10/modules/tpvformer_layer.py:112-130</span> <span class="cite">tpvformer10/modules/tpvformer_layer.py:216-219</span></td>
+          </tr>
+          <tr>
+            <td>聚合头 <code>decoder</code>＋<code>classifier</code></td>
+            <td>Linear(128,256)＋Softplus＋Linear(256,128)＋Linear(128,<strong>17</strong>)（16 前景类＋背景 ignore 0）</td>
+            <td>3D 侧（桥之外下游）</td>
+            <td><span class="cite">tpvformer10/tpv_aggregator.py:24-30</span> <span class="cite">tpv_lidarseg.py:101-113</span> <span class="cite">tpv_lidarseg.py:34</span> <span class="cite">config/_base_/dataset.py:27</span> <span class="cite">config/_base_/dataset.py:4</span></td>
+          </tr>
+          <tr>
+            <td><code>img_backbone</code>＋<code>img_neck</code>（ResNet-101-DCN＋FPN，FCOS3D 预训练）</td>
+            <td>输入 (B·6,3,928,1600)→512/1024/2048ch @/8–/32→FPN 4 尺度 128ch（/8：116×200、/16：58×100、/32：29×50、/64：15×25）</td>
+            <td>2D 侧（拉取之前）</td>
+            <td><span class="cite">tpv_lidarseg.py:114-132</span> <span class="cite">config/_base_/schedule.py:3</span></td>
+          </tr>
         </tbody>
       </table>
+      <p>张量形状按 nuScenes 口径（<code>config/tpv_lidarseg.py</code>）列写；CVHA 出现在全部 5 层（每层 1 个），ICA 出现在前 3 层 HCAB（每层 1 个），FFN 每层 1 组。要点：<strong>投影桥上的学习量＝三平面 query 表（46400×128＝5.94M，名片参数<span class="cite">tpvformer10/tpv_head.py:53-55</span>）＋ICA 的 offsets/weights/value_proj（3 层）＋CVHA 的 offsets/含平面门控的 weights（5 层<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>）＋两侧注入嵌入（cams/level embeds）</strong>；而"在哪采"的骨架——三平面正交轴锚点射线、跨视图 16 锚网格、lidar2img 投影、hit 判定、聚合阶段的投影＋双线性＋求和<span class="cite">tpvformer10/tpv_aggregator.py:83-84</span>——全部零参数。论文未给 nuScenes 口径参数量（SSC 口径 6.0M，§4.5 p.8，论文值、异口径不比较）。</p>
 
       <h3>③ 2D-3D 关系</h3>
-      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+      <p>TPVFormer 对"2D 特征如何进入 3D"的回答可归纳为五点：</p>
+      <ul>
+        <li><strong>推/拉方向：拉（pull）。</strong>主动方是 3D 侧的三组可学习平面 query：每个平面查询沿本平面正交轴取固定锚点射线（hw 4 点沿 Z、zh/wz 32 点沿 X/Y<span class="cite">tpvformer10/modules/encoder.py:36-47</span><span class="cite">tpvformer10/modules/encoder.py:124-148</span>），经 lidar2img 投到 6 相机，从命中相机的多尺度特征上"拉取"锚点邻域特征（deformable 采样<span class="cite">tpvformer10/modules/image_cross_attention.py:104-164</span>）。与 BEVFormer 同为拉取式；差异在于锚点射线不在同一根 Z 轴上，而分散到三根正交轴。</li>
+        <li><strong>深度：隐式、无深度分布。</strong>不预测 per-pixel 深度（对比 LSS 的 41 维 α），无深度监督、无深度输出头；深度不确定性由每查询的锚点射线离散枚举（hw 沿 Z 4 档、zh/wz 沿水平轴 32 档），由 attention 权重隐式加权。</li>
+        <li><strong>几何与学习的分工：几何给"候选落点"，学习给"query 内容与采样幅度"。</strong>固定几何决定候选落点——三平面网格（0.512/0.5 m 格<span class="cite">tpv_lidarseg.py:20-22</span>）、正交轴锚点射线（4/32/32<span class="cite">tpvformer10/modules/encoder.py:36-47</span>）、跨视图 16 锚网格<span class="cite">tpvformer10/modules/encoder.py:49-51</span>、lidar2img 投影与 hit 掩码<span class="cite">tpvformer10/modules/encoder.py:167-220</span>、聚合阶段的投影＋双线性＋求和<span class="cite">tpvformer10/tpv_aggregator.py:69-84</span>；学习决定"query 内容"（三张嵌入表 46400×128）与"采多远、权重多少"（ICA/CVHA 的 offsets 与 weights）。特别的：<strong>平面之间的学习权重存在于 CVHA 的层级门控</strong>（attention_weights 第 33 个输出在 3 平面间 softmax<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>），而<strong>聚合阶段三平面是等权求和、无学习权重</strong><span class="cite">tpvformer10/tpv_aggregator.py:83-84</span>（与论文 Eq.5 一致）。</li>
+        <li><strong>query 有无及形态：有，且是三张平面嵌入表。</strong>TPV query＝(40000,128)＋(3200,128)＋(3200,128) 共 46400 条，逐格与三平面对应（论文 §3.2 "initialize TPV queries as learnable parameters"，且 TPV queries 与 TPV planes 指同一组特征向量、同物异名<span class="cite">tpvformer10/tpv_head.py:53-55</span>）。对比：BEVFormer 单表 40000 条（仅 BEV），LSS 无 query；TPVFormer 用 <strong>7.25% 于稠密 voxel 的 query 预算</strong>（46400 vs 640000）覆盖全 3D 空间——体表征靠"广播＋求和"零参数重建，任意分辨率可查（论文 Fig.6）。</li>
+        <li><strong>三平面交互（BEVFormer 没有的）。</strong>CVHA 让三平面 query 互为 key/value（跨平面 deformable 自注意力），是"3D 侧自注意力"<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:36-50</span>；BEVFormer 的 self-attn 是 BEV 平面内＋时序，TPVFormer 无时序（单帧模型）。</li>
+      </ul>
 
       <h3>④ 代码校对</h3>
       <div class="code-check">
-        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+        <p><strong>配置入口：</strong><code>config/tpv_lidarseg.py</code>（README 的 A100 主训练命令<span class="cite">README.md:78</span>；<code>_dim_=128</code> 与论文 TPVFormer-Base（TPV 200×200×16、特征 128）一致，故取为主口径；同目录 dim64/dim96 为轻量变体，不引用）。核心量：<code>point_cloud_range=[-51.2,-51.2,-5.0,51.2,51.2,3.0]</code><span class="cite">tpv_lidarseg.py:11</span>、<code>_dim_=128</code><span class="cite">tpv_lidarseg.py:13</span>、<code>num_heads=8</code><span class="cite">tpv_lidarseg.py:14</span>、<code>_pos_dim_=[48,48,32]</code><span class="cite">tpv_lidarseg.py:15</span>、<code>_num_levels_=4</code><span class="cite">tpv_lidarseg.py:17</span>、<code>_num_cams_=6</code><span class="cite">tpv_lidarseg.py:18</span>、<code>tpv_h_=tpv_w_=200、tpv_z_=16</code><span class="cite">tpv_lidarseg.py:20-22</span>、<code>tpv_encoder_layers=5</code><span class="cite">tpv_lidarseg.py:26</span>、<code>num_points_in_pillar=[4,32,32]</code><span class="cite">tpv_lidarseg.py:27</span>、<code>num_points=[8,64,64]</code><span class="cite">tpv_lidarseg.py:28</span>、<code>num_points_in_pillar_cross_view=[16,16,16]</code><span class="cite">tpv_lidarseg.py:150</span>、<code>nbr_class=17</code><span class="cite">tpv_lidarseg.py:34</span>。插件代码取 <code>tpvformer10/</code>（<code>occupancy=False</code><span class="cite">tpv_lidarseg.py:7</span>→<span class="cite">train.py:73-76</span>→<span class="cite">builder/tpv_lidarseg_builder.py:1</span>；旧版 <code>tpvformer04/</code> 为 SemanticKITTI 口径所用，不引用，仓内自注见<span class="cite">tpvformer10/modules/encoder.py:150-151</span>）。派生量：TPV query 200×200＋16×200＋200×16＝40000＋3200＋3200＝46400 条（@128 维 5.94M，为稠密 voxel 640000 格的 7.25%）；格边长 102.4/200＝0.512 m、8/16＝0.5 m；输入 900×1600 无 resize<span class="cite">dataloader/dataset_wrapper.py:28-51</span>、pad 到 32 整除→928×1600<span class="cite">dataloader/dataset_wrapper.py:45</span><span class="cite">dataloader/transform_3d.py:19</span><span class="cite">dataloader/transform_3d.py:38</span>；FPN 四层 128ch @ /8、/16、/32、/64<span class="cite">tpv_lidarseg.py:125-132</span>；ICA 每查询每命中相机采样位置 hw 256、zh/wz 2048，CVHA 每查询 768。训练超参：AdamW lr=2e-4、backbone lr_mult=0.1、wd=0.01、cosine（warmup 500 iter）、grad clip 35、24 epochs、每 GPU batch=1（6 视图）<span class="cite">config/_base_/optimizer.py:1-12</span><span class="cite">train.py:114-121</span><span class="cite">config/_base_/schedule.py:2</span><span class="cite">config/_base_/dataset.py:15</span>（论文附录 B p.9 一致）。</p>
+        <p><strong>论文 ↔ 代码印证（一致项）：</strong>hit-view 剔除机制（§3.2 "removing invalid sets if none of the reference points falls onto the image" ↔ <span class="cite">tpvformer10/modules/image_cross_attention.py:113-137</span>）；Eq.9 的 1/|V_hit| 归一（↔ <span class="cite">tpvformer10/modules/image_cross_attention.py:157-160</span>）；邻平面锚点 Eq.11（↔ <span class="cite">tpvformer10/modules/encoder.py:64-75</span>）；Eq.6 反投影公式（论文 ego 居中式 ↔ 代码 linspace 格心反归一，取 i+0.5 时两式恒等<span class="cite">tpvformer10/modules/encoder.py:139-144</span><span class="cite">tpvformer10/modules/encoder.py:176-181</span>）；N_ref 平面间可变 [4,32,32]（§3.2 ↔ <span class="cite">tpv_lidarseg.py:27</span>）；TPV 平面即 query（§3.2 ↔ <span class="cite">tpvformer10/tpv_head.py:53-55</span>）；200×200×16、dim 128、1600×900、ResNet101-DCN（FCOS3D）、CE(voxel)＋lovasz(points)<span class="cite">tpv_lidarseg.py:8-9</span><span class="cite">train.py:191-202</span>、AdamW 2e-4/24ep（Table 4 p.8、附录 B p.9、§4.2 p.7 ↔ <span class="cite">tpv_lidarseg.py:13,20-22,114-124</span><span class="cite">config/_base_/optimizer.py:1-9</span><span class="cite">config/_base_/schedule.py:2</span>）；层数 3 HCAB＋2 HAB 与 Table 5 最优组合一致（<span class="cite">tpv_lidarseg.py:152-158</span>，论文 Table 5 p.8）。</p>
+        <p><strong>差异与勘正（要点）：</strong></p>
+        <ul>
+          <li><strong>三平面聚合权重（关键纠偏）：</strong>arXiv v2 论文 Eq.5/§3.3 明写 "bilinear interpolation and summation"（求和），全文无 α；代码同为直接求和、无任何学习权重<span class="cite">tpvformer10/tpv_aggregator.py:83-84</span>（旧版 <code>tpvformer04</code> 逐字节相同）。"可学习的 α 加权混合"不属于本 commit 与 v2 论文——可学习的平面间混合在 CVHA 门控（见下条），① 图 B 的聚合块因此画为固定几何。</li>
+          <li><strong>CVHA 平面门控：</strong>Eq.12 仅写 CVHA(t)=DA(t,R,T)，未提平面级权重；代码 <code>attention_weights</code> 每平面多输出 1 个 logit，在 3 平面间 softmax 成层级门控并与点权重相乘，初始偏置 10 使训练初期"本平面主导"<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:45-47</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:107-110</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>——代码侧补充机制，① 图在 CVHA 标注 3-way plane gate。</li>
+          <li><strong>本平面参考点：</strong>论文 §3.2 称在本平面邻域"随机采几个点"（random points）；代码本平面 16 锚＝自身格心重复 16 次<span class="cite">tpvformer10/modules/encoder.py:57-63</span>，邻域扩散交给可学习偏移（bias 初始化为放射状网格<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:59-65</span>）；邻平面锚＝沿对方轴 16 个均匀格心（与 Eq.11 一致）——以代码为准，① 图按代码画。</li>
+          <li><strong>位置编码注入点：</strong>论文 §3.2 说 3D 位置编码加在第一个 encoder 层之前；代码 <code>tpv_pos</code> 在每一层 CVHA 内部重新相加（ICA 不加 pos）<span class="cite">tpvformer10/modules/tpvformer_layer.py:185-192</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:148-149</span>——代码更激进（逐层注入），① 图 B 将 pos 标注在每层 CVHA 入口。</li>
+          <li><strong>论文未提的代码侧细节：</strong><code>cams_embeds</code>(6,128)/<code>level_embeds</code>(4,128) 注入多尺度特征（BEVFormer 同名遗产<span class="cite">tpvformer10/tpv_head.py:49-52,103-104</span>）；zh/wz 查询复制 8 子查询各管 4 锚、结果求和还原（<code>points_multiplier=[1,8,8]</code><span class="cite">tpvformer10/modules/image_cross_attention.py:242-244</span><span class="cite">tpvformer10/modules/image_cross_attention.py:300-314</span>）；每锚点每头每层 2 个学习偏移（num_points=[8,64,64] / num_z_anchors=[4,32,32]<span class="cite">tpv_lidarseg.py:27-28</span>）。</li>
+          <li><strong>机制图编号勘正：</strong>论文 Fig.2 是任务总览（p.2），Fig.3 为 voxel/BEV/TPV 表示对比（p.3），Fig.4 才是架构图（p.5）——本节 ① 图按 Fig.4（流水线）＋Fig.3（表示概念）重绘，Fig.2 仅作任务背景。</li>
+          <li><strong>参数量：</strong>论文未给 nuScenes 口径参数量（SSC 口径 6.0M，§4.5 p.8，论文值、异口径不比较）。</li>
+        </ul>
+        <p><strong>版本锚定：</strong>本节代码均指 commit <code>459bc060</code>（2024-09-07 "Update readme.md"，完整 hash 与克隆口径见页脚来源表）。</p>
       </div>
     </section>
 
