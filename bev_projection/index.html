@@ -1091,7 +1091,7 @@
         <p><strong>差异与勘正（要点）：</strong></p>
         <ul>
           <li><strong>三平面聚合权重（关键纠偏）：</strong>arXiv v2 论文 Eq.5/§3.3 明写 "bilinear interpolation and summation"（求和），全文无 α；代码同为直接求和、无任何学习权重<span class="cite">tpvformer10/tpv_aggregator.py:83-84</span>（旧版 <code>tpvformer04</code> 逐字节相同）。"可学习的 α 加权混合"不属于本 commit 与 v2 论文——可学习的平面间混合在 CVHA 门控（见下条），① 图 B 的聚合块因此画为固定几何。</li>
-          <li><strong>CVHA 平面门控：</strong>Eq.12 仅写 CVHA(t)=DA(t,R,T)，未提平面级权重；代码 <code>attention_weights</code> 每平面多输出 1 个 logit，在 3 平面间 softmax 成层级门控并与点权重相乘，初始偏置 10 使训练初期"本平面主导"<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:45-47</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:107-110</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>——代码侧补充机制，① 图在 CVHA 标注 3-way plane gate。</li>
+          <li><strong>CVHA 平面门控：</strong>Eq.12 仅写 CVHA(t)=DA(t,R,T)，未提平面级权重；代码 <code>attention_weights</code> 每平面多输出 1 个 logit，在 3 平面间 softmax 成层级门控并与点权重相乘，初始偏置 10 使训练初期"本平面主导"<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:45-47</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:107-110</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>——代码侧补充机制，① 图在 CVHA 标注 3-way plane gate。</li>
           <li><strong>本平面参考点：</strong>论文 §3.2 称在本平面邻域"随机采几个点"（random points）；代码本平面 16 锚＝自身格心重复 16 次<span class="cite">tpvformer10/modules/encoder.py:57-63</span>，邻域扩散交给可学习偏移（bias 初始化为放射状网格<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:59-65</span>）；邻平面锚＝沿对方轴 16 个均匀格心（与 Eq.11 一致）——以代码为准，① 图按代码画。</li>
           <li><strong>位置编码注入点：</strong>论文 §3.2 说 3D 位置编码加在第一个 encoder 层之前；代码 <code>tpv_pos</code> 在每一层 CVHA 内部重新相加（ICA 不加 pos）<span class="cite">tpvformer10/modules/tpvformer_layer.py:185-192</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:148-149</span>——代码更激进（逐层注入），① 图 B 将 pos 标注在每层 CVHA 入口。</li>
           <li><strong>论文未提的代码侧细节：</strong><code>cams_embeds</code>(6,128)/<code>level_embeds</code>(4,128) 注入多尺度特征（BEVFormer 同名遗产<span class="cite">tpvformer10/tpv_head.py:49-52,103-104</span>）；zh/wz 查询复制 8 子查询各管 4 锚、结果求和还原（<code>points_multiplier=[1,8,8]</code><span class="cite">tpvformer10/modules/image_cross_attention.py:242-244</span><span class="cite">tpvformer10/modules/image_cross_attention.py:300-314</span>）；每锚点每头每层 2 个学习偏移（num_points=[8,64,64] / num_z_anchors=[4,32,32]<span class="cite">tpv_lidarseg.py:27-28</span>）。</li>
@@ -1481,6 +1481,8 @@
       <h3>① 四家对比大表（含口径脚注）</h3>
       <style>
         /* 节内 scoped 变体：汇总对比大表（基于全局 .param-table，仅加首列维度列样式与紧凑字号） */
+        #sec-summary .cmp-table { table-layout: fixed; }
+        #sec-summary .cmp-table .cite { white-space: normal; overflow-wrap: anywhere; }
         #sec-summary .cmp-table td { font-size: 0.9em; }
         #sec-summary .cmp-table th:first-child, #sec-summary .cmp-table td:first-child { width: 92px; font-weight: 600; background: #f3f6f9; }
         #sec-summary .cmp-table thead th:not(:first-child) { text-align: center; }
