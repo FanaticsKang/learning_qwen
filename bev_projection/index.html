@@ -182,22 +182,24 @@
 
     <div class="legend" id="legend">
       <strong class="legend-title">统一图例</strong>
-      <svg viewBox="0 0 730 44" width="730" role="img" aria-label="图例：可学习参数为橙色实线，固定几何为蓝色虚线加斜纹，数据流为灰色箭头">
+      <svg viewBox="0 0 940 44" width="940" role="img" aria-label="图例：可学习参数为橙色实线，固定几何为蓝色虚线加斜纹，数据/中间量为灰边白底，数据流为灰色箭头">
         <rect class="learnable" x="8" y="9" width="34" height="20" rx="3"></rect>
         <line class="learnable" x1="52" y1="19" x2="88" y2="19"></line>
         <text x="96" y="24">可学习参数载体（橙 · 实线）</text>
         <rect class="fixed" x="300" y="9" width="34" height="20" rx="3"></rect>
         <line class="fixed" x1="344" y1="19" x2="380" y2="19"></line>
         <text x="388" y="24">固定几何（蓝 · 虚线 + 斜纹）</text>
-        <line class="flow" x1="610" y1="19" x2="654" y2="19"></line>
-        <text x="666" y="24">数据流</text>
+        <rect x="590" y="9" width="34" height="20" rx="3" fill="#ffffff" stroke="#8a94a0" stroke-width="2"></rect>
+        <text x="632" y="24">数据 / 中间量（灰 · 白底）</text>
+        <line class="flow" x1="824" y1="19" x2="868" y2="19"></line>
+        <text x="880" y="24">数据流</text>
       </svg>
     </div>
 
     <nav class="toc">
       <h2>目录</h2>
       <ol>
-        <li><a href="#sec-lss">LSS：Lift, Splat, Shoot —— 无 query，学习全在 2D 侧</a></li>
+        <li><a href="#sec-lss">LSS：Lift, Splat, Shoot —— 无 query，学习全在桥两端</a></li>
         <li><a href="#sec-bevformer">BEVFormer：稠密 BEV query 的空间交叉注意力（3D 侧拉取）</a></li>
         <li><a href="#sec-tpvformer">TPVFormer：三平面（TPV）压缩 query</a></li>
         <li><a href="#sec-voxformer">VoxFormer：深度门控的稀疏 voxel query</a></li>
@@ -210,7 +212,7 @@
 
     <!-- ======================= 一、LSS ======================= -->
     <section id="sec-lss">
-      <h2>一、LSS：Lift, Splat, Shoot<span class="tag">谱系定位：无 query，学习全在 2D 侧</span></h2>
+      <h2>一、LSS：Lift, Splat, Shoot<span class="tag">谱系定位：无 query，学习全在桥两端</span></h2>
 
       <h3>① 机制总览</h3>
       <div class="panel">
