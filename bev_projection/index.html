@@ -445,8 +445,200 @@
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <!-- 占位：机制总览 SVG 由后续任务绘制（空间交叉注意力的柱采样，区分可学习参数与固定几何） -->
-        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+        <svg viewBox="0 0 1000 748" role="img" aria-label="BEVFormer 机制图：上半为 encoder 总览（重绘自论文 Fig.2(a)），下半为 SCA 柱采样（重绘自 Fig.2(b)）；BEV query 与采样偏移为可学习，pillar 网格、z 锚点与 lidar2img 投影为固定几何">
+          <!-- ===== A · Encoder 总览（重绘自论文 Fig.2(a)）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · Encoder 总览（重绘自论文 Fig.2(a)）：query 是学的（橙），锚点是标的（蓝）</text>
+
+            <rect x="20" y="70" width="112" height="60" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="76" y="92" text-anchor="middle">6 环视图输入</text>
+            <text x="76" y="109" text-anchor="middle" font-size="10.5">(B,6,3,928,1600)</text>
+            <text x="76" y="124" text-anchor="middle" font-size="10">（数据）</text>
+
+            <line class="flow" x1="132" y1="100" x2="150" y2="100"></line>
+
+            <rect class="learnable" x="150" y="64" width="190" height="72" rx="4"></rect>
+            <text x="245" y="84" text-anchor="middle" font-size="11.5">Backbone ＋ FPN</text>
+            <text x="245" y="100" text-anchor="middle" font-size="9.5">ResNet-101-DCN（FCOS3D 预训练）</text>
+            <text x="245" y="114" text-anchor="middle" font-size="9.5">FPN 4 尺度 256ch（/8–/64）</text>
+            <text x="245" y="128" text-anchor="middle" font-size="9.5">＋cams/level embeds 注入</text>
+
+            <line class="flow" x1="340" y1="100" x2="640" y2="100"></line>
+
+            <rect x="640" y="70" width="160" height="60" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="720" y="91" text-anchor="middle" font-size="11.5">多相机特征 F_t</text>
+            <text x="720" y="108" text-anchor="middle" font-size="10.5">(6, 30825, B, 256)</text>
+            <text x="720" y="123" text-anchor="middle" font-size="10">（数据）</text>
+
+            <line class="flow" x1="690" y1="130" x2="690" y2="174"></line>
+
+            <rect x="450" y="150" width="410" height="110" rx="6" fill="none" stroke="#8a94a0" stroke-width="1.5" stroke-dasharray="8 5"></rect>
+            <text x="462" y="166" font-size="11" font-weight="600" fill="#37424d">BEVFormerLayer ×6：TSA → SCA → FFN</text>
+
+            <rect class="learnable" x="462" y="174" width="72" height="70" rx="4"></rect>
+            <text x="498" y="194" text-anchor="middle" font-size="11">TSA</text>
+            <text x="498" y="210" text-anchor="middle" font-size="9.5">时序自注意力</text>
+            <text x="498" y="226" text-anchor="middle" font-size="9">（一句带过）</text>
+
+            <line class="flow" x1="534" y1="209" x2="548" y2="209"></line>
+
+            <rect class="fixed" x="548" y="174" width="108" height="70" rx="4"></rect>
+            <text x="602" y="192" text-anchor="middle" font-size="9.5">lidar2img 投影</text>
+            <text x="602" y="207" text-anchor="middle" font-size="9.5">＋hit 掩码</text>
+            <text x="602" y="222" text-anchor="middle" font-size="9.5">＋4 z 锚点</text>
+            <text x="602" y="237" text-anchor="middle" font-size="9">（固定·零参数）</text>
+
+            <line class="flow" x1="656" y1="209" x2="670" y2="209"></line>
+
+            <rect class="learnable" x="670" y="174" width="100" height="70" rx="4"></rect>
+            <text x="720" y="192" text-anchor="middle" font-size="10.5">SCA 采样</text>
+            <text x="720" y="208" text-anchor="middle" font-size="9.5">deformable</text>
+            <text x="720" y="224" text-anchor="middle" font-size="9">offsets/weights</text>
+            <text x="720" y="238" text-anchor="middle" font-size="9">（可学习）</text>
+
+            <line class="flow" x1="770" y1="209" x2="784" y2="209"></line>
+
+            <rect class="learnable" x="784" y="174" width="64" height="70" rx="4"></rect>
+            <text x="816" y="194" text-anchor="middle" font-size="11">FFN</text>
+            <text x="816" y="210" text-anchor="middle" font-size="9">256→512</text>
+            <text x="816" y="224" text-anchor="middle" font-size="9">→256＋LN</text>
+            <text x="816" y="238" text-anchor="middle" font-size="8.5">Add&amp;Norm</text>
+
+            <rect class="learnable" x="20" y="196" width="330" height="62" rx="4"></rect>
+            <text x="32" y="215" font-size="11">BEV Queries Q（可学习·3D 侧，桥的主动方）</text>
+            <text x="32" y="232" font-size="10">bev_embedding (40000,256)＋bev_pos (200×200)</text>
+            <text x="32" y="248" font-size="9">can_bus_mlp 注入（时序项，一句带过）</text>
+
+            <line class="flow" x1="350" y1="227" x2="462" y2="227"></line>
+
+            <line class="flow" x1="860" y1="209" x2="882" y2="209"></line>
+
+            <rect x="884" y="182" width="98" height="54" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="933" y="201" text-anchor="middle" font-size="10.5">bev_embed B_t</text>
+            <text x="933" y="217" text-anchor="middle" font-size="10">(B,40000,256)</text>
+            <text x="933" y="230" text-anchor="middle" font-size="9.5">（数据）</text>
+
+            <line class="flow" x1="933" y1="236" x2="933" y2="250"></line>
+
+            <rect class="learnable" x="884" y="252" width="98" height="52" rx="4"></rect>
+            <text x="933" y="270" text-anchor="middle" font-size="10">Det 头（可学习）</text>
+            <text x="933" y="285" text-anchor="middle" font-size="9">decoder 900 query</text>
+            <text x="933" y="298" text-anchor="middle" font-size="9">＋cls/reg 头</text>
+
+            <line class="flow" x1="933" y1="304" x2="933" y2="316"></line>
+
+            <rect x="884" y="318" width="98" height="40" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="933" y="336" text-anchor="middle" font-size="10.5">3D 框＋速度</text>
+            <text x="933" y="351" text-anchor="middle" font-size="9.5">（数据）</text>
+          </g>
+
+          <line x1="16" y1="376" x2="984" y2="376" stroke="#d0d7de" stroke-width="1"></line>
+
+          <!-- ===== B · SCA 柱采样（重绘自论文 Fig.2(b)）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="398" font-size="14" font-weight="600" fill="#37424d">B · SCA 柱采样（重绘自论文 Fig.2(b)）：固定投影定锚，可学习偏移采样</text>
+
+            <!-- BEV 网格与 pillar -->
+            <rect class="fixed" x="430" y="565" width="140" height="40" rx="2"></rect>
+            <line x1="458" y1="565" x2="458" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="486" y1="565" x2="486" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="514" y1="565" x2="514" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="542" y1="565" x2="542" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="430" y1="585" x2="570" y2="585" stroke="#9DC3E6" stroke-width="1"></line>
+            <rect x="486" y="565" width="28" height="20" fill="#FBE3C8" stroke="#D55E00" stroke-width="1"></rect>
+            <text x="585" y="586" font-size="10.5">BEV 网格 200×200 @0.512 m（固定）</text>
+            <text x="585" y="602" font-size="10" fill="#5a6570">橙色格＝该格 BEV query（可学习 bev_embedding）</text>
+
+            <line x1="500" y1="441" x2="500" y2="565" stroke="#0072B2" stroke-width="2"></line>
+            <text x="500" y="432" text-anchor="middle" font-size="11" fill="#37424d">每格 1 pillar × 4 z 锚点（固定）</text>
+
+            <circle class="fixed" cx="500" cy="445" r="4.5"></circle>
+            <circle class="fixed" cx="500" cy="480" r="4.5"></circle>
+            <circle class="fixed" cx="500" cy="515" r="4.5"></circle>
+            <circle class="fixed" cx="500" cy="550" r="4.5"></circle>
+            <text x="510" y="434" font-size="10" fill="#0072B2">z=2.5 m</text>
+            <text x="510" y="469" font-size="10" fill="#0072B2">z=0.167 m</text>
+            <text x="510" y="504" font-size="10" fill="#0072B2">z=−2.167 m</text>
+            <text x="510" y="539" font-size="10" fill="#0072B2">z=−4.5 m</text>
+
+            <!-- 命中相机 j（左）与投影射线 -->
+            <rect x="80" y="420" width="180" height="155" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="170" y="441" text-anchor="middle" font-size="10.5" font-weight="600">命中相机 j ∈ V_hit（后向）</text>
+            <line class="fixed" x1="500" y1="445" x2="235" y2="450"></line>
+            <line class="fixed" x1="500" y1="480" x2="235" y2="475"></line>
+            <line class="fixed" x1="500" y1="515" x2="235" y2="500"></line>
+            <line class="fixed" x1="500" y1="550" x2="235" y2="525"></line>
+            <circle class="fixed" cx="235" cy="450" r="4"></circle>
+            <circle class="fixed" cx="235" cy="475" r="4"></circle>
+            <circle class="fixed" cx="235" cy="500" r="4"></circle>
+            <circle class="fixed" cx="235" cy="525" r="4"></circle>
+            <line x1="235" y1="500" x2="222" y2="491" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="235" y1="500" x2="249" y2="489" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="235" y1="500" x2="223" y2="511" stroke="#D55E00" stroke-width="1"></line>
+            <circle class="learnable" cx="222" cy="491" r="3"></circle>
+            <circle class="learnable" cx="249" cy="489" r="3"></circle>
+            <circle class="learnable" cx="223" cy="511" r="3"></circle>
+            <text x="170" y="552" text-anchor="middle" font-size="9" fill="#5a6570">多尺度特征 4 层（/8–/64）</text>
+            <text x="170" y="566" text-anchor="middle" font-size="9" fill="#5a6570">采样偏移同右图（橙）</text>
+
+            <!-- 命中相机 i（右）与投影射线 -->
+            <rect x="760" y="420" width="180" height="155" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="850" y="441" text-anchor="middle" font-size="10.5" font-weight="600">命中相机 i ∈ V_hit（前向）</text>
+            <line class="fixed" x1="500" y1="445" x2="785" y2="450"></line>
+            <line class="fixed" x1="500" y1="480" x2="785" y2="475"></line>
+            <line class="fixed" x1="500" y1="515" x2="785" y2="500"></line>
+            <line class="fixed" x1="500" y1="550" x2="785" y2="525"></line>
+            <circle class="fixed" cx="785" cy="450" r="4"></circle>
+            <circle class="fixed" cx="785" cy="475" r="4"></circle>
+            <circle class="fixed" cx="785" cy="500" r="4"></circle>
+            <circle class="fixed" cx="785" cy="525" r="4"></circle>
+            <line x1="785" y1="475" x2="770" y2="464" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="785" y1="475" x2="803" y2="462" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="785" y1="475" x2="766" y2="477" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="785" y1="475" x2="804" y2="479" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="785" y1="475" x2="786" y2="459" stroke="#D55E00" stroke-width="1"></line>
+            <circle class="learnable" cx="770" cy="464" r="3"></circle>
+            <circle class="learnable" cx="803" cy="462" r="3"></circle>
+            <circle class="learnable" cx="766" cy="477" r="3"></circle>
+            <circle class="learnable" cx="804" cy="479" r="3"></circle>
+            <circle class="learnable" cx="786" cy="459" r="3"></circle>
+            <line x1="785" y1="525" x2="771" y2="516" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="785" y1="525" x2="800" y2="514" stroke="#D55E00" stroke-width="1"></line>
+            <line x1="785" y1="525" x2="769" y2="532" stroke="#D55E00" stroke-width="1"></line>
+            <circle class="learnable" cx="771" cy="516" r="3"></circle>
+            <circle class="learnable" cx="800" cy="514" r="3"></circle>
+            <circle class="learnable" cx="769" cy="532" r="3"></circle>
+            <text x="812" y="470" font-size="9" fill="#D55E00">Δ</text>
+            <text x="850" y="552" text-anchor="middle" font-size="9" fill="#0072B2">● 参考点＝lidar2img 投影（固定）</text>
+            <text x="850" y="566" text-anchor="middle" font-size="9" fill="#D55E00">● 采样点＝参考点＋Δ 偏移（可学习）</text>
+
+            <!-- 聚合 -->
+            <line class="flow" x1="120" y1="575" x2="120" y2="640"></line>
+            <path class="flow" d="M 120 640 L 300 640"></path>
+            <line class="flow" x1="900" y1="575" x2="900" y2="640"></line>
+            <path class="flow" d="M 900 640 L 700 640"></path>
+            <rect x="300" y="610" width="400" height="60" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="500" y="628" text-anchor="middle" font-size="10.5">SCA 聚合：加权求和（weights 可学习）</text>
+            <text x="500" y="644" text-anchor="middle" font-size="10.5">4 尺度双线性采样 → ÷|V_hit|（Eq.2，固定）</text>
+            <text x="500" y="660" text-anchor="middle" font-size="10.5">→ 回注该 BEV query（SCA 输出）</text>
+
+            <!-- 6 相机 hit 掩码 -->
+            <rect class="fixed" x="44" y="688" width="24" height="16" rx="2"></rect>
+            <rect class="fixed" x="128" y="688" width="24" height="16" rx="2"></rect>
+            <rect x="16" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
+            <rect x="72" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
+            <rect x="100" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
+            <rect x="156" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
+            <text x="28" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
+            <text x="84" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
+            <text x="112" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
+            <text x="168" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
+            <text x="190" y="700" font-size="10" fill="#5a6570">6 相机环视：仅命中相机（蓝虚线框）参与 SCA，其余被 bev_mask 掩码——hit 判定：任一 z 锚点落入视锥（any-of-4，固定）</text>
+
+            <text x="500" y="730" text-anchor="middle" font-size="11" fill="#4a5560">每 query 每命中相机采样位置 ＝ 8 head × 4 level × 8 point ＝ 256 个；聚合结果除以命中相机数 |V_hit|（论文 Eq.2）</text>
+          </g>
+        </svg>
+        <p>拉取式桥：主动方是 3D 侧的可学习 BEV query 表 <code>bev_embedding</code>（<code>nn.Embedding(40000,256)</code><span class="cite">dense_heads/bevformer_head.py:104-105</span>）——每格 query 抬成 8 m pillar、取 4 个固定 z 锚点<span class="cite">modules/encoder.py:62-63</span><span class="cite">modules/encoder.py:189</span>，经 <code>lidar2img</code> 标定投影落到命中相机（仅命中相机参与，bev_mask 掩码）<span class="cite">modules/encoder.py:95-136</span>，再在投影点邻域以可学习偏移做 deformable 采样<span class="cite">modules/spatial_cross_attention.py:245-267</span>。"在哪采"的锚点全部来自固定标定几何，"采多远、权重多少"才是学习量；深度不预测、无深度头，仅由 4 个 z 锚点隐式离散。</p>
       </div>
 
       <h3>② 可学习参数清单</h3>
@@ -455,16 +647,119 @@
           <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
         </thead>
         <tbody>
-          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+          <tr>
+            <td><code>bev_embedding</code>（BEV query 表，本模型的名片参数）</td>
+            <td><code>nn.Embedding(200×200, 256)</code>＝(40000, 256)，10.24M</td>
+            <td>3D 侧（桥的主动方）</td>
+            <td><span class="cite">dense_heads/bevformer_head.py:104-105</span> <span class="cite">bevformer_base.py:64-65</span></td>
+          </tr>
+          <tr>
+            <td>位置编码 <code>row_embed</code>＋<code>col_embed</code>（mmdet <code>LearnedPositionalEncoding</code>，外部库类）</td>
+            <td>各 <code>Embedding(200, 128)</code>，输出拼成 256 维 bev_pos</td>
+            <td>3D 侧（仅注入 TSA）</td>
+            <td><span class="cite">bevformer_base.py:135-140</span> <span class="cite">dense_heads/bevformer_head.py:139-141</span></td>
+          </tr>
+          <tr>
+            <td><code>query_embedding</code></td>
+            <td><code>nn.Embedding(900, 512)</code>（拆成 query＋query_pos）</td>
+            <td>3D 侧（decoder，桥之外）</td>
+            <td><span class="cite">dense_heads/bevformer_head.py:106-107</span></td>
+          </tr>
+          <tr>
+            <td><code>cams_embeds</code></td>
+            <td>(6, 256)：每相机一个可学习向量，加到所有特征层</td>
+            <td>桥（2D 特征侧注入）</td>
+            <td><span class="cite">modules/transformer.py:74-75</span> <span class="cite">modules/transformer.py:170-171</span></td>
+          </tr>
+          <tr>
+            <td><code>level_embeds</code></td>
+            <td>(4, 256)：每尺度一个可学习向量</td>
+            <td>桥（2D 特征侧注入）</td>
+            <td><span class="cite">modules/transformer.py:72-73</span> <span class="cite">modules/transformer.py:172-173</span></td>
+          </tr>
+          <tr>
+            <td><code>can_bus_mlp</code>（CAN 信号→位置偏置；时序项，一句带过）</td>
+            <td>Linear(18,128)＋ReLU＋Linear(128,256)＋ReLU＋LN(256)</td>
+            <td>3D 侧 query 注入</td>
+            <td><span class="cite">modules/transformer.py:77-84</span> <span class="cite">modules/transformer.py:159-162</span></td>
+          </tr>
+          <tr>
+            <td>SCA <code>sampling_offsets</code>（可学习采样偏移，deformable 核心）×6 层</td>
+            <td><code>Linear(256, 8×4×8×2=512)</code>；权重零初始化、bias 放射状网格初始化</td>
+            <td>桥（拉取路径上的学习量）</td>
+            <td><span class="cite">modules/spatial_cross_attention.py:245-246</span> <span class="cite">modules/spatial_cross_attention.py:255-267</span></td>
+          </tr>
+          <tr>
+            <td>SCA <code>attention_weights</code> ×6 层</td>
+            <td><code>Linear(256, 8×4×8=256)</code>，softmax 于 level×point＝32 维</td>
+            <td>桥</td>
+            <td><span class="cite">modules/spatial_cross_attention.py:247-248</span> <span class="cite">modules/spatial_cross_attention.py:340-343</span></td>
+          </tr>
+          <tr>
+            <td>SCA <code>value_proj</code> ×6 层</td>
+            <td><code>Linear(256, 256)</code></td>
+            <td>桥（2D 特征侧）</td>
+            <td><span class="cite">modules/spatial_cross_attention.py:249</span> <span class="cite">modules/spatial_cross_attention.py:334</span></td>
+          </tr>
+          <tr>
+            <td>SCA 外壳 <code>output_proj</code> ×6 层（子模块内 output_proj 为 None）</td>
+            <td><code>Linear(256, 256)</code></td>
+            <td>桥（聚合后）</td>
+            <td><span class="cite">modules/spatial_cross_attention.py:67</span> <span class="cite">modules/spatial_cross_attention.py:173</span> <span class="cite">modules/spatial_cross_attention.py:221</span></td>
+          </tr>
+          <tr>
+            <td>TSA 四个 Linear（时序项，一句带过）×6 层</td>
+            <td><code>sampling_offsets Linear(512,128)</code>、<code>attention_weights Linear(512,64)</code>、value/output <code>Linear(256,256)</code>（points=4、levels=1）</td>
+            <td>3D 侧（时序）</td>
+            <td><span class="cite">modules/temporal_self_attention.py:99-104</span> <span class="cite">modules/temporal_self_attention.py:59</span></td>
+          </tr>
+          <tr>
+            <td>encoder 每层 FFN＋LN ×6 层</td>
+            <td>FFN 256→512→256（2 个 Linear）＋3×LN(256)</td>
+            <td>3D 侧</td>
+            <td><span class="cite">bevformer_base.py:102-105</span> <span class="cite">modules/custom_base_transformer_layer.py:151-163</span></td>
+          </tr>
+          <tr>
+            <td>decoder 参考点、6 层 decoder 与 cls/reg 分支</td>
+            <td>参考点 <code>Linear(256,3)</code>；cls 256→10、reg 256→10（code_size=10；num_classes=10 且 FocalLoss sigmoid→无背景类）</td>
+            <td>3D 侧（桥之外下游）</td>
+            <td><span class="cite">modules/transformer.py:76</span> <span class="cite">modules/transformer.py:267-268</span> <span class="cite">bevformer_base.py:106-127</span> <span class="cite">dense_heads/bevformer_head.py:49-52</span></td>
+          </tr>
+          <tr>
+            <td><code>img_backbone</code>＋<code>img_neck</code>（ResNet-101-DCN＋FPN，FCOS3D 预训练）</td>
+            <td>输入 (B·6,3,928,1600)→4 尺度 256ch（/8：116×200、/16：58×100、/32：29×50、/64：15×25）</td>
+            <td>2D 侧（拉取之前）</td>
+            <td><span class="cite">bevformer_base.py:43-61</span> <span class="cite">bevformer_base.py:249</span></td>
+          </tr>
         </tbody>
       </table>
+      <p>张量形状按 nuScenes 口径（<code>projects/configs/bevformer/bevformer_base.py</code>）列写。要点：<strong>投影桥上的学习量＝SCA 的 offsets/weights 与两个投影矩阵</strong>（每层 328,960 参数、6 层约 1.97M，逐项见上表）＋两侧注入嵌入（cams/level embeds）；而"在哪采"的骨架——pillar 网格、z 锚点、lidar2img 投影、hit 判定——全部零参数（见 ① 图蓝虚线元素）。论文 Tab.5 计 BEVFormer-S 68.7M 参数（p.10，论文值、未在代码侧复算）。</p>
 
       <h3>③ 2D-3D 关系</h3>
-      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+      <p>BEVFormer 对"2D 特征如何进入 3D"的回答可归纳为四点：</p>
+      <ul>
+        <li><strong>推/拉方向：拉（pull）。</strong>主动方是 3D 侧的可学习 BEV query：先把每格 query 抬成 pillar、取 4 个固定 3D 参考点<span class="cite">modules/encoder.py:46-71</span>，经 <code>lidar2img</code> 投到 2D<span class="cite">modules/encoder.py:95-136</span>，再从命中相机的多尺度特征上"拉取"邻域特征（deformable 采样<span class="cite">modules/spatial_cross_attention.py:134-172</span>）。与 LSS（2D 侧推、scatter 落格）方向相反——投影方向本身是 3D→2D 定锚，特征流是 2D→3D 聚合。</li>
+        <li><strong>深度：隐式、无深度分布。</strong>不预测任何 per-pixel 深度（对比 LSS 的 41 维 α），无深度监督、无深度输出头；深度不确定性由 4 个固定 z 锚点离散枚举<span class="cite">modules/encoder.py:62-63</span>，由 attention 权重隐式加权<span class="cite">modules/spatial_cross_attention.py:340-343</span>——学习量只在采样偏移与权重上修正锚点邻域。</li>
+        <li><strong>几何与学习的分工："几何给锚点、学习给偏移"。</strong>固定几何决定候选落点——BEV 网格 200×200@0.512 m<span class="cite">dense_heads/bevformer_head.py:61-62</span>、z 锚点 {−4.5, −2.167, 0.167, 2.5} m<span class="cite">modules/encoder.py:62-63</span>、lidar2img 投影与 hit 掩码<span class="cite">modules/encoder.py:122-138</span>、四层尺度归一化<span class="cite">modules/spatial_cross_attention.py:357-363</span>；学习决定"query 内容"（<code>bev_embedding</code> 40000×256）与"采多远、权重多少"（SCA sampling_offsets/attention_weights）。</li>
+        <li><strong>query 有无及形态：有，且是网格形嵌入表。</strong>BEV query 是一张 (40000, 256) 的可学习嵌入表，逐格与 BEV 平面一一对应（论文 §3.2 "grid-shaped learnable parameters"<span class="cite">dense_heads/bevformer_head.py:104-105</span>），另有 (900, 512) 的 object query 供 decoder 用（桥之外<span class="cite">dense_heads/bevformer_head.py:106-107</span>）。这与 LSS 的"无 query、固定视锥点"构成四模型对比中的两极。</li>
+      </ul>
 
       <h3>④ 代码校对</h3>
       <div class="code-check">
-        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+        <p><strong>配置入口：</strong><code>projects/configs/bevformer/bevformer_base.py</code>（本节范围限定 v1；repo master 同时含有 BEVFormerV2（<code>projects/configs/bevformerv2/</code>、<code>detectors/bevformerV2.py</code>），一律不引用）。核心量：<code>_dim_=256</code><span class="cite">bevformer_base.py:31</span>、<code>_num_levels_=4</code><span class="cite">bevformer_base.py:34</span>、<code>bev_h_=bev_w_=200</code><span class="cite">bevformer_base.py:35-36</span>、<code>point_cloud_range=[-51.2,-51.2,-5.0,51.2,51.2,3.0]</code><span class="cite">bevformer_base.py:11</span>、encoder <code>num_layers=6</code><span class="cite">bevformer_base.py:80</span>、<code>num_points_in_pillar=4</code><span class="cite">bevformer_base.py:82</span>、SCA <code>num_points=8</code>/<code>num_levels=4</code><span class="cite">bevformer_base.py:97-98</span>、<code>num_query=900</code><span class="cite">bevformer_base.py:66</span>；输入 900×1600<span class="cite">bevformer_base.py:185</span>，pad 到 32 整除→928×1600<span class="cite">bevformer_base.py:174</span>。派生量：BEV query 数 200×200=40000、格边长 102.4/200=0.512 m<span class="cite">dense_heads/bevformer_head.py:61-62</span>；pillar 高 Z=3.0−(−5.0)=8 m<span class="cite">modules/encoder.py:189</span>；FPN 四层 256ch @ /8、/16、/32、/64<span class="cite">bevformer_base.py:54-61</span>。</p>
+        <p><strong>论文 ↔ 代码印证（一致项）：</strong>6 层 encoder、200×200、±51.2 m、s=0.512、N_ref=4、C=256（§3.1/§4.2 ↔ <span class="cite">bevformer_base.py:80</span><span class="cite">bevformer_base.py:35-36</span><span class="cite">bevformer_base.py:11</span><span class="cite">bevformer_base.py:82</span><span class="cite">bevformer_base.py:31</span>）；Eq.3 格→世界坐标取格中心（§3.3 ↔ <span class="cite">modules/encoder.py:64-67</span>）；hit-view 机制（§3.3/A.4 ↔ <span class="cite">modules/spatial_cross_attention.py:137-141</span>）；Eq.2 的 1/|V_hit| 归一化（slots 汇总后除以命中相机数，clamp≥1，<span class="cite">modules/spatial_cross_attention.py:169-172</span>）；900 query/300 框/24 epochs/lr=2e-4/backbone lr_mult=0.1（§A.3/§A.1/§4.2 ↔ <span class="cite">bevformer_base.py:66</span><span class="cite">bevformer_base.py:132</span><span class="cite">bevformer_base.py:228-245</span>）。</p>
+        <p><strong>差异与勘正（要点）：</strong></p>
+        <ul>
+          <li>多尺度层数：论文 §4.2 写 "FPN with sizes of 1/16, 1/32, 1/64"（3 层），代码 FPN <code>num_outs=4</code> 且 SCA <code>num_levels=4</code>，实际消费 /8、/16、/32、/64 四层<span class="cite">bevformer_base.py:34</span><span class="cite">bevformer_base.py:60</span><span class="cite">bevformer_base.py:98</span>——以代码为准：四层，论文少写了 /8 层（① 图按四层标注）。</li>
+          <li>每参考点采样数：论文 §4.2 称每头 4 个采样点；代码 <code>num_points=8</code>（每头每层），经 reshape 按 4 个 z 锚点拆分→每锚点每头每层 2 个<span class="cite">bevformer_base.py:97</span><span class="cite">modules/spatial_cross_attention.py:360-369</span>——论文"4 点"与发布代码数值对不上，疑为早期版本口径，以代码为准。</li>
+          <li>z 锚点取值：论文 §4.2 称 "height anchors are sampled uniformly from −5 meters to 3 meters"；代码 <code>linspace(0.5,7.5,4)/8</code> 给开区间内 4 个等距点 {−4.5, −2.167, 0.167, 2.5} m，不含 −5/3 端点<span class="cite">modules/encoder.py:62-63</span>——论文表述含糊而非矛盾，图按代码值标注。</li>
+          <li>位置编码消费点：论文 §3.2 说位置编码加在 BEV query 上（未区分两个 attention）；代码 <code>bev_pos</code> 仅作为 query_pos 注入 TSA，SCA 调用时 query_pos=None<span class="cite">modules/encoder.py:365-366</span>——代码更细，① 图将 bev_pos 标注在 query 侧。</li>
+          <li>投影矩阵形式：论文 Eq.4 用 3×4 的 T_i；代码用 4×4 齐次矩阵乘后除以 z<span class="cite">modules/encoder.py:109-128</span>，数学等价，非差异。</li>
+          <li>机制图编号：论文 Fig.2 即总架构图，含 (a) encoder 层组成、(b) SCA、(c) TSA 三幅子图（p.4）——与 LSS 分册的图号勘正不同，此处图号无误，① 图按 Fig.2(a)＋(b) 重绘。</li>
+          <li>GridMask 为代码侧训练细节（prob 0.7，论文未提<span class="cite">bevformer_base.py:41</span><span class="cite">detectors/bevformer.py:52-53</span>）；参数量 68.7M（Tab.5，BEVFormer-S）为论文值，仓库无复算脚本。</li>
+          <li>时序项（TSA、can_bus 注入及 <code>modules/encoder.py:196-198</code> 处 "keep this bug for reproducing" 的作者自注）仅一句带过，非本节目标。</li>
+        </ul>
+        <p><strong>版本锚定：</strong>本节代码均指 commit <code>66b65f3a</code>（2024-05-03，完整 hash 与克隆口径见页脚来源表）。</p>
       </div>
     </section>
 
