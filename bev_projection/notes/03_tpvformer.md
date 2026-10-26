@@ -67,7 +67,7 @@
 |---|---|---|
 | 感知范围 pc_range | [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]（X/Y ±51.2 m；Z −5~3 m），real 102.4×102.4×8.0 m | `tpv_lidarseg.py:11`；`tpvformer10/tpv_head.py:39-41` |
 | 三平面网格 | hw 200×200（格 0.512×0.512 m）；zh 16×200（z 格 **0.5 m** × y 格 0.512 m）；wz 200×16（x 0.512 × z 0.5） | `tpv_lidarseg.py:20-22,11`；聚合 reshape `tpvformer10/tpv_aggregator.py:42-44` |
-| hw 锚点射线（沿 Z） | 4 锚 `linspace(0.5,7.5,4)/8`→度量 **{−4.5, −2.167, 0.167, 2.5} m**，间距 2 m（与 BEVFormer z 锚同式同值） | `tpvformer10/modules/encoder.py:36` + `139-140` |
+| hw 锚点射线（沿 Z） | 4 锚 `linspace(0.5,7.5,4)/8`→度量 **{−4.5, −2.167, 0.167, 2.5} m**，间距 (7.5−0.5)/3=7/3≈**2.33 m**（含端点等距，非 8/4=2 的格心式）；与 BEVFormer z 锚**同式同值**——BEVFormer 仓（02 分册口径）`projects/mmdet3d_plugin/bevformer/modules/encoder.py:62`（同 `linspace(0.5,Z−0.5,D)/Z` 式）、`:188-189`（Z=pc_range z 跨度）+ `bevformer_base.py:11,82`（z 跨度 8.0、D=4），参数相同故度量锚点逐一相等 | `tpvformer10/modules/encoder.py:36` + `139-140` |
 | zh 锚点射线（沿 X） | 32 锚 `linspace(0.5,101.9,32)/102.4`→度量 **−50.7 ~ +50.7 m**，间距 101.4/31=**3.27 m** | `tpvformer10/modules/encoder.py:38-40` + `139-140` |
 | wz 锚点射线（沿 Y） | 32 锚，同 zh 数值（沿 Y） | `tpvformer10/modules/encoder.py:42-44` |
 | 跨视图锚点网格 | 每查询每平面 16 锚：本平面=自身格心重复 16 次；邻平面=沿对方轴 16 个均匀格心（如 hw 查询在 zh/wz 平面沿 z 取 16 个 z 格心） | `tpvformer10/modules/encoder.py:49-51,54-121`（57-63 本平面、64-75 邻平面）；`tpv_lidarseg.py:150` |
