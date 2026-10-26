@@ -111,6 +111,7 @@
     padding: 14px;
     margin: 10px 0 18px;
   }
+  .panel svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
   .param-table { border-collapse: collapse; width: 100%; font-size: 0.95em; margin: 10px 0 18px; }
   .param-table th, .param-table td {
     border: 1px solid #d8dee4;
@@ -213,8 +214,150 @@
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <!-- 占位：机制总览 SVG 由后续任务绘制（lift 视锥 / splat 池化，区分可学习参数与固定几何） -->
-        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+        <svg viewBox="0 0 1000 632" role="img" aria-label="LSS 机制图：上半为逐像素 lift（重绘自论文 Fig.3），下半为端到端流水线（重绘自 Fig.4）；可学习参数全在两端，中间投影核零参数">
+          <!-- ===== A · 逐像素 Lift（重绘自论文 Fig.3）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 逐像素 Lift（重绘自论文 Fig.3）：格中心固定，α 与 c 可学习</text>
+
+            <rect class="learnable" x="20" y="48" width="120" height="44" rx="4"></rect>
+            <text x="80" y="66" text-anchor="middle">图像特征图 /16</text>
+            <text x="80" y="84" text-anchor="middle">(512, 8, 22)</text>
+
+            <line class="flow" x1="140" y1="70" x2="166" y2="70"></line>
+
+            <rect class="learnable" x="170" y="48" width="140" height="44" rx="4"></rect>
+            <text x="240" y="66" text-anchor="middle">depthnet 1×1 conv</text>
+            <text x="240" y="84" text-anchor="middle">512 → 105</text>
+
+            <line class="flow" x1="310" y1="60" x2="356" y2="56"></line>
+            <line class="flow" x1="310" y1="82" x2="356" y2="126"></line>
+
+            <rect class="learnable" x="360" y="30" width="168" height="52" rx="4"></rect>
+            <text x="368" y="46" font-size="11">α：41 维深度分布（softmax）</text>
+            <rect class="learnable" x="370" y="73" width="8" height="3"></rect>
+            <rect class="learnable" x="382" y="70" width="8" height="6"></rect>
+            <rect class="learnable" x="394" y="64" width="8" height="12"></rect>
+            <rect class="learnable" x="406" y="58" width="8" height="18"></rect>
+            <rect class="learnable" x="418" y="54" width="8" height="22"></rect>
+            <rect class="learnable" x="430" y="59" width="8" height="17"></rect>
+            <rect class="learnable" x="442" y="65" width="8" height="11"></rect>
+            <rect class="learnable" x="454" y="70" width="8" height="6"></rect>
+            <rect class="learnable" x="466" y="73" width="8" height="3"></rect>
+
+            <rect class="learnable" x="360" y="108" width="168" height="40" rx="4"></rect>
+            <text x="444" y="126" text-anchor="middle">c：64 维上下文</text>
+            <text x="444" y="142" text-anchor="middle">（C=64）</text>
+
+            <line class="flow" x1="528" y1="56" x2="556" y2="80"></line>
+            <line class="flow" x1="528" y1="128" x2="556" y2="100"></line>
+
+            <rect class="fixed" x="560" y="68" width="130" height="44" rx="4"></rect>
+            <text x="625" y="86" text-anchor="middle">外积 c_d = α_d · c</text>
+            <text x="625" y="103" text-anchor="middle" font-size="11">（Eq.(1)，零参数）</text>
+
+            <path class="flow" d="M 625 112 L 625 250 L 686 250"></path>
+
+            <rect class="fixed" x="690" y="226" width="26" height="48" rx="2"></rect>
+            <line x1="698.7" y1="226" x2="698.7" y2="274" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="707.3" y1="226" x2="707.3" y2="274" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="690" y1="242" x2="716" y2="242" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="690" y1="258" x2="716" y2="258" stroke="#9DC3E6" stroke-width="1"></line>
+
+            <line class="flow" x1="716" y1="250" x2="946" y2="250"></line>
+            <circle class="fixed" cx="732" cy="250" r="4"></circle>
+            <circle class="fixed" cx="752" cy="250" r="4"></circle>
+            <circle class="fixed" cx="772" cy="250" r="4"></circle>
+            <circle class="fixed" cx="792" cy="250" r="4"></circle>
+            <circle class="fixed" cx="812" cy="250" r="4"></circle>
+            <circle class="fixed" cx="832" cy="250" r="4"></circle>
+            <circle class="fixed" cx="852" cy="250" r="4"></circle>
+            <circle class="fixed" cx="872" cy="250" r="4"></circle>
+            <circle class="fixed" cx="892" cy="250" r="4"></circle>
+            <circle class="fixed" cx="912" cy="250" r="4"></circle>
+            <circle class="fixed" cx="932" cy="250" r="4"></circle>
+            <rect class="learnable" x="727" y="234" width="10" height="10"></rect>
+            <rect class="learnable" x="747" y="224" width="10" height="20"></rect>
+            <rect class="learnable" x="767" y="208" width="10" height="36"></rect>
+            <rect class="learnable" x="787" y="192" width="10" height="52"></rect>
+            <rect class="learnable" x="807" y="178" width="10" height="66"></rect>
+            <rect class="learnable" x="827" y="184" width="10" height="60"></rect>
+            <rect class="learnable" x="847" y="198" width="10" height="46"></rect>
+            <rect class="learnable" x="867" y="214" width="10" height="30"></rect>
+            <rect class="learnable" x="887" y="228" width="10" height="16"></rect>
+            <rect class="learnable" x="907" y="236" width="10" height="8"></rect>
+            <rect class="learnable" x="927" y="240" width="10" height="4"></rect>
+            <text x="724" y="168" font-size="12">各深度点特征强度 ∝ α_d·c（可学习）</text>
+            <text x="736" y="278" font-size="11.5">41 个固定深度格中心 4.0–44.0 m（Δd=1.0 m）</text>
+            <text x="703" y="296" font-size="12" text-anchor="middle">8×22 像素格（/16，固定）</text>
+          </g>
+
+          <line x1="16" y1="316" x2="984" y2="316" stroke="#d0d7de" stroke-width="1"></line>
+
+          <!-- ===== B · 端到端流水线（重绘自论文 Fig.4）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="344" font-size="14" font-weight="600" fill="#37424d">B · 端到端流水线（重绘自论文 Fig.4）：可学习参数全在两端，中间投影核零参数</text>
+
+            <rect x="20" y="428" width="120" height="64" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="80" y="450" text-anchor="middle">N 环视图输入</text>
+            <text x="80" y="468" text-anchor="middle" font-size="11.5">(B,N,3,128,352)</text>
+            <text x="80" y="484" text-anchor="middle" font-size="11">（数据）</text>
+
+            <line class="flow" x1="140" y1="460" x2="168" y2="460"></line>
+
+            <rect class="learnable" x="172" y="424" width="164" height="72" rx="4"></rect>
+            <text x="254" y="443" text-anchor="middle" font-size="11.5">2D 编码器 CamEncode</text>
+            <text x="254" y="460" text-anchor="middle" font-size="11.5">EfficientNet-B0 + up1</text>
+            <text x="254" y="477" text-anchor="middle" font-size="11.5">+ depthnet（1×1 conv）</text>
+            <text x="254" y="491" text-anchor="middle" font-size="10.5">产出 α(41) 与 c(64)</text>
+
+            <line class="flow" x1="336" y1="460" x2="380" y2="460"></line>
+
+            <rect x="368" y="352" width="320" height="172" rx="6" fill="none" stroke="#8a94a0" stroke-width="1.5" stroke-dasharray="8 5"></rect>
+            <text x="382" y="370" font-size="12" font-weight="600" fill="#37424d">固定几何桥（零参数）</text>
+
+            <rect class="fixed" x="382" y="378" width="200" height="40" rx="4"></rect>
+            <text x="482" y="394" text-anchor="middle" font-size="11">每相机 K / rot / trans（cam→ego）</text>
+            <text x="482" y="410" text-anchor="middle" font-size="11">post 增广校正（固定·逐样本）</text>
+            <line class="flow" x1="482" y1="418" x2="482" y2="426"></line>
+
+            <rect class="fixed" x="382" y="428" width="150" height="64" rx="4"></rect>
+            <text x="457" y="448" text-anchor="middle" font-size="11.5">Lift：外积 Eq.(1)</text>
+            <text x="457" y="464" text-anchor="middle" font-size="11.5">视锥 + K⁻¹/E 反投影</text>
+            <text x="457" y="480" text-anchor="middle" font-size="11.5">点云 (41,8,22,3)/相机</text>
+
+            <line class="flow" x1="532" y1="460" x2="558" y2="460"></line>
+
+            <rect class="fixed" x="560" y="428" width="116" height="64" rx="4"></rect>
+            <text x="618" y="448" text-anchor="middle" font-size="11.5">Splat：体素</text>
+            <text x="618" y="464" text-anchor="middle" font-size="11.5">scatter 求和池化</text>
+            <text x="618" y="480" text-anchor="middle" font-size="11.5">BEV 栅格 200×200</text>
+
+            <line class="flow" x1="676" y1="460" x2="704" y2="460"></line>
+
+            <rect class="learnable" x="706" y="424" width="140" height="72" rx="4"></rect>
+            <text x="776" y="446" text-anchor="middle" font-size="11.5">BEV 编码器 BevEncode</text>
+            <text x="776" y="464" text-anchor="middle" font-size="11.5">resnet18 式 CNN</text>
+            <text x="776" y="482" text-anchor="middle" font-size="10.5">输入 (64,200,200)</text>
+
+            <line class="flow" x1="846" y1="460" x2="876" y2="460"></line>
+
+            <rect x="878" y="428" width="102" height="64" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="929" y="450" text-anchor="middle">BEV 二值分割</text>
+            <text x="929" y="468" text-anchor="middle" font-size="11.5">(B,1,200,200)</text>
+            <text x="929" y="484" text-anchor="middle" font-size="11">（vehicle 框）</text>
+
+            <rect class="learnable" x="172" y="544" width="164" height="6" rx="1"></rect>
+            <rect class="fixed" x="368" y="544" width="320" height="6" rx="1"></rect>
+            <rect class="learnable" x="706" y="544" width="140" height="6" rx="1"></rect>
+            <text x="254" y="566" text-anchor="middle" font-size="12">2D 侧可学习</text>
+            <text x="528" y="566" text-anchor="middle" font-size="12">固定几何 · 零参数</text>
+            <text x="776" y="566" text-anchor="middle" font-size="12">BEV 侧可学习</text>
+
+            <text x="500" y="592" text-anchor="middle" font-size="12.5" fill="#4a5560">形状流：(B,N,3,128,352) → (B·N,64,41,8,22) → (B,64,200,200) → (B,1,200,200)</text>
+            <text x="500" y="614" text-anchor="middle" font-size="11" fill="#5a6570">注：按 6 相机环视表达，训练默认随机抽 5/6（ncams=5）、验证用全 6；监督仅为 BEV 二值分割（BCEWithLogits，vehicle 框栅格化）。</text>
+          </g>
+        </svg>
+        <p>三明治结构：所有可学习参数都在投影桥两端——2D 侧（深度分布 α 与上下文特征 c 的产生<span class="cite">src/models.py:46</span>）与 BEV 侧（splat 之后的 CNN<span class="cite">src/models.py:90-126</span>）；中间的投影核——外积<span class="cite">src/models.py:57</span>、几何反投影 <code>get_geometry</code><span class="cite">src/models.py:166-186</span>、体素求和池化 <code>voxel_pooling</code><span class="cite">src/models.py:200-242</span>——零参数、纯固定几何。</p>
       </div>
 
       <h3>② 可学习参数清单</h3>
@@ -223,16 +366,74 @@
           <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
         </thead>
         <tbody>
-          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+          <tr>
+            <td><code>camencode.trunk</code>（EfficientNet-B0 全部卷积，ImageNet 预训练初始化）</td>
+            <td>输入 (3,128,352)；本模型消费 /16 端点 112ch×8×22 与 /32 端点 320ch×4×11</td>
+            <td>2D 侧（lift 之前）</td>
+            <td><span class="cite">src/models.py:43</span> <span class="cite">src/models.py:61-82</span></td>
+          </tr>
+          <tr>
+            <td><code>camencode.up1</code>（Up(320+112, 512)：两组 3×3 conv+BN+ReLU）</td>
+            <td>432→512 @ /16，输出 (512,8,22)</td>
+            <td>2D 侧</td>
+            <td><span class="cite">src/models.py:45</span> <span class="cite">src/models.py:22-29</span></td>
+          </tr>
+          <tr>
+            <td><code>camencode.depthnet</code>（1×1 conv，无 padding）</td>
+            <td>Conv2d 512→105（=D41+C64），输出 (105,8,22)：前 41ch→α logits，后 64ch→c</td>
+            <td>2D 侧（α、c 的唯一来源）</td>
+            <td><span class="cite">src/models.py:46</span> <span class="cite">src/models.py:54-57</span></td>
+          </tr>
+          <tr>
+            <td><code>bevencode.conv1</code>+<code>bn1</code>（7×7 conv, stride 2 + BN）</td>
+            <td>64→64 @ 200×200→100×100</td>
+            <td>3D/BEV 侧（splat 之后）</td>
+            <td><span class="cite">src/models.py:95-97</span></td>
+          </tr>
+          <tr>
+            <td><code>bevencode.layer1/2/3</code>（resnet18 前三段，pretrained=False）</td>
+            <td>64→64→128→256，空间 100→100→50→25</td>
+            <td>3D/BEV 侧</td>
+            <td><span class="cite">src/models.py:94</span> <span class="cite">src/models.py:100-102</span></td>
+          </tr>
+          <tr>
+            <td><code>bevencode.up1</code>（Up(64+256, 256, ×4)：上采样×4 拼接 + resnet block）</td>
+            <td>320→256 @ 25×25→100×100</td>
+            <td>3D/BEV 侧</td>
+            <td><span class="cite">src/models.py:104</span> <span class="cite">src/models.py:15-34</span></td>
+          </tr>
+          <tr>
+            <td><code>bevencode.up2</code>（上采样×2 + 3×3 conv 256→128 + 1×1 conv 128→outC）</td>
+            <td>256→128→1，100×100→200×200</td>
+            <td>3D/BEV 侧</td>
+            <td><span class="cite">src/models.py:105-112</span></td>
+          </tr>
         </tbody>
       </table>
+      <p>张量形状按 B=1、单相机列写（N 维在 batch 维合并）；全模型可训练参数论文计 14.3M（§4.1，论文值、未在代码侧复算）。要点：<strong>没有任何可学习参数位于投影桥上</strong>——外积<span class="cite">src/models.py:57</span>、几何反投影 <code>get_geometry</code><span class="cite">src/models.py:166-186</span>、体素池化 <code>voxel_pooling</code><span class="cite">src/models.py:200-242</span>三者均零参数；可学习量全部在 2D 侧（α 与 c 的产生<span class="cite">src/models.py:46</span>）与 BEV 侧（splat 之后的 CNN<span class="cite">src/models.py:90-126</span>）。</p>
 
       <h3>③ 2D-3D 关系</h3>
-      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+      <p>LSS 对"2D 特征如何进入 3D"的回答可归纳为四点：</p>
+      <ul>
+        <li><strong>推/拉方向：推（push）。</strong>LSS 从 2D 图像侧出发，把每像素特征沿固定视锥射线"抬"到 3D（lift），再以纯 scatter 落进 BEV 网格（splat）；不存在 3D→2D 的采样/拉取路径，也没有任何 cross-attention。</li>
+        <li><strong>深度：显式分布、隐式监督。</strong>每个像素显式输出 41 维离散深度分布 α（softmax<span class="cite">src/models.py:48-49</span>），格中心固定（4.0–44.0 m）；但 α 没有深度标签，仅由 BEV 任务损失端到端回传（论文 §3.1 称 latent depth，§5.1 frozen-encoder 消融证明其学到了有效深度）。两个极端可作对照：one-hot α 退化为 pseudo-lidar，均匀 α 退化为 OFT 式全程铺展。</li>
+        <li><strong>几何与学习的分工：可学习参数全部在投影桥两端。</strong>2D 侧（EfficientNet-B0 + up1 + depthnet）负责"什么内容、放在多深"，BEV 侧是 resnet18 式编码器；中间的投影核（视锥分箱、K/E 反投影、体素 scatter 求和）零参数、纯固定几何——"学习决定特征与深度权重，几何决定落点"。</li>
+        <li><strong>query 有无：无 query。</strong>不存在可学习的 3D query / BEV embedding / position embedding；3D 位置全部来自固定视锥网格点（每相机 41×8×22=7216 个），BEV 格内容由落入该 pillar 的点求和得到<span class="cite">src/models.py:236-240</span>。这也是 LSS 与 BEVFormer（可学习 BEV query 拉取）对比时最根本的形态差异。</li>
+      </ul>
 
       <h3>④ 代码校对</h3>
       <div class="code-check">
-        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+        <p><strong>配置入口：</strong>LSS 无独立 config 文件——<code>main.py</code> 为 fire 入口<span class="cite">main.py:13-20</span>，全部默认值写在 <code>src/train.py::train()</code> 的函数签名<span class="cite">src/train.py:18-43</span>，且 train.py 默认值即 nuScenes 口径：输入 H=900、W=1600，<code>resize_lim=(0.193,0.225)</code>，<code>final_dim=(128,352)</code><span class="cite">src/train.py:23-25</span>；<code>ncams=5</code><span class="cite">src/train.py:29</span>；BEV 网格 <code>xbound=ybound=[-50.0,50.0,0.5]</code>、<code>zbound=[-10.0,10.0,20.0]</code>（单层 pillar）<span class="cite">src/train.py:34-36</span>；<code>dbound=[4.0,45.0,1.0]</code><span class="cite">src/train.py:37</span>；<code>outC=1</code><span class="cite">src/train.py:67</span>。派生量：D=41、特征格 8×22（downsample=16）<span class="cite">src/models.py:143</span>、C=64<span class="cite">src/models.py:144</span>、depthnet 输出通道 D+C=105<span class="cite">src/models.py:46</span>。</p>
+        <p><strong>论文 ↔ 代码印证（一致项）：</strong>骨干 EfficientNet-B0（ImageNet 预训练）与 BEV 侧 resnet18 前三段 + ×4/×2 上采样逐层吻合（§4.1 ↔ <span class="cite">src/models.py:43</span><span class="cite">src/models.py:94-112</span>）；Eq.(1) 外积逐元素乘（§3.1 ↔ <span class="cite">src/models.py:57</span>）；sum-pooling + cumsum trick（§4.2 ↔ <span class="cite">src/tools.py:193-219</span>）；输入 128×352 与 BEV ±50 m、0.5 m 格、200×200 栅格亦与论文一致。</p>
+        <p><strong>差异与勘正（要点）：</strong></p>
+        <ul>
+          <li>深度区间端点：论文 §4.1 写 "D between 4.0 meters and 45.0 meters spaced by 1.0 meters"，但代码 <code>torch.arange(4.0,45.0,1.0)</code> 左闭右开——实际 41 个格中心 4.0–44.0 m，45.0 不含<span class="cite">src/models.py:157</span>，以代码为准。</li>
+          <li>相机数量：论文 §5 称 6 相机环视；代码训练默认随机抽 5（<code>ncams=5</code><span class="cite">src/train.py:29</span>；<span class="cite">src/data.py:196-201</span>），验证用全 6。</li>
+          <li>正样本权重：论文 §5 给对象分割 1.0、车道 5.0，代码默认 <code>pos_weight=2.13</code><span class="cite">src/train.py:31</span>——任务口径差异，不影响投影机制。</li>
+          <li>可训练参数量 14.3M 为论文值（§4.1），仓库无复现脚本，未在代码侧逐参数复算。</li>
+          <li>机制图编号勘正：论文 Fig.2 是动机图，lift 机制图为 Fig.3、端到端流程为 Fig.4——本节机制总览按 Fig.3 + Fig.4 重绘；另 arXiv v1 无附录，深度离散化仅有 §3.1 与 §4.1 两处描述。</li>
+        </ul>
+        <p><strong>版本锚定：</strong>本节代码均指 commit <code>2903467c</code>（2024-10-14，完整 hash 与克隆口径见页脚来源表）。</p>
       </div>
     </section>
 
