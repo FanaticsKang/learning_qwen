@@ -178,7 +178,7 @@
       <span class="subtitle">LSS · BEVFormer · TPVFormer · VoxFormer</span>
     </h1>
 
-    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、BEVFormer、TPVFormer、VoxFormer 四条路线给出了四种截然不同的答案。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、长在 2D 侧还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准，仓库地址与 commit hash 见页脚。</p>
+    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、BEVFormer、TPVFormer、VoxFormer 四条路线给出了四种截然不同的答案。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、长在 2D 侧还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第四节），仓库地址与 commit hash 见页脚。</p>
 
     <div class="legend" id="legend">
       <strong class="legend-title">统一图例</strong>
@@ -289,7 +289,7 @@
             <rect class="learnable" x="907" y="236" width="10" height="8"></rect>
             <rect class="learnable" x="927" y="240" width="10" height="4"></rect>
             <text x="724" y="168" font-size="12">各深度点特征强度 ∝ α_d·c（可学习）</text>
-            <text x="736" y="278" font-size="11.5">41 个固定深度格中心 4.0–44.0 m（Δd=1.0 m）</text>
+            <text x="736" y="278" font-size="11.5">41 个固定深度格中心（图示 11 个，示意）4.0–44.0 m（Δd=1.0 m）</text>
             <text x="703" y="296" font-size="12" text-anchor="middle">8×22 像素格（/16，固定）</text>
           </g>
 
@@ -502,7 +502,7 @@
             <text x="816" y="194" text-anchor="middle" font-size="11">FFN</text>
             <text x="816" y="210" text-anchor="middle" font-size="9">256→512</text>
             <text x="816" y="224" text-anchor="middle" font-size="9">→256＋LN</text>
-            <text x="816" y="238" text-anchor="middle" font-size="8.5">Add&amp;Norm</text>
+            <text x="816" y="238" text-anchor="middle" font-size="9.5">Add&amp;Norm</text>
 
             <rect class="learnable" x="20" y="196" width="330" height="62" rx="4"></rect>
             <text x="32" y="215" font-size="11">BEV Queries Q（可学习·3D 侧，桥的主动方）</text>
@@ -894,7 +894,7 @@
             <text x="500" y="614" text-anchor="middle" font-size="11">CVHA</text>
             <text x="500" y="629" text-anchor="middle" font-size="9.5">跨平面混合</text>
             <text x="500" y="643" text-anchor="middle" font-size="9.5">＋3-way 门控</text>
-            <text x="500" y="656" text-anchor="middle" font-size="8.5">（第 33 logit）</text>
+            <text x="500" y="656" text-anchor="middle" font-size="9.5">（第 33 logit）</text>
 
             <line class="flow" x1="538" y1="627" x2="548" y2="627"></line>
 
@@ -918,7 +918,7 @@
             <text x="802" y="614" text-anchor="middle" font-size="11">FFN</text>
             <text x="802" y="629" text-anchor="middle" font-size="9">128→256→128</text>
             <text x="802" y="643" text-anchor="middle" font-size="9">＋LN</text>
-            <text x="802" y="656" text-anchor="middle" font-size="8.5">（每层 1 组）</text>
+            <text x="802" y="656" text-anchor="middle" font-size="9.5">（每层 1 组）</text>
 
             <text x="655" y="704" text-anchor="middle" font-size="9.5" fill="#5a6570">HCAB ×3 ＝ CVHA→ICA→FFN；HAB ×2 ＝ CVHA→FFN（ICA 仅前 3 层）</text>
 
@@ -942,14 +942,14 @@
             <text x="924" y="684" text-anchor="middle" font-size="10.5">TPV 聚合</text>
             <text x="924" y="698" text-anchor="middle" font-size="9.5">广播＋双线性</text>
             <text x="924" y="712" text-anchor="middle" font-size="9.5">＋等权求和</text>
-            <text x="924" y="726" text-anchor="middle" font-size="8.5">（Eq.5·零参数）</text>
+            <text x="924" y="726" text-anchor="middle" font-size="9.5">（Eq.5·零参数）</text>
 
             <line class="flow" x1="924" y1="732" x2="924" y2="742"></line>
 
             <rect class="learnable" x="868" y="744" width="112" height="56" rx="4"></rect>
             <text x="924" y="762" text-anchor="middle" font-size="10">分割头（可学习）</text>
-            <text x="924" y="776" text-anchor="middle" font-size="8.5">Linear 128→256→128</text>
-            <text x="924" y="790" text-anchor="middle" font-size="8.5">→Linear(128,17)</text>
+            <text x="924" y="776" text-anchor="middle" font-size="9.5">Linear 128→256→128</text>
+            <text x="924" y="790" text-anchor="middle" font-size="9.5">→Linear(128,17)</text>
 
             <line class="flow" x1="924" y1="800" x2="924" y2="810"></line>
 
@@ -1072,7 +1072,7 @@
           </tr>
         </tbody>
       </table>
-      <p>张量形状按 nuScenes 口径（<code>config/tpv_lidarseg.py</code>）列写；CVHA 出现在全部 5 层（每层 1 个），ICA 出现在前 3 层 HCAB（每层 1 个），FFN 每层 1 组。要点：<strong>投影桥上的学习量＝三平面 query 表（46400×128＝5.94M，名片参数<span class="cite">tpvformer10/tpv_head.py:53-55</span>）＋ICA 的 offsets/weights/value_proj（3 层）＋CVHA 的 offsets/含平面门控的 weights（5 层<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>）＋两侧注入嵌入（cams/level embeds）</strong>；而"在哪采"的骨架——三平面正交轴锚点射线、跨视图 16 锚网格、lidar2img 投影、hit 判定、聚合阶段的投影＋双线性＋求和<span class="cite">tpvformer10/tpv_aggregator.py:83-84</span>——全部零参数。论文未给 nuScenes 口径参数量（SSC 口径 6.0M，§4.5 p.8，论文值、异口径不比较）。</p>
+      <p>张量形状按 nuScenes 口径（<code>config/tpv_lidarseg.py</code>）列写；CVHA 出现在全部 5 层（每层 1 个），ICA 出现在前 3 层 HCAB（每层 1 个），FFN 每层 1 组。要点：<strong>与投影桥相关的学习量按位置拆解＝三平面 query 表（46400×128＝5.94M，名片参数<span class="cite">tpvformer10/tpv_head.py:53-55</span>，3D 侧）＋ICA 的 offsets/weights/value_proj（3 层，桥上）＋CVHA 的 offsets/含 3-way 平面门控的 weights（5 层，3D 侧自注意力<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>）＋两侧注入嵌入（cams/level embeds）</strong>；而"在哪采"的骨架——三平面正交轴锚点射线、跨视图 16 锚网格、lidar2img 投影、hit 判定、聚合阶段的投影＋双线性＋求和<span class="cite">tpvformer10/tpv_aggregator.py:83-84</span>——全部零参数。论文未给 nuScenes 口径参数量（SSC 口径 6.0M，§4.5 p.8，论文值、异口径不比较）。</p>
 
       <h3>③ 2D-3D 关系</h3>
       <p>TPVFormer 对"2D 特征如何进入 3D"的回答可归纳为五点：</p>
@@ -1144,7 +1144,7 @@
             <rect class="fixed" x="424" y="78" width="132" height="72" rx="4"></rect>
             <text x="490" y="100" text-anchor="middle" font-size="10.5">Eq.1 深度反投影</text>
             <text x="490" y="117" text-anchor="middle" font-size="10">标定内参·零参数</text>
-            <text x="490" y="134" text-anchor="middle" font-size="10">x≥0、z＜80 过滤</text>
+            <text x="490" y="134" text-anchor="middle" font-size="10">保留 x≥0、z＜80</text>
 
             <line class="flow" x1="556" y1="114" x2="576" y2="114"></line>
 
@@ -1253,7 +1253,7 @@
             <text x="514" y="663" text-anchor="middle" font-size="9.5">掩码 deformable</text>
             <text x="514" y="679" text-anchor="middle" font-size="9.5">交叉注意力</text>
             <text x="514" y="696" text-anchor="middle" font-size="9">仅激活×命中相机参与</text>
-            <text x="514" y="736" text-anchor="middle" font-size="8.5" fill="#5a6570">÷|V_t| 均值·64 采样位/相机</text>
+            <text x="514" y="736" text-anchor="middle" font-size="9.5" fill="#5a6570">÷|V_t| 均值·64 采样位/相机</text>
 
             <line class="flow" x1="584" y1="672" x2="600" y2="672"></line>
 
@@ -1262,7 +1262,7 @@
             <text x="664" y="663" text-anchor="middle" font-size="9">激活格写入 cross 输出</text>
             <text x="664" y="679" text-anchor="middle" font-size="9">空格广播 mask token</text>
             <text x="664" y="696" text-anchor="middle" font-size="9">(N_p → 262144)</text>
-            <text x="664" y="736" text-anchor="middle" font-size="8.5" fill="#5a6570">sparse→dense</text>
+            <text x="664" y="736" text-anchor="middle" font-size="9.5" fill="#5a6570">sparse→dense</text>
 
             <line class="flow" x1="724" y1="672" x2="740" y2="672"></line>
 
@@ -1271,7 +1271,7 @@
             <text x="808" y="663" text-anchor="middle" font-size="9">deformable 自注意力</text>
             <text x="808" y="679" text-anchor="middle" font-size="9">全体 262144 voxel 互采</text>
             <text x="808" y="696" text-anchor="middle" font-size="9">＋bev_pos PE 注入</text>
-            <text x="808" y="736" text-anchor="middle" font-size="8.5" fill="#5a6570">vanilla＝512×512 平面 2D</text>
+            <text x="808" y="736" text-anchor="middle" font-size="9.5" fill="#5a6570">vanilla＝512×512 平面 2D</text>
 
             <rect class="learnable" x="20" y="624" width="240" height="96" rx="4"></rect>
             <text x="140" y="646" text-anchor="middle" font-size="11">voxel query 表 bev_embed</text>
@@ -1305,7 +1305,7 @@
 
             <rect x="896" y="782" width="96" height="66" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="944" y="804" text-anchor="middle" font-size="10.5">SSC 输出</text>
-            <text x="944" y="821" text-anchor="middle" font-size="8.5">(1,20,256,256,32)</text>
+            <text x="944" y="821" text-anchor="middle" font-size="9.5">(1,20,256,256,32)</text>
             <text x="944" y="838" text-anchor="middle" font-size="9" fill="#5a6570">（20 类·数据）</text>
 
             <text x="20" y="768" font-size="10">DCA 细则：仅 proposal 激活且落入某相机的 query 参与该相机（逐相机 rebatch）；命中相机输出求和后 ÷ 命中数＝1/|V_t|（Eq.4·固定）</text>
@@ -1436,7 +1436,7 @@
           </tr>
         </tbody>
       </table>
-      <p>张量形状按 SemanticKITTI 口径（<code>projects/configs/voxformer/voxformer-S.py</code>）列写；QPN 与深度模型为离线训练后冻结、供 stage-2 使用的产物。要点：<strong>投影桥上的学习量＝voxel query 表（262144×128＝33.55 M，名片参数<span class="cite">dense_heads/voxformer_head.py:53</span>）＋mask token＋DCA/DSA 的 offsets/weights/value_proj（3＋2 层）＋cams/level embeds＋两侧主干</strong>；而"哪些 voxel 有 query"这一稀疏化本身也是学习量（QPN），但逐帧、离线；"在哪采"的骨架——0.4 m 格心锚点、lidar2img 投影、hit 判定、命中相机均值、×2 三线性上采样——零参数。总量对账：论文 Table 6（p.8）记 VoxFormer-S 57.90 M，本表逐项加总（含 ≈23.5 M 无 fc 头 ResNet50）≈58.18 M、差 ≈0.3 M（疑来自 FPN/统计口径），记为一致（自算值，标差）。</p>
+      <p>张量形状按 SemanticKITTI 口径（<code>projects/configs/voxformer/voxformer-S.py</code>）列写；QPN 与深度模型为离线训练后冻结、供 stage-2 使用的产物。要点：<strong>与投影桥相关的学习量按位置拆解＝voxel query 表（262144×128＝33.55 M，名片参数<span class="cite">dense_heads/voxformer_head.py:53</span>，3D 侧）＋mask token（3D 侧）＋DCA 的 offsets/weights/value_proj（3 层，桥上）＋DSA 的 offsets/weights/value_proj（2 层，3D 侧自注意力）＋cams/level embeds（两侧注入）＋两侧主干（2D/3D）</strong>；而"哪些 voxel 有 query"这一稀疏化本身也是学习量（QPN），但逐帧、离线；"在哪采"的骨架——0.4 m 格心锚点、lidar2img 投影、hit 判定、命中相机均值、×2 三线性上采样——零参数。总量对账：论文 Table 6（p.8）记 VoxFormer-S 57.90 M，本表逐项加总（含 ≈23.5 M 无 fc 头 ResNet50）≈58.18 M、差 ≈0.3 M（疑来自 FPN/统计口径），记为一致（自算值，标差）。</p>
 
       <h3>③ 2D-3D 关系</h3>
       <p>VoxFormer 对"2D 特征如何进入 3D"的回答可归纳为五点：</p>
@@ -1504,8 +1504,8 @@
             <td>可学习参数位置与形态</td>
             <td><strong>全在桥两端</strong>——2D 侧：EfficientNet-B0＋up1＋depthnet（α 41 维深度分布与 c 64 维上下文的唯一来源）；BEV 侧：resnet18 式 CNN；桥上（外积／反投影／池化）零参数<span class="cite">src/models.py:46</span><span class="cite">src/models.py:90-126</span></td>
             <td><strong>3D 侧 query 主导＋桥上采样学习量</strong>——bev_embedding＋bev_pos／can_bus_mlp；桥上 SCA offsets／weights／value_proj／output_proj（每层 328,960、×6 层约 1.97M）＋cams/level embeds；2D 侧 ResNet-101-DCN＋FPN<span class="cite">modules/spatial_cross_attention.py:245-249</span></td>
-            <td><strong>3D 侧三表＋桥上采样学习量</strong>——三平面表＋逐层 pos；桥上 ICA offsets/weights/value_proj（×3 层）＋CVHA offsets／含 3-way 平面门控的 weights（×5 层）＋cams/level embeds；2D 侧 ResNet-101-DCN＋FPN<span class="cite">tpvformer10/modules/image_cross_attention.py:247-254</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span></td>
-            <td><strong>3D 侧全表＋稀疏化本身可学习</strong>——bev_embed＋mask token；桥上 DCA/DSA offsets/weights/value_proj（3＋2 层）；2D 侧 ResNet50＋FPN；QPN 门控（离线训练后冻结）与外部冻结 MSNet3D 共同决定 N_p<span class="cite">modules/deformable_cross_attention.py:249-253</span><span class="cite">detectors/lmscnet.py:67-140</span></td>
+            <td><strong>3D 侧三表＋桥上采样＋3D 侧自注意力学习量</strong>——三平面表＋逐层 pos；桥上 ICA offsets/weights/value_proj（×3 层，桥上）＋CVHA offsets／含 3-way 平面门控的 weights（×5 层，3D 侧自注意力）＋cams/level embeds；2D 侧 ResNet-101-DCN＋FPN<span class="cite">tpvformer10/modules/image_cross_attention.py:247-254</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span></td>
+            <td><strong>3D 侧全表＋稀疏化本身可学习</strong>——bev_embed＋mask token；桥上 DCA offsets/weights/value_proj（3 层，桥上）＋DSA offsets/weights/value_proj（2 层，3D 侧自注意力）；2D 侧 ResNet50＋FPN；QPN 门控（离线训练后冻结）与外部冻结 MSNet3D 共同决定 N_p<span class="cite">modules/deformable_cross_attention.py:249-253</span><span class="cite">detectors/lmscnet.py:67-140</span></td>
           </tr>
           <tr>
             <td>投影方向（推·拉）</td>
@@ -1620,11 +1620,11 @@
             <text x="980" y="172" font-size="12" fill="#D55E00" text-anchor="end">④</text>
             <text x="818" y="192" font-size="10.5" fill="#37424d">拉为主 · 推在门口（深度门控）</text>
             <rect class="learnable" x="818" y="200" width="162" height="20" rx="2"></rect>
-            <text x="899" y="214" font-size="8.5" text-anchor="middle">bev_embed (262144,128)（学的）</text>
+            <text x="899" y="214" font-size="9.5" text-anchor="middle">bev_embed (262144,128)（学的）</text>
             <rect class="fixed" x="818" y="224" width="162" height="20" rx="2"></rect>
-            <text x="899" y="238" font-size="8.5" text-anchor="middle">0.4 m 格心＋lidar2img＋hit（标的）</text>
+            <text x="899" y="238" font-size="9.5" text-anchor="middle">0.4 m 格心＋lidar2img＋hit（标的）</text>
             <rect class="learnable" x="818" y="248" width="162" height="20" rx="2"></rect>
-            <text x="899" y="262" font-size="8.5" text-anchor="middle">DCA/DSA＋QPN 门控（学的）</text>
+            <text x="899" y="262" font-size="9.5" text-anchor="middle">DCA/DSA＋QPN 门控（学的）</text>
             <text x="899" y="290" font-size="9" fill="#5a6570" text-anchor="middle">深度：显式·离线（MSNet3D·无分箱）</text>
             <text x="899" y="308" font-size="9" fill="#5a6570" text-anchor="middle">query 体 128×128×16 @0.4 m†</text>
             <text x="899" y="324" font-size="9" fill="#5a6570" text-anchor="middle">输出体 256×256×32 @0.2 m†</text>
@@ -1659,35 +1659,35 @@
       <tbody>
         <tr>
           <td>LSS</td>
-          <td><a href="https://arxiv.org/abs/2008.05711">arXiv:2008.05711</a></td>
-          <td><a href="https://github.com/nv-tlabs/lift-splat-shoot">github.com/nv-tlabs/lift-splat-shoot</a></td>
+          <td>arXiv:2008.05711</td>
+          <td>github.com/nv-tlabs/lift-splat-shoot</td>
           <td><code>2903467c91ee9c12f0917a12c22ab1f04e607ae0</code></td>
           <td>2026-10-26</td>
         </tr>
         <tr>
           <td>BEVFormer</td>
-          <td><a href="https://arxiv.org/abs/2203.17270">arXiv:2203.17270</a></td>
-          <td><a href="https://github.com/fundamentalvision/BEVFormer">github.com/fundamentalvision/BEVFormer</a></td>
+          <td>arXiv:2203.17270</td>
+          <td>github.com/fundamentalvision/BEVFormer</td>
           <td><code>66b65f3a1f58caf0507cb2a971b9c0e7f842376c</code></td>
           <td>2026-10-26</td>
         </tr>
         <tr>
           <td>TPVFormer</td>
-          <td><a href="https://arxiv.org/abs/2302.07817">arXiv:2302.07817</a></td>
-          <td><a href="https://github.com/wzzheng/TPVFormer">github.com/wzzheng/TPVFormer</a></td>
+          <td>arXiv:2302.07817</td>
+          <td>github.com/wzzheng/TPVFormer</td>
           <td><code>459bc060901c9c4920f802252f04b290a449e4a1</code></td>
           <td>2026-10-26</td>
         </tr>
         <tr>
           <td>VoxFormer</td>
-          <td><a href="https://arxiv.org/abs/2302.12251">arXiv:2302.12251</a></td>
-          <td><a href="https://github.com/NVlabs/VoxFormer">github.com/NVlabs/VoxFormer</a></td>
+          <td>arXiv:2302.12251</td>
+          <td>github.com/NVlabs/VoxFormer</td>
           <td><code>63da92415447c2e97654bad977254c907f5ce703</code></td>
           <td>2026-10-26</td>
         </tr>
       </tbody>
     </table>
-    <p class="footer-note">四仓均为 2026-10-26 以 <code>--depth 1</code> 浅克隆的默认分支；文中具体数字若无特别说明，均取自上表 commit 下的 nuScenes 配置口径，代码中找不到的标注"论文值，代码未见"。</p>
+    <p class="footer-note">四仓均为 2026-10-26 以 <code>--depth 1</code> 浅克隆的默认分支；文中具体数字若无特别说明，均取自上表 commit 下的 nuScenes 配置口径（VoxFormer 例外：原生 SemanticKITTI，见第四节），代码中找不到的标注"论文值，代码未见"。</p>
   </footer>
 
 </div>
