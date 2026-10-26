@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四种 2D→3D 投影机制：可学习参数与固定几何的分工 · LSS / BEVFormer / TPVFormer / VoxFormer</title>
+<style>
+  :root {
+    --c-learn-fill: #FBE3C8;   /* 可学习：浅橙填充 */
+    --c-learn-line: #D55E00;   /* 可学习：橙描边（Okabe-Ito 朱红） */
+    --c-fixed-fill: #E8F1F8;   /* 固定：浅蓝底 */
+    --c-fixed-line: #0072B2;   /* 固定：蓝描边（Okabe-Ito 蓝） */
+    --c-flow: #4A5560;         /* 数据流箭头 */
+    --ink: #24292f;
+    --muted: #5a6570;
+    --line: #d0d7de;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    color: var(--ink);
+    background: #ffffff;
+    line-height: 1.75;
+    font-size: 16px;
+  }
+  .page { max-width: 940px; margin: 0 auto; padding: 40px 24px 72px; }
+  a { color: #0969da; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.9em;
+    background: #f0f3f6;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ---- 头部 ---- */
+  h1 { font-size: 1.85em; line-height: 1.4; margin: 0; }
+  .subtitle {
+    display: block;
+    font-size: 0.55em;
+    font-weight: 600;
+    color: #4a5560;
+    letter-spacing: 1px;
+    margin-top: 8px;
+  }
+  .intro { margin: 20px 0 0; text-align: left; }
+
+  /* ---- 统一图例条（全局，页首一条） ---- */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 24px;
+    padding: 10px 16px;
+    background: #fbfcfd;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .legend .legend-title { flex: none; font-size: 0.95em; color: #37424d; }
+  .legend svg { display: block; max-width: 100%; height: auto; }
+  .legend svg text { font-size: 14px; fill: #2b3440; font-family: inherit; }
+
+  /* ---- 目录 ---- */
+  .toc {
+    margin-top: 18px;
+    background: #fbfcfd;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 22px;
+  }
+  .toc h2 { font-size: 1.05em; border: none; margin: 0 0 4px; padding: 0; }
+  .toc ol { margin: 0; padding-left: 1.7em; }
+  .toc li { margin: 3px 0; text-align: left; }
+
+  /* ---- 章节 ---- */
+  section { margin-top: 64px; scroll-margin-top: 12px; }
+  h2 {
+    font-size: 1.42em;
+    line-height: 1.5;
+    margin: 0 0 4px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+  }
+  h2 .tag {
+    display: inline-block;
+    font-size: 0.62em;
+    font-weight: 500;
+    color: #4a5560;
+    background: #f0f3f6;
+    border-radius: 4px;
+    padding: 2px 10px;
+    margin-left: 10px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  h3 { font-size: 1.12em; margin: 26px 0 10px; }
+
+  /* ---- 统一视觉编码（SVG 元素类，后续任务直接复用） ---- */
+  .learnable { fill: var(--c-learn-fill); stroke: var(--c-learn-line); stroke-width: 2; }
+  .fixed { fill: url(#hatch-fixed); stroke: var(--c-fixed-line); stroke-width: 2; stroke-dasharray: 6 4; }
+  .flow { stroke: var(--c-flow); stroke-width: 2; fill: none; marker-end: url(#arrow-flow); }
+
+  /* ---- 结构类 ---- */
+  .panel {
+    border: 1px solid var(--line);
+    background: #fcfdfe;
+    border-radius: 6px;
+    padding: 14px;
+    margin: 10px 0 18px;
+  }
+  .param-table { border-collapse: collapse; width: 100%; font-size: 0.95em; margin: 10px 0 18px; }
+  .param-table th, .param-table td {
+    border: 1px solid #d8dee4;
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .param-table thead th { background: #eef2f6; font-weight: 600; }
+  .param-table .placeholder-cell { color: #8a94a0; font-style: italic; background: #fafbfc; }
+  .code-check {
+    border: 1px solid var(--line);
+    border-left: 4px solid #6b7785;
+    background: #f7f9fa;
+    border-radius: 5px;
+    padding: 12px 16px;
+    margin: 10px 0 18px;
+    font-size: 0.96em;
+  }
+  .cite {
+    font-size: 0.82em;
+    color: #5a6b7a;
+    background: #eef2f6;
+    border-radius: 3px;
+    padding: 0 5px;
+    margin-left: 3px;
+    white-space: nowrap;
+  }
+  .placeholder {
+    margin: 8px 0 16px;
+    padding: 12px 16px;
+    color: #8a94a0;
+    background: #fafbfc;
+    border: 1px dashed #c4ccd4;
+    border-radius: 5px;
+    font-size: 0.95em;
+  }
+
+  /* ---- 页脚 ---- */
+  footer { margin-top: 88px; border-top: 2px solid var(--line); padding-top: 26px; }
+  footer h2 { font-size: 1.2em; }
+  .footer-note { color: var(--muted); font-size: 0.92em; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+
+<!-- 共享 SVG defs：数据流箭头 marker 与固定几何斜纹 pattern。
+     后续任务的机制图 SVG 直接引用 url(#arrow-flow) 与 url(#hatch-fixed)，勿删本块。 -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <marker id="arrow-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#4A5560"></path>
+    </marker>
+    <pattern id="hatch-fixed" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="6" height="6" fill="#E8F1F8"></rect>
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#9DC3E6" stroke-width="2"></line>
+    </pattern>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <header>
+    <h1>四种 2D→3D 投影机制：可学习参数与固定几何的分工
+      <span class="subtitle">LSS · BEVFormer · TPVFormer · VoxFormer</span>
+    </h1>
+
+    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、BEVFormer、TPVFormer、VoxFormer 四条路线给出了四种截然不同的答案。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、长在 2D 侧还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准，仓库地址与 commit hash 见页脚。</p>
+
+    <div class="legend" id="legend">
+      <strong class="legend-title">统一图例</strong>
+      <svg viewBox="0 0 730 44" width="730" role="img" aria-label="图例：可学习参数为橙色实线，固定几何为蓝色虚线加斜纹，数据流为灰色箭头">
+        <rect class="learnable" x="8" y="9" width="34" height="20" rx="3"></rect>
+        <line class="learnable" x1="52" y1="19" x2="88" y2="19"></line>
+        <text x="96" y="24">可学习参数载体（橙 · 实线）</text>
+        <rect class="fixed" x="300" y="9" width="34" height="20" rx="3"></rect>
+        <line class="fixed" x1="344" y1="19" x2="380" y2="19"></line>
+        <text x="388" y="24">固定几何（蓝 · 虚线 + 斜纹）</text>
+        <line class="flow" x1="610" y1="19" x2="654" y2="19"></line>
+        <text x="666" y="24">数据流</text>
+      </svg>
+    </div>
+
+    <nav class="toc">
+      <h2>目录</h2>
+      <ol>
+        <li><a href="#sec-lss">LSS：Lift, Splat, Shoot —— 无 query，学习全在 2D 侧</a></li>
+        <li><a href="#sec-bevformer">BEVFormer：稠密 BEV query 的空间交叉注意力（3D 侧拉取）</a></li>
+        <li><a href="#sec-tpvformer">TPVFormer：三平面（TPV）压缩 query</a></li>
+        <li><a href="#sec-voxformer">VoxFormer：深度门控的稀疏 voxel query</a></li>
+        <li><a href="#sec-summary">汇总对比：可学习参数的位置与形态 × 投影方向</a></li>
+      </ol>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- ======================= 一、LSS ======================= -->
+    <section id="sec-lss">
+      <h2>一、LSS：Lift, Splat, Shoot<span class="tag">谱系定位：无 query，学习全在 2D 侧</span></h2>
+
+      <h3>① 机制总览</h3>
+      <div class="panel">
+        <!-- 占位：机制总览 SVG 由后续任务绘制（lift 视锥 / splat 池化，区分可学习参数与固定几何） -->
+        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+      </div>
+
+      <h3>② 可学习参数清单</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>③ 2D-3D 关系</h3>
+      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+
+      <h3>④ 代码校对</h3>
+      <div class="code-check">
+        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+      </div>
+    </section>
+
+    <!-- ======================= 二、BEVFormer ======================= -->
+    <section id="sec-bevformer">
+      <h2>二、BEVFormer：稠密 BEV query 的空间交叉注意力<span class="tag">谱系定位：稠密 query，3D 侧拉取（pull）</span></h2>
+
+      <h3>① 机制总览</h3>
+      <div class="panel">
+        <!-- 占位：机制总览 SVG 由后续任务绘制（空间交叉注意力的柱采样，区分可学习参数与固定几何） -->
+        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+      </div>
+
+      <h3>② 可学习参数清单</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>③ 2D-3D 关系</h3>
+      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+
+      <h3>④ 代码校对</h3>
+      <div class="code-check">
+        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+      </div>
+    </section>
+
+    <!-- ======================= 三、TPVFormer ======================= -->
+    <section id="sec-tpvformer">
+      <h2>三、TPVFormer：三平面（TPV）压缩 query<span class="tag">谱系定位：三平面压缩 query</span></h2>
+
+      <h3>① 机制总览</h3>
+      <div class="panel">
+        <!-- 占位：机制总览 SVG 由后续任务绘制（TPV 三平面流水线，区分可学习参数与固定几何） -->
+        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+      </div>
+
+      <h3>② 可学习参数清单</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>③ 2D-3D 关系</h3>
+      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+
+      <h3>④ 代码校对</h3>
+      <div class="code-check">
+        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+      </div>
+    </section>
+
+    <!-- ======================= 四、VoxFormer ======================= -->
+    <section id="sec-voxformer">
+      <h2>四、VoxFormer：深度门控的稀疏 voxel query<span class="tag">谱系定位：深度门控的稀疏 query</span></h2>
+
+      <h3>① 机制总览</h3>
+      <div class="panel">
+        <!-- 占位：机制总览 SVG 由后续任务绘制（两阶段稀疏 query，区分可学习参数与固定几何） -->
+        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+      </div>
+
+      <h3>② 可学习参数清单</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>③ 2D-3D 关系</h3>
+      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+
+      <h3>④ 代码校对</h3>
+      <div class="code-check">
+        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+      </div>
+    </section>
+
+    <!-- ======================= 五、汇总 ======================= -->
+    <section id="sec-summary">
+      <h2>五、汇总对比<span class="tag">谱系：无 query → 稠密 query → 三平面压缩 query → 深度门控稀疏 query</span></h2>
+
+      <h3>四家对比大表</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>维度</th><th>LSS</th><th>BEVFormer</th><th>TPVFormer</th><th>VoxFormer</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="5" class="placeholder-cell">占位：四家对比大表由后续任务填充（投影方向、深度显隐、可学习参数位置与形态等维度）。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>谱系总览图</h3>
+      <div class="panel">
+        <!-- 占位：谱系总览 SVG 由后续任务绘制（可学习参数的位置与形态 × 投影方向） -->
+        <p class="placeholder">占位：谱系总览 SVG（可学习参数的位置与形态 × 投影方向，统一视觉编码）。</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <h2>来源与版本锚定</h2>
+    <table class="param-table">
+      <thead>
+        <tr><th>模型</th><th>论文</th><th>代码仓库</th><th>commit hash</th><th>克隆日期</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>LSS</td>
+          <td><a href="https://arxiv.org/abs/2008.05711">arXiv:2008.05711</a></td>
+          <td><a href="https://github.com/nv-tlabs/lift-splat-shoot">github.com/nv-tlabs/lift-splat-shoot</a></td>
+          <td><code>2903467c91ee9c12f0917a12c22ab1f04e607ae0</code></td>
+          <td>2026-10-26</td>
+        </tr>
+        <tr>
+          <td>BEVFormer</td>
+          <td><a href="https://arxiv.org/abs/2203.17270">arXiv:2203.17270</a></td>
+          <td><a href="https://github.com/fundamentalvision/BEVFormer">github.com/fundamentalvision/BEVFormer</a></td>
+          <td><code>66b65f3a1f58caf0507cb2a971b9c0e7f842376c</code></td>
+          <td>2026-10-26</td>
+        </tr>
+        <tr>
+          <td>TPVFormer</td>
+          <td><a href="https://arxiv.org/abs/2302.07817">arXiv:2302.07817</a></td>
+          <td><a href="https://github.com/wzzheng/TPVFormer">github.com/wzzheng/TPVFormer</a></td>
+          <td><code>459bc060901c9c4920f802252f04b290a449e4a1</code></td>
+          <td>2026-10-26</td>
+        </tr>
+        <tr>
+          <td>VoxFormer</td>
+          <td><a href="https://arxiv.org/abs/2302.12251">arXiv:2302.12251</a></td>
+          <td><a href="https://github.com/NVlabs/VoxFormer">github.com/NVlabs/VoxFormer</a></td>
+          <td><code>63da92415447c2e97654bad977254c907f5ce703</code></td>
+          <td>2026-10-26</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="footer-note">四仓均为 2026-10-26 以 <code>--depth 1</code> 浅克隆的默认分支；文中具体数字若无特别说明，均取自上表 commit 下的 nuScenes 配置口径，代码中找不到的标注"论文值，代码未见"。</p>
+  </footer>
+
+</div>
+
+</body>
+</html>
