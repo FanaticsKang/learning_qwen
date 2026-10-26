@@ -1106,10 +1106,218 @@
     <section id="sec-voxformer">
       <h2>四、VoxFormer：深度门控的稀疏 voxel query<span class="tag">谱系定位：深度门控的稀疏 query</span></h2>
 
+      <div class="code-check">
+        <p><strong>口径例外（本节必读）：</strong>本页 LSS／BEVFormer／TPVFormer 三节均按各家官方仓的 nuScenes 配置口径列写；VoxFormer 是四家中唯一没有 nuScenes 支持的一家——官方仓 README 的数据集勾选框中 nuScenes 未实现<span class="cite">README.md:56-58</span>，论文全文 0 次提及 nuScenes（13 页 PDF 全文检索），仓内唯一可运行口径是 SemanticKITTI 单目（cam2）SSC（stage-1 配置用 <code>SemanticKittiDatasetStage1</code>＋'./kitti/'<span class="cite">projects/configs/voxformer/qpn.py:60-61</span>；<code>qpn.py:19-23</code> 的 nuScenes class_names 为死配置）。故本节按其原生 SemanticKITTI 口径（<code>voxformer-S.py</code> 配置）列写，页脚"数字均取 nuScenes 配置口径"的总说明自本节起让位于此例外；四家横向对比时需注意数据集差异。</p>
+      </div>
+
       <h3>① 机制总览</h3>
       <div class="panel">
-        <!-- 占位：机制总览 SVG 由后续任务绘制（两阶段稀疏 query，区分可学习参数与固定几何） -->
-        <p class="placeholder">占位：机制总览 SVG（参考论文原图重绘，统一视觉编码）。</p>
+        <svg viewBox="0 0 1000 878" role="img" aria-label="VoxFormer 机制图：上半为 Stage-1 离线深度门控 query 提议（重绘自论文 Fig.2 上排），下半为 Stage-2 在线拉取与 MAE 式补全（重绘自 Fig.2 下排）；voxel query 表、mask token、QPN、DCA/DSA 采样偏移与两侧主干可学习，深度反投影、光线投射、格心锚点、lidar2img 投影与上采样为固定几何">
+          <!-- ===== A · Stage-1 离线深度门控（重绘自论文 Fig.2 上排）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · Stage-1 深度门控 query 提议（重绘自论文 Fig.2 上排）：全部离线预处理——深度不进在线图，只决定哪些 voxel 有 query</text>
+
+            <rect x="12" y="42" width="976" height="352" rx="8" fill="none" stroke="#8a94a0" stroke-width="1.5" stroke-dasharray="8 5"></rect>
+            <text x="26" y="64" font-size="11" font-weight="600" fill="#37424d">离线预处理（preprocess/ 三脚本＋qpn.py）——论文把这段画在 pipeline 内，代码全部离线</text>
+
+            <rect x="20" y="78" width="104" height="72" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="72" y="100" text-anchor="middle" font-size="10.5">KITTI 立体对</text>
+            <text x="72" y="117" text-anchor="middle" font-size="10">image_2/3</text>
+            <text x="72" y="134" text-anchor="middle" font-size="9.5" fill="#5a6570">（数据）</text>
+
+            <line class="flow" x1="124" y1="114" x2="144" y2="114"></line>
+
+            <rect class="learnable" x="148" y="78" width="124" height="72" rx="4"></rect>
+            <text x="210" y="100" text-anchor="middle" font-size="11">MSNet3D</text>
+            <text x="210" y="117" text-anchor="middle" font-size="10">立体深度估计</text>
+            <text x="210" y="134" text-anchor="middle" font-size="9">外部预训练·冻结</text>
+
+            <line class="flow" x1="272" y1="114" x2="292" y2="114"></line>
+
+            <rect x="296" y="78" width="104" height="72" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="348" y="100" text-anchor="middle" font-size="10.5">连续深度图 Z(u,v)</text>
+            <text x="348" y="117" text-anchor="middle" font-size="9.5">（离线·无分箱）</text>
+            <text x="348" y="134" text-anchor="middle" font-size="9.5" fill="#5a6570">（数据）</text>
+
+            <line class="flow" x1="400" y1="114" x2="420" y2="114"></line>
+
+            <rect class="fixed" x="424" y="78" width="132" height="72" rx="4"></rect>
+            <text x="490" y="100" text-anchor="middle" font-size="10.5">Eq.1 深度反投影</text>
+            <text x="490" y="117" text-anchor="middle" font-size="10">标定内参·零参数</text>
+            <text x="490" y="134" text-anchor="middle" font-size="10">x≥0、z＜80 过滤</text>
+
+            <line class="flow" x1="556" y1="114" x2="576" y2="114"></line>
+
+            <rect class="fixed" x="580" y="78" width="140" height="72" rx="4"></rect>
+            <text x="650" y="100" text-anchor="middle" font-size="10.5">10-sweep 累积</text>
+            <text x="650" y="117" text-anchor="middle" font-size="10">log-odds 光线投射</text>
+            <text x="650" y="134" text-anchor="middle" font-size="9.5">→伪占用 256×256×32</text>
+
+            <line class="flow" x1="720" y1="114" x2="740" y2="114"></line>
+
+            <rect class="learnable" x="744" y="78" width="152" height="72" rx="4"></rect>
+            <text x="820" y="100" text-anchor="middle" font-size="10.5">QPN 占用预测</text>
+            <text x="820" y="117" text-anchor="middle" font-size="10">LMSCNet_SS</text>
+            <text x="820" y="134" text-anchor="middle" font-size="9">2D U-Net＋3D ASPP 头</text>
+
+            <line class="flow" x1="825" y1="150" x2="825" y2="226"></line>
+
+            <rect x="750" y="230" width="150" height="44" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="825" y="248" text-anchor="middle" font-size="10.5">proposal 掩码 Qp</text>
+            <text x="825" y="266" text-anchor="middle" font-size="9.5">(128,128,16) 二值（数据）</text>
+
+            <line class="flow" x1="750" y1="252" x2="352" y2="252"></line>
+
+            <!-- query 体网格（名场面：满网格、稀疏激活） -->
+            <path class="fixed" d="M 30 240 L 300 240 L 350 208 L 80 208 Z"></path>
+            <path class="fixed" d="M 300 240 L 350 208 L 350 298 L 300 330 Z"></path>
+            <rect class="fixed" x="30" y="240" width="270" height="90"></rect>
+            <line x1="57" y1="240" x2="57" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="84" y1="240" x2="84" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="111" y1="240" x2="111" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="138" y1="240" x2="138" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="165" y1="240" x2="165" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="192" y1="240" x2="192" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="219" y1="240" x2="219" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="246" y1="240" x2="246" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="273" y1="240" x2="273" y2="330" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="30" y1="262" x2="300" y2="262" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="30" y1="285" x2="300" y2="285" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="30" y1="307" x2="300" y2="307" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="114" y1="240" x2="164" y2="208" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="198" y1="240" x2="248" y2="208" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="282" y1="240" x2="332" y2="208" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="55" y1="224" x2="325" y2="224" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="317" y1="229" x2="317" y2="319" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="333" y1="219" x2="333" y2="309" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="300" y1="270" x2="350" y2="238" stroke="#9DC3E6" stroke-width="1"></line>
+            <line x1="300" y1="300" x2="350" y2="268" stroke="#9DC3E6" stroke-width="1"></line>
+            <rect x="57" y="240" width="27" height="22" fill="#FBE3C8" stroke="#D55E00" stroke-width="1.2"></rect>
+            <rect x="138" y="285" width="27" height="22" fill="#FBE3C8" stroke="#D55E00" stroke-width="1.2"></rect>
+            <rect x="192" y="262" width="27" height="22" fill="#FBE3C8" stroke="#D55E00" stroke-width="1.2"></rect>
+            <rect x="246" y="307" width="27" height="22" fill="#FBE3C8" stroke="#D55E00" stroke-width="1.2"></rect>
+            <path fill="#FBE3C8" stroke="#D55E00" stroke-width="1.2" d="M 317 229 L 327 223 L 327 245 L 317 251 Z"></path>
+            <path fill="#FBE3C8" stroke="#D55E00" stroke-width="1.2" d="M 138 240 L 165 240 L 170 237 L 143 237 Z"></path>
+
+            <text x="20" y="349" font-size="10.5">query 体网格 128×128×16 @0.4 m（N_q＝262,144，输出体 1/8 降采样）</text>
+            <text x="20" y="367" font-size="10" fill="#D55E00">橙格＝Qp 选中＝该 voxel 获得 query（N_p 逐帧数据相关，无固定比例）</text>
+            <text x="20" y="385" font-size="10" fill="#5a6570">其余格＝masked——stage-2 由可学习 mask token 补齐（见 B）</text>
+
+            <text x="400" y="296" font-size="10">论文 Table 4 消融：occupancy 稀疏 query 44.0 IoU／14.6 G</text>
+            <text x="400" y="314" font-size="10">vs 100% dense 34.6 IoU／18.5 G——稀疏既省显存又涨点</text>
+
+            <path class="flow" d="M 825 274 L 825 357 L 672 357"></path>
+            <rect x="400" y="335" width="270" height="44" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="535" y="353" text-anchor="middle" font-size="9.5">bit-pack .query 文件（QPN 指标标注于文件名）</text>
+            <text x="535" y="371" text-anchor="middle" font-size="9.5">离线→在线唯一接口（数据）</text>
+          </g>
+
+          <line x1="16" y1="408" x2="984" y2="408" stroke="#d0d7de" stroke-width="1"></line>
+
+          <!-- ===== B · Stage-2 在线拉取＋补全（重绘自论文 Fig.2 下排）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="432" font-size="14" font-weight="600" fill="#37424d">B · Stage-2 在线拉取＋补全（重绘自论文 Fig.2 下排）：格心标定定锚拉特征，mask token 补空格</text>
+
+            <rect x="20" y="470" width="110" height="64" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="75" y="494" text-anchor="middle" font-size="10.5">cam2 单目图像</text>
+            <text x="75" y="511" text-anchor="middle" font-size="9.5">(1,3,370,1220)</text>
+            <text x="75" y="527" text-anchor="middle" font-size="9" fill="#5a6570">（数据）</text>
+
+            <line class="flow" x1="130" y1="502" x2="146" y2="502"></line>
+
+            <rect class="learnable" x="148" y="464" width="252" height="80" rx="4"></rect>
+            <text x="274" y="488" text-anchor="middle" font-size="11">Backbone＋FPN（可学习）</text>
+            <text x="274" y="506" text-anchor="middle" font-size="9.5">ResNet50 C3@/16 → FPN 128ch</text>
+            <text x="274" y="523" text-anchor="middle" font-size="9.5">＋cams/level embeds 注入</text>
+
+            <line class="flow" x1="400" y1="504" x2="422" y2="504"></line>
+
+            <rect x="424" y="470" width="176" height="64" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="512" y="494" text-anchor="middle" font-size="10.5">图像特征 F2D</text>
+            <text x="512" y="511" text-anchor="middle" font-size="9.5">(1, 1848, B, 128)</text>
+            <text x="512" y="527" text-anchor="middle" font-size="9" fill="#5a6570">（数据·24×77 token）</text>
+
+            <line class="flow" x1="512" y1="534" x2="512" y2="620"></line>
+
+            <rect class="learnable" x="612" y="528" width="104" height="48" rx="4"></rect>
+            <text x="664" y="548" text-anchor="middle" font-size="10">mask token</text>
+            <text x="664" y="566" text-anchor="middle" font-size="9">mask_embed (1,128)</text>
+
+            <line class="flow" x1="664" y1="576" x2="664" y2="620"></line>
+
+            <rect x="434" y="596" width="446" height="150" rx="6" fill="none" stroke="#8a94a0" stroke-width="1.5" stroke-dasharray="8 5"></rect>
+            <text x="676" y="614" font-size="11" font-weight="600" fill="#37424d">Stage-2 在线（DCA×3 → 补全 → DSA×2）</text>
+
+            <rect class="learnable" x="444" y="624" width="140" height="96" rx="4"></rect>
+            <text x="514" y="646" text-anchor="middle" font-size="11">DCA ×3</text>
+            <text x="514" y="663" text-anchor="middle" font-size="9.5">掩码 deformable</text>
+            <text x="514" y="679" text-anchor="middle" font-size="9.5">交叉注意力</text>
+            <text x="514" y="696" text-anchor="middle" font-size="9">仅激活×命中相机参与</text>
+            <text x="514" y="736" text-anchor="middle" font-size="8.5" fill="#5a6570">÷|V_t| 均值·64 采样位/相机</text>
+
+            <line class="flow" x1="584" y1="672" x2="600" y2="672"></line>
+
+            <rect class="learnable" x="604" y="624" width="120" height="96" rx="4"></rect>
+            <text x="664" y="646" text-anchor="middle" font-size="11">MAE 式补全</text>
+            <text x="664" y="663" text-anchor="middle" font-size="9">激活格写入 cross 输出</text>
+            <text x="664" y="679" text-anchor="middle" font-size="9">空格广播 mask token</text>
+            <text x="664" y="696" text-anchor="middle" font-size="9">(N_p → 262144)</text>
+            <text x="664" y="736" text-anchor="middle" font-size="8.5" fill="#5a6570">sparse→dense</text>
+
+            <line class="flow" x1="724" y1="672" x2="740" y2="672"></line>
+
+            <rect class="learnable" x="744" y="624" width="128" height="96" rx="4"></rect>
+            <text x="808" y="646" text-anchor="middle" font-size="11">DSA ×2</text>
+            <text x="808" y="663" text-anchor="middle" font-size="9">deformable 自注意力</text>
+            <text x="808" y="679" text-anchor="middle" font-size="9">全体 262144 voxel 互采</text>
+            <text x="808" y="696" text-anchor="middle" font-size="9">＋bev_pos PE 注入</text>
+            <text x="808" y="736" text-anchor="middle" font-size="8.5" fill="#5a6570">vanilla＝512×512 平面 2D</text>
+
+            <rect class="learnable" x="20" y="624" width="240" height="96" rx="4"></rect>
+            <text x="140" y="646" text-anchor="middle" font-size="11">voxel query 表 bev_embed</text>
+            <text x="140" y="663" text-anchor="middle" font-size="10">(262144,128)＝33.55 M</text>
+            <text x="140" y="679" text-anchor="middle" font-size="9.5">（名片参数·桥的主动方）</text>
+            <text x="140" y="696" text-anchor="middle" font-size="9">每帧仅 N_p 行激活（Qp 决定）</text>
+
+            <line class="flow" x1="260" y1="672" x2="274" y2="672"></line>
+
+            <rect class="fixed" x="276" y="624" width="140" height="96" rx="4"></rect>
+            <text x="346" y="646" text-anchor="middle" font-size="10">固定几何·零参数</text>
+            <text x="346" y="663" text-anchor="middle" font-size="9.5">0.4 m 格心锚点</text>
+            <text x="346" y="679" text-anchor="middle" font-size="9.5">lidar2img 投影</text>
+            <text x="346" y="696" text-anchor="middle" font-size="9">hit 判定 z&gt;1e-5</text>
+
+            <line class="flow" x1="416" y1="672" x2="440" y2="672"></line>
+
+            <line class="flow" x1="872" y1="672" x2="894" y2="672"></line>
+
+            <rect class="fixed" x="896" y="646" width="96" height="52" rx="4"></rect>
+            <text x="944" y="668" text-anchor="middle" font-size="9.5">×2 三线性上采样</text>
+            <text x="944" y="686" text-anchor="middle" font-size="9">（零参数）</text>
+
+            <line class="flow" x1="944" y1="698" x2="944" y2="710"></line>
+
+            <rect class="learnable" x="896" y="712" width="96" height="56" rx="4"></rect>
+            <text x="944" y="734" text-anchor="middle" font-size="10">Header MLP</text>
+            <text x="944" y="752" text-anchor="middle" font-size="9">LN＋Linear(128→20)</text>
+
+            <line class="flow" x1="944" y1="768" x2="944" y2="780"></line>
+
+            <rect x="896" y="782" width="96" height="66" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="944" y="804" text-anchor="middle" font-size="10.5">SSC 输出</text>
+            <text x="944" y="821" text-anchor="middle" font-size="8.5">(1,20,256,256,32)</text>
+            <text x="944" y="838" text-anchor="middle" font-size="9" fill="#5a6570">（20 类·数据）</text>
+
+            <text x="20" y="768" font-size="10">DCA 细则：仅 proposal 激活且落入某相机的 query 参与该相机（逐相机 rebatch）；命中相机输出求和后 ÷ 命中数＝1/|V_t|（Eq.4·固定）</text>
+            <text x="20" y="786" font-size="10">采样密度：每 query 每命中相机 64 采样位＝8 头×1 层×8 点；DSA 每 voxel 8 头×8 点体间互采</text>
+            <text x="20" y="804" font-size="10">差异①（PE 注入点）：论文说 PE 加进 voxel query，代码 cross-attn 分支 query_pos=None——PE 只进 DSA（本图 pos 仅标于 DSA 入口）</text>
+            <text x="20" y="822" font-size="10">差异②（DSA 采样空间）：vanilla 在压平索引的 512×512 参考平面做 2D deformable 采样、非真 3D；deform3D 变体才是真 3D（S-3D 44.42＞S 44.02）</text>
+            <text x="20" y="840" font-size="10">形状流：(1,3,370,1220) → (1,1848,B,128) → 激活 (N_p,B,128) → 补全 (262144,128) → (1,20,256,256,32)</text>
+
+            <text x="500" y="862" text-anchor="middle" font-size="11" fill="#4a5560">构图要旨：深度把 query 推稀 · 标定把特征拉准 · 学习填满其余——四家中唯一由深度显式决定 query 集合</text>
+          </g>
+        </svg>
+        <p>拉为主、推在门口：在线主体是拉（pull）——3D voxel query 以自身 0.4 m 格心<span class="cite">dense_heads/voxformer_head.py:191-216</span>经固定 <code>lidar2img</code> 投到图像、判 hit 后在命中相机上 deformable 采样"拉"取特征<span class="cite">modules/encoder.py:94-149</span><span class="cite">modules/deformable_cross_attention.py:140-176</span>（与 BEVFormer/TPVFormer 同为 MSDA 血统）；但进入在线模型之前有一次决定性的"推"（push）——像素深度经 Eq.1 反投影、光线投射、QPN 修正后形成 proposal 掩码，<strong>哪些 3D 位置有 query 由深度提议动态决定</strong>（"深度门控稀疏化"）。query 内容取自全网格可学习表 <code>bev_embed</code>（(262144,128)＝33.55 M，名片参数<span class="cite">dense_heads/voxformer_head.py:53</span>），每帧仅 N_p 行被激活；stage-2 用可学习 mask token 把空格补齐后经 DSA 稠密化（MAE 式 sparse-to-dense<span class="cite">dense_heads/voxformer_head.py:110-113</span>）。</p>
       </div>
 
       <h3>② 可学习参数清单</h3>
@@ -1118,16 +1326,149 @@
           <tr><th>参数名</th><th>张量形状</th><th>挂载侧</th><th>代码出处</th></tr>
         </thead>
         <tbody>
-          <tr><td colspan="4" class="placeholder-cell">占位：可学习参数清单由后续任务填充（参数名 / 张量形状 / 挂载侧：2D 侧、3D 侧或桥上 / 代码出处：文件 + 函数）。</td></tr>
+          <tr>
+            <td><code>bev_embed</code>（voxel query 表，本模型的名片参数）</td>
+            <td><code>nn.Embedding(128×128×16, 128)</code>＝(262144,128)，33.55 M</td>
+            <td>3D 侧（桥的主动方；每帧仅 N_p 行被激活）</td>
+            <td><span class="cite">dense_heads/voxformer_head.py:53</span> <span class="cite">voxformer-S.py:51-53</span></td>
+          </tr>
+          <tr>
+            <td><code>mask_embed</code>（mask token，论文 §3.3 的 m∈R^d）</td>
+            <td><code>nn.Embedding(1,128)</code>＝(1,128)，128</td>
+            <td>3D 侧（补全端）</td>
+            <td><span class="cite">dense_heads/voxformer_head.py:54</span> <span class="cite">dense_heads/voxformer_head.py:113</span></td>
+          </tr>
+          <tr>
+            <td>位置编码 <code>row_embed</code>＋<code>col_embed</code>（mmdet <code>LearnedPositionalEncoding</code>，外部库类）</td>
+            <td>各 <code>Embedding(512,64)</code>，输出拼 128 维/位置（512×512 表）</td>
+            <td>3D 侧（<strong>仅 DSA 注入</strong>，见 ④ 差异①）</td>
+            <td><span class="cite">voxformer-S.py:128-132</span> <span class="cite">dense_heads/voxformer_head.py:55</span> <span class="cite">modules/encoder.py:349-361</span></td>
+          </tr>
+          <tr>
+            <td><code>cams_embeds</code></td>
+            <td>(1,128)（T 变体 (5,128)）</td>
+            <td>桥（2D 特征侧注入）</td>
+            <td><span class="cite">modules/transformer.py:69-70</span> <span class="cite">modules/transformer.py:120-121</span></td>
+          </tr>
+          <tr>
+            <td><code>level_embeds</code></td>
+            <td>(4,128)（默认 num_feature_levels=4，实际 1 level 仅 [0] 行用）</td>
+            <td>桥（2D 特征侧注入）</td>
+            <td><span class="cite">modules/transformer.py:40</span> <span class="cite">modules/transformer.py:67-68</span> <span class="cite">modules/transformer.py:122-123</span></td>
+          </tr>
+          <tr>
+            <td><code>img_backbone</code>（ResNet50，C3 出口，frozen_stages=1：stem＋layer1 冻结）</td>
+            <td>1024ch@/16（mmdet 版无 fc 头，≈23.5 M）</td>
+            <td>2D 侧</td>
+            <td><span class="cite">voxformer-S.py:31-40</span> <span class="cite">detectors/voxformer.py:61</span></td>
+          </tr>
+          <tr>
+            <td><code>img_neck</code>（FPN：1×1 1024→128＋on_output 3×3）</td>
+            <td>单层 128ch，≈0.28 M</td>
+            <td>2D 侧</td>
+            <td><span class="cite">voxformer-S.py:41-48</span></td>
+          </tr>
+          <tr>
+            <td>DCA <code>output_proj</code> ×3 层</td>
+            <td><code>Linear(128,128)</code>，每层 16,512</td>
+            <td>桥（聚合后）</td>
+            <td><span class="cite">modules/deformable_cross_attention.py:71</span> <span class="cite">modules/deformable_cross_attention.py:177</span></td>
+          </tr>
+          <tr>
+            <td>DCA <code>sampling_offsets</code> ×3 层</td>
+            <td><code>Linear(128, 8头×1level×8点×2=128)</code>，每层 16,512；零初始化＋bias 放射状网格</td>
+            <td>桥（拉取路径的学习偏移）</td>
+            <td><span class="cite">modules/deformable_cross_attention.py:249-250</span> <span class="cite">modules/deformable_cross_attention.py:259-271</span></td>
+          </tr>
+          <tr>
+            <td>DCA <code>attention_weights</code> ×3 层</td>
+            <td><code>Linear(128, 8×1×8=64)</code>，每层 8,256；softmax 覆盖 8 点</td>
+            <td>桥</td>
+            <td><span class="cite">modules/deformable_cross_attention.py:251-252</span> <span class="cite">modules/deformable_cross_attention.py:272</span></td>
+          </tr>
+          <tr>
+            <td>DCA <code>value_proj</code> ×3 层</td>
+            <td><code>Linear(128,128)</code>，每层 16,512</td>
+            <td>桥（2D 特征侧）</td>
+            <td><span class="cite">modules/deformable_cross_attention.py:253</span>（子模块内 output_proj 为 None：<span class="cite">modules/deformable_cross_attention.py:225</span>）</td>
+          </tr>
+          <tr>
+            <td>DSA <code>sampling_offsets</code> ×2 层</td>
+            <td><code>Linear(256, 2queue×8头×1level×8点×2=256)</code>，每层 65,792</td>
+            <td>3D 侧（体间学习偏移）</td>
+            <td><span class="cite">modules/deformable_self_attention.py:105-106</span> <span class="cite">modules/deformable_self_attention.py:113-128</span></td>
+          </tr>
+          <tr>
+            <td>DSA <code>attention_weights</code> ×2 层</td>
+            <td><code>Linear(256, 2×8×1×8=128)</code>，每层 32,896</td>
+            <td>3D 侧</td>
+            <td><span class="cite">modules/deformable_self_attention.py:107-108</span></td>
+          </tr>
+          <tr>
+            <td>DSA <code>value_proj</code>／<code>output_proj</code> ×2 层</td>
+            <td>各 <code>Linear(128,128)</code>，每层 16,512×2</td>
+            <td>3D 侧</td>
+            <td><span class="cite">modules/deformable_self_attention.py:109-110</span> <span class="cite">modules/deformable_self_attention.py:273</span></td>
+          </tr>
+          <tr>
+            <td>每层 FFN＋LN（DCA 3 层＋DSA 2 层共 5 组，每组 2×LN）</td>
+            <td>FFN <code>Linear(128→256)</code>＋<code>Linear(256→128)</code>，每组 65,920（生效隐藏维 256，见 ④ 差异⑤）</td>
+            <td>桥／3D 侧（按层所属）</td>
+            <td><span class="cite">voxformer-S.py:85-95</span> <span class="cite">voxformer-S.py:117-127</span> <span class="cite">modules/custom_base_transformer_layer.py:81-92</span> <span class="cite">modules/custom_base_transformer_layer.py:144-156</span></td>
+          </tr>
+          <tr>
+            <td>输出头 MLP</td>
+            <td>LayerNorm(128)＋<code>Linear(128→20)</code>，2,836（19 语义＋empty）</td>
+            <td>3D 侧（桥之外下游）</td>
+            <td><span class="cite">utils/header.py:22-25</span> <span class="cite">dense_heads/voxformer_head.py:58</span></td>
+          </tr>
+          <tr>
+            <td>QPN 全部卷积（离线训练后冻结供 stage-2）</td>
+            <td>LMSCNet_SS：2D U-Net 编码 f=32→48→64→80＋1_8/1_4/1_2 解码＋3D ASPP 分割头</td>
+            <td>3D 侧深度门控（决定 N_p）</td>
+            <td><span class="cite">projects/configs/voxformer/qpn.py:41-44</span> <span class="cite">detectors/lmscnet.py:67-140</span></td>
+          </tr>
+          <tr>
+            <td>立体深度模型 MSNet3D（外部，全冻结）</td>
+            <td>MobileStereoNet3D 预训练 ckpt</td>
+            <td>2D 侧（深度的来源）</td>
+            <td><span class="cite">preprocess/image2depth.sh:6-8</span></td>
+          </tr>
         </tbody>
       </table>
+      <p>张量形状按 SemanticKITTI 口径（<code>projects/configs/voxformer/voxformer-S.py</code>）列写；QPN 与深度模型为离线训练后冻结、供 stage-2 使用的产物。要点：<strong>投影桥上的学习量＝voxel query 表（262144×128＝33.55 M，名片参数<span class="cite">dense_heads/voxformer_head.py:53</span>）＋mask token＋DCA/DSA 的 offsets/weights/value_proj（3＋2 层）＋cams/level embeds＋两侧主干</strong>；而"哪些 voxel 有 query"这一稀疏化本身也是学习量（QPN），但逐帧、离线；"在哪采"的骨架——0.4 m 格心锚点、lidar2img 投影、hit 判定、命中相机均值、×2 三线性上采样——零参数。总量对账：论文 Table 6（p.8）记 VoxFormer-S 57.90 M，本表逐项加总（含 ≈23.5 M 无 fc 头 ResNet50）≈58.18 M、差 ≈0.3 M（疑来自 FPN/统计口径），记为一致（自算值，标差）。</p>
 
       <h3>③ 2D-3D 关系</h3>
-      <p class="placeholder">占位：2D-3D 关系小结（谁发起对应：推/拉；深度显式还是隐式；几何与学习的分工）。</p>
+      <p>VoxFormer 对"2D 特征如何进入 3D"的回答可归纳为五点：</p>
+      <ul>
+        <li><strong>推/拉方向：拉为主、推在门口。</strong>在线主体是拉（pull）——3D voxel query 以自身格心经固定 <code>lidar2img</code> 投到图像、在命中相机上 deformable 采样"拉"取特征（与 BEVFormer/TPVFormer 同族，均为 BEVFormer 式 MSDA 血统<span class="cite">modules/deformable_cross_attention.py:159-168</span>）；但进入在线模型之前有一次决定性的"推"（push）——像素深度经 Eq.1 反投影成伪点云、光线投射成占用、QPN 修正后形成 proposal 掩码，2D 深度决定<strong>哪些</strong> 3D voxel 有资格成为 query（论文 §3.2 "2D features correspond to visible and occupied voxels"）。即：深度不参与在线特征提取，只做<strong>深度门控稀疏化</strong>——四家中唯一由深度显式决定 query 集合的模型。</li>
+        <li><strong>深度：显式、离线、无分箱。</strong>深度由外部立体模型 MSNet3D 一次性给出（可学习但外部冻结<span class="cite">preprocess/image2depth.sh:6-8</span>），连续值→离散占据，不存在 LSS 式 per-pixel 深度分布、也没有 TPVFormer 式沿射线多深度假设枚举（每查询 4/32/32 锚点）；在线注意力里每个 voxel 只有 1 个参考点（格心投影<span class="cite">dense_heads/voxformer_head.py:208-214</span>），深度不确定性被前置到 QPN 掩码里消化。代价即论文 Limitation：远距离深度不可靠→远距性能受限（§4.2.4 p.8）。</li>
+        <li><strong>几何与学习的分工：几何定"骨架"，学习定"内容与稀疏性"。</strong>固定几何——0.2/0.4 m 双层网格、格心锚点、lidar2img、hit 判定<span class="cite">modules/encoder.py:105-144</span>、命中相机均值、×2 三线性上采样<span class="cite">utils/header.py:27</span>；学习——query 嵌入表内容（262144×128）、<strong>N_p 的大小与分布</strong>（QPN，逐帧数据相关<span class="cite">detectors/lmscnet.py:304-305</span>）、采样偏移与权重（DCA 3 层＋DSA 2 层）、mask token、两侧主干。四家中 VoxFormer 独有：<strong>稀疏化本身是可学习的</strong>（LSS 稠密 splat、BEVFormer/TPVFormer 全网格 query）。</li>
+        <li><strong>query 有无及形态：有，全网格表＋逐帧稀疏激活。</strong>N_q=262,144 条 3D 网格形可学习参数（论文 §3.3 "3D-grid-shaped learnable parameters"<span class="cite">dense_heads/voxformer_head.py:53</span>），每帧仅 N_p（QPN 输出，数据相关）参与 DCA——论文 Table 4（p.8）：100% dense 消融 IoU 34.6 vs occupancy 44.0、显存 18.5 G vs 14.6 G，稀疏既省显存又涨点；stage-2 用 mask token 把其余 voxel 补齐后经 DSA 稠密化（MAE 式 sparse-to-dense，论文 Fig.2 "Mask Token"＋"Updated Queries"<span class="cite">dense_heads/voxformer_head.py:110-113</span>）。对比：BEVFormer 40000 条 BEV 网格全激活、TPVFormer 46400 条三平面全激活、LSS 无 query。</li>
+        <li><strong>体间交互（BEVFormer 没有的）。</strong>DSA 是 voxel↔voxel 的 deformable 自注意力（3D 侧自注意力，论文 Eq.5；vanilla 实现在 512×512 展平索引面上采样，见 ④ 差异②<span class="cite">modules/encoder.py:189-195</span>）；BEVFormer 的 self-attn 在 BEV 平面＋时序，TPVFormer 的在平面间（CVHA）。VoxFormer 无时序 self-attn——T 变体的时序＝把历史帧当"更多相机"进 DCA（<code>_temporal_=[-12,-9,-6,-3]</code>、num_cams=5<span class="cite">voxformer-T.py:18-19</span>）。</li>
+      </ul>
 
       <h3>④ 代码校对</h3>
       <div class="code-check">
-        <p class="placeholder">占位：代码校对（关键函数、配置项；开源代码与论文说法的印证或差异）。</p>
+        <p><strong>配置入口：</strong><code>projects/configs/voxformer/voxformer-S.py</code>（VoxFormer-S＝单帧单相机基准，论文 Table 1 与 Table 6/7 消融均以 S 为基准行，投影机制与 T 完全相同；同目录 <code>voxformer-T.py</code> 唯一差异 <code>_num_cams_=5</code>、<code>_temporal_=[-12,-9,-6,-3]</code><span class="cite">voxformer-T.py:18-19</span>（README:48 headline IoU 44.15/mIoU 13.35）；<code>voxformer-S/T_deform3D.py</code> 为 stage-2 真 3D 采样变体<span class="cite">voxformer-S_deform3D.py:97</span>；<code>qpn.py</code> 为 stage-1 QPN 训练配置——SemanticKITTI 口径、非 nuScenes，见下差异③）。核心量：<code>point_cloud_range=[0,-25.6,-2.0,51.2,25.6,4.4]</code><span class="cite">voxformer-S.py:20</span>、<code>voxel_size=[0.2,0.2,0.2]</code><span class="cite">voxformer-S.py:21</span>、<code>_dim_=128</code><span class="cite">voxformer-S.py:12</span>、<code>_num_levels_=1</code><span class="cite">voxformer-S.py:15</span>、<code>_num_cams_=1</code><span class="cite">voxformer-S.py:18</span>、<code>_num_layers_cross_=3</code>／<code>_num_points_cross_=8</code><span class="cite">voxformer-S.py:8-9</span>、<code>_num_layers_self_=2</code>／<code>_num_points_self_=8</code><span class="cite">voxformer-S.py:10-11</span>、<code>bev_h=128, bev_w=128, bev_z=16</code><span class="cite">voxformer-S.py:51-53</span>、位置编码表 512×512<span class="cite">voxformer-S.py:128-132</span>、<code>_nsweep_=10</code>／<code>_depthmodel_='msnet3d'</code>／<code>_query_tag_</code><span class="cite">voxformer-S.py:25-27</span>。派生量：输出体 256×256×32@0.2 m＝2,097,152 格；query 体 128×128×16@0.4 m＝N_q 262,144（输出体 1/8<span class="cite">dense_heads/voxformer_head.py:201</span>）；cam2 裁剪 1220×370<span class="cite">datasets/semantic_kitti_dataset_stage2.py:64-65</span>→特征 /16→24×77＝1848 token；每 query 每命中相机 8 头×1 层×8 点＝64 采样位。训练超参（脚注级）：stage-1 AdamW lr=2e-4、24 ep<span class="cite">projects/configs/voxformer/qpn.py:100-107</span><span class="cite">projects/configs/voxformer/qpn.py:117</span>；stage-2 AdamW lr=2e-4、wd 0.01、cosine（warmup 500 iter）、grad clip 35、每 GPU batch=1<span class="cite">voxformer-S.py:187-202</span>；两阶段分别训练。</p>
+        <p><strong>论文 ↔ 代码印证（一致项）：</strong>MobileStereoNet 深度（§4.1 ↔ <span class="cite">preprocess/image2depth.sh:7</span>）；LMSCNet 改造 Φ_occ 输入 256×256×32→输出 128×128×16（§4.1 ↔ <span class="cite">projects/configs/voxformer/qpn.py:43-44</span><span class="cite">detectors/lmscnet.py:267-268</span>）；cam2 裁 1220×370（§4.1 ↔ <span class="cite">datasets/semantic_kitti_dataset_stage2.py:64-65</span>）；ResNet50 C3＋FPN /16（§4.1 ↔ <span class="cite">voxformer-S.py:33-48</span>）；d=128（§4.1 ↔ <span class="cite">voxformer-S.py:12</span>）；DCA 3 层＋DSA 2 层（§3.5 ↔ <span class="cite">voxformer-S.py:8-11</span>）；每参考点 8 采样点（§4.1 ↔ <span class="cite">voxformer-S.py:9</span><span class="cite">voxformer-S.py:11</span>）；Linear 128→20（§3.5 ↔ <span class="cite">utils/header.py:24</span>）；lr 2e-4（§4.1 ↔ <span class="cite">voxformer-S.py:188</span>）——逐一对应一致。</p>
+        <p><strong>差异与勘正（要点）：</strong></p>
+        <ul>
+          <li><strong>差异①·PE 注入点（高价值差异，审稿验证）：</strong>论文 §3.3 称可学习位置编码"will be added to voxel queries for attention stages"（两个注意力都加）；代码 cross-attn 分支实际不注入——<code>bev_pos</code> 被计算并传递（<span class="cite">dense_heads/voxformer_head.py:85</span><span class="cite">dense_heads/voxformer_head.py:104</span>）但在 cross 分支把 query_pos（None）传给 DCA（bev_pos 被 forward 签名截获后弃用<span class="cite">modules/encoder.py:371-386</span>），只有 DSA 的 self 分支注入 <code>query_pos=bev_pos</code><span class="cite">modules/encoder.py:349-361</span>——以代码为准，① 图 pos 仅标于 DSA 入口、cross 入口不画。</li>
+          <li><strong>差异②·DSA 采样空间（高价值差异，审稿验证）：</strong>论文 Eq.5 的 DSA 在三维 p=(x,y,z) 上采样；vanilla S/T 代码把体网格按展平索引摆到 <strong>512×512 二维参考平面</strong>做 2D deformable（"3D 位置"仅隐含在嵌入表/pos 表的索引里<span class="cite">modules/encoder.py:189-195</span><span class="cite">dense_heads/voxformer_head.py:119-120</span>）；真 3D 版在 <code>*_deform3D.py</code> 变体<span class="cite">modules/deformable_self_attention_3D_custom.py:182-183</span><span class="cite">modules/deformable_self_attention_3D_custom.py:233-238</span>，README:51 S-3D 44.42/12.86＞S 44.02/12.35——主口径记 vanilla 的 2D 实现，① 图按 vanilla 画并注明。</li>
+          <li><strong>差异③·任务口径与 manifest 勘正：</strong>本 commit 无任何 nuScenes 支持（README:56-58 未勾选、论文 0 提及）；<code>qpn.py:19-23</code> 的 nuScenes class_names 为死配置（该 dataset 自带 ["empty","occupied"] 两类<span class="cite">datasets/semantic_kitti_dataset_stage1.py:45</span>）；仓内"nuScenes"字样仅为 <code>encoder.py:43</code> 的未使用默认参数——本节按 SemanticKITTI 口径（见节首口径例外）。</li>
+          <li><strong>差异④·stage-1 在线/离线：</strong>论文 §3.4/Fig.2 把深度→占用→proposal 画为 pipeline 组成；代码中深度、反投影、光线投射、QPN 全部离线（<code>preprocess/</code> 三脚本＋<code>qpn.py</code> 单独训练推理），在线 stage-2 直接读 bit-pack 的 <code>.query</code> 文件<span class="cite">voxformer-S.py:27</span><span class="cite">datasets/semantic_kitti_dataset_stage2.py:332</span>——① 图 A 区整体加"离线预处理"虚线框。</li>
+          <li><strong>差异⑤·FFN 隐藏维：</strong>config <code>ffn_cfgs</code> 写 <code>feedforward_channels=1024</code><span class="cite">voxformer-S.py:88</span>但被 deprecated 顶层参数 <code>_ffn_dim_=256</code> 覆盖（回填逻辑<span class="cite">modules/custom_base_transformer_layer.py:81-92</span>）→生效 128→256→128，1024 为死配置。</li>
+          <li><strong>差异⑥·训练轮数：</strong>论文 §4.1 写 "train stage-1 and stage-2 separately with 24 epochs"；stage-1 24 ep ✓（<span class="cite">projects/configs/voxformer/qpn.py:117</span>），stage-2 实为 <strong>20 ep</strong>（<span class="cite">voxformer-S.py:199</span>，README:48-51 Model Zoo 同）——以代码 20 为准。</li>
+          <li><strong>差异⑦·pillar 采样点：</strong>config <code>num_points_in_pillar=8</code>（<span class="cite">voxformer-S.py:68</span>，BEVFormer 遗产）为死配置——参考点实际来自 head 的格心（每 voxel 每相机 1 个<span class="cite">dense_heads/voxformer_head.py:208-214</span>），<code>get_reference_points</code> 的 '3d' 分支无调用点。</li>
+          <li><strong>差异⑧·QPN 推理脚本缺陷：</strong><code>lmscnet.py</code> 的 forward_test 中 <code>save_query_path</code> 赋值被注释、下一行直接使用会 NameError<span class="cite">detectors/lmscnet.py:312-317</span>——复现 <code>.query</code> 文件需手工恢复注释（复现提示，不影响机制事实）。</li>
+          <li><strong>差异⑨·损失组成：</strong>论文 Eq.6＝加权 CE＋scene-class affinity（引 MonoScene）；代码另有 geo-scal loss 并开<span class="cite">voxformer-S.py:24</span>（实现<span class="cite">projects/mmdet3d_plugin/voxformer/utils/ssc_loss.py:15</span>）——代码侧补充。</li>
+          <li><strong>差异⑩·query 比例：</strong>论文 Table 4 的 10–100% 为固定比例消融设计、未给实际 N_p；N_p 逐帧由 QPN argmax 决定<span class="cite">detectors/lmscnet.py:304-305</span>，无固定比例——不引用任何"固定比例"值。</li>
+          <li><strong>差异⑪·level_embeds 尺寸：</strong>论文未提；(4,128) 表但 num_levels=1 仅 [0] 行使用<span class="cite">modules/transformer.py:40</span>——已入 ② 清单。</li>
+          <li><strong>参数量：</strong>论文 Table 6（p.8）记 VoxFormer-S（1/16 层）57.90 M；代码侧逐项自算 ≈58.18 M（含 ≈23.5 M 无 fc 头 ResNet50＋33.55 M bev_embed，numpy 复核），差 ≈0.3 M 记为一致（标差）。</li>
+          <li><strong>机制图编号：</strong>论文 Fig.2（p.4）即两阶段架构图，本节 ① 图按其上排（Stage-1）＋下排（Stage-2）重绘。</li>
+        </ul>
+        <p><strong>版本锚定：</strong>本节代码均指 commit <code>63da9241</code>（"update readme"，2026-10-26 浅克隆，完整 hash 见页脚来源表）。</p>
       </div>
     </section>
 
