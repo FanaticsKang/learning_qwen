@@ -332,21 +332,25 @@
             #frustum3d-canvas { display: block; width: 100%; height: 420px; border: 1px solid #e3e8ee; border-radius: 4px; background: #fbfcfe; cursor: grab; touch-action: none; }
             #frustum3d-canvas.dragging { cursor: grabbing; }
             #frustum3d .f3d-state { font-size: 13px; color: #5a6570; }
+            #frustum3d .f3d-zoom { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5a6570; }
+            #frustum3d-zoom { width: 140px; accent-color: #0072B2; }
             #frustum3d .f3d-note { font-size: 13px; color: #5a6570; margin: 8px 0 0; }
           </style>
           <p class="f3d-title">B · 3D 视锥：相平面与 41 档候选点云（固定几何 + 深度加权，可拖拽旋转）</p>
           <div class="f3d-controls">
             <button id="frustum3d-toggle" type="button" aria-pressed="false">加入深度估计</button>
+            <label class="f3d-zoom"><span>缩放</span><input type="range" id="frustum3d-zoom" min="40" max="160" value="78" step="1" aria-label="视锥缩放"></label>
             <span class="f3d-state" id="frustum3d-state">当前：常规视锥——8×22 个像素 × 41 档深度＝7216 个候选点（全灰等大），几何全固定</span>
           </div>
-          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：0–4 m 空档处的相平面（8×22）与 4.0 m 起的候选点云（8×22 像素 × 41 档）；拖拽旋转视角；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
-          <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——把 2D 图像特征变成 3D 视锥候选点，是 2D→3D 的核心一步（在图C 流程图中以"Lift＝2D→3D"徽标标出）。视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。相平面（8×22）画在 0–4 m 的空档里——候选点从第一档 4.0 m 才开始，光心到 4 m 之间没有数据。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；相平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角。</p>
+          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：0–4 m 空档处的相平面（8×22）与 4.0 m 起的候选点云（8×22 像素 × 41 档）；拖拽旋转视角，滑杆缩放；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
+          <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——把 2D 图像特征变成 3D 视锥候选点，是 2D→3D 的核心一步（在图C 流程图中以"Lift＝2D→3D"徽标标出）。视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。相平面（8×22）画在 0–4 m 的空档里——候选点从第一档 4.0 m 才开始，光心到 4 m 之间没有数据。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；相平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角，"缩放"滑杆可拉近拉远。</p>
           <script id="frustum3d-script">
 'use strict';
 (function () {
   var canvas = document.getElementById('frustum3d-canvas');
   var toggle = document.getElementById('frustum3d-toggle');
   var stateEl = document.getElementById('frustum3d-state');
+  var zoomEl = document.getElementById('frustum3d-zoom');
   if (!canvas || !toggle || !stateEl || !canvas.getContext) { return; }
   var ctx = canvas.getContext('2d');
 
@@ -380,7 +384,7 @@
   recomputeAlpha();
 
   var yaw = -0.55, pitch = 0.34;
-  var CENTER = [23, 0, 0], RADIUS = 78;
+  var CENTER = [23, 0, 0], RADIUS = zoomEl ? +zoomEl.value : 78;
   var F = 900, CX = 500, CY = 210;
   var W = 880, H = 420;
   var inset = { x0: 0, x1: 0, top: 0, bottom: 0, step: 1 }; // α 直方图命中区
@@ -602,10 +606,14 @@
     draw();
   });
 
+  if (zoomEl) {
+    zoomEl.addEventListener('input', function () { RADIUS = +zoomEl.value; draw(); });
+  }
+
   window.addEventListener('resize', draw);
   draw();
 
-  window.__frustum3dState = function () { return { yaw: yaw, pitch: pitch, depthOn: DEPTH_ON, alphaC: alphaC }; };
+  window.__frustum3dState = function () { return { yaw: yaw, pitch: pitch, depthOn: DEPTH_ON, alphaC: alphaC, radius: RADIUS }; };
 })();
           </script>
         </div>
