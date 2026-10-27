@@ -103,6 +103,11 @@
   .fixed { fill: url(#hatch-fixed); stroke: var(--c-fixed-line); stroke-width: 2; stroke-dasharray: 6 4; }
   .flow { stroke: var(--c-flow); stroke-width: 2; fill: none; marker-end: url(#arrow-flow); }
 
+  /* ---- 悬停提示（SVG 标签）：hover 或 Tab 聚焦显示，纯 CSS 无脚本 ---- */
+  .tip { cursor: help; outline: none; }
+  .tip .tipbox { visibility: hidden; }
+  .tip:hover .tipbox, .tip:focus .tipbox { visibility: visible; }
+
   /* ---- 结构类 ---- */
   .panel {
     border: 1px solid var(--line);
@@ -178,7 +183,7 @@
       <span class="subtitle">LSS · BEVFormer · TPVFormer · VoxFormer</span>
     </h1>
 
-    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、BEVFormer、TPVFormer、VoxFormer 四条路线给出了四种截然不同的答案。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、长在 2D 侧还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第四节），仓库地址与 commit hash 见页脚。</p>
+    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、BEVFormer、TPVFormer、VoxFormer 四条路线给出了四种截然不同的答案。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、参数在 2D 侧、投影桥上还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第四节），仓库地址与 commit hash 见页脚。</p>
 
     <div class="legend" id="legend">
       <strong class="legend-title">统一图例</strong>
@@ -216,20 +221,12 @@
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 632" role="img" aria-label="LSS 机制图：上半为逐像素 lift（重绘自论文 Fig.3），下半为端到端流水线（重绘自 Fig.4）；可学习参数全在两端，中间投影核零参数">
+        <svg viewBox="0 0 1000 316" role="img" aria-label="LSS 逐像素 lift（重绘自论文 Fig.3）：格中心固定，α 与 c 可学习">
           <!-- ===== A · 逐像素 Lift（重绘自论文 Fig.3）===== -->
           <g font-size="13" fill="#2b3440">
             <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 逐像素 Lift（重绘自论文 Fig.3）：格中心固定，α 与 c 可学习</text>
 
-            <rect class="learnable" x="20" y="48" width="120" height="44" rx="4"></rect>
-            <text x="80" y="66" text-anchor="middle">图像特征图 /16</text>
-            <text x="80" y="84" text-anchor="middle">(512, 8, 22)</text>
-
             <line class="flow" x1="140" y1="70" x2="166" y2="70"></line>
-
-            <rect class="learnable" x="170" y="48" width="140" height="44" rx="4"></rect>
-            <text x="240" y="66" text-anchor="middle">depthnet 1×1 conv</text>
-            <text x="240" y="84" text-anchor="middle">512 → 105</text>
 
             <line class="flow" x1="310" y1="60" x2="356" y2="56"></line>
             <line class="flow" x1="310" y1="82" x2="356" y2="126"></line>
@@ -292,12 +289,214 @@
             <text x="736" y="278" font-size="11.5">41 个固定深度格中心（图示 11 个，示意）4.0–44.0 m（Δd=1.0 m）</text>
             <text x="703" y="296" font-size="12" text-anchor="middle">8×22 像素格（/16，固定）</text>
           </g>
+        </svg>
 
-          <line x1="16" y1="316" x2="984" y2="316" stroke="#d0d7de" stroke-width="1"></line>
+        <div id="frustum3d">
+          <style>
+            #frustum3d { margin: 18px 0 22px; }
+            #frustum3d .f3d-title { font-size: 14px; font-weight: 600; color: #37424d; margin: 0 0 8px; }
+            #frustum3d .f3d-controls { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; flex-wrap: wrap; }
+            #frustum3d-toggle { font: inherit; font-size: 13px; padding: 5px 14px; border: 1px solid #8a94a0; border-radius: 4px; background: #ffffff; color: #2b3440; cursor: pointer; }
+            #frustum3d-toggle.on { background: #D55E00; border-color: #D55E00; color: #ffffff; }
+            #frustum3d-toggle:focus-visible { outline: 2px solid #D55E00; outline-offset: 2px; }
+            #frustum3d-canvas { display: block; width: 100%; height: 420px; border: 1px solid #e3e8ee; border-radius: 4px; background: #fbfcfe; cursor: grab; touch-action: none; }
+            #frustum3d-canvas.dragging { cursor: grabbing; }
+            #frustum3d .f3d-state { font-size: 13px; color: #5a6570; }
+            #frustum3d .f3d-note { font-size: 13px; color: #5a6570; margin: 8px 0 0; }
+          </style>
+          <p class="f3d-title">B · 3D 视锥：固定几何 + 深度加权（可拖拽旋转）</p>
+          <div class="f3d-controls">
+            <button id="frustum3d-toggle" type="button" aria-pressed="false">加入深度估计</button>
+            <span class="f3d-state" id="frustum3d-state">当前：常规视锥——41 个候选格中心沿解剖射线等大排布，几何全固定</span>
+          </div>
+          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：拖拽旋转视角；点亮按钮后，解剖射线上的 41 个候选点大小随示意深度分布 α 变化"></canvas>
+          <p class="f3d-note">小结：视锥线框与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；点亮按钮后，深度网络给每个深度档一个权重 α_d，候选点大小 ∝ α_d——这就是外积 α_d·c 沿图像中心像素那根光轴射线的剖面：几何定落点，α 定权重。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角。</p>
+          <script id="frustum3d-script">
+'use strict';
+(function () {
+  var canvas = document.getElementById('frustum3d-canvas');
+  var toggle = document.getElementById('frustum3d-toggle');
+  var stateEl = document.getElementById('frustum3d-state');
+  if (!canvas || !toggle || !stateEl || !canvas.getContext) { return; }
+  var ctx = canvas.getContext('2d');
 
-          <!-- ===== B · 端到端流水线（重绘自论文 Fig.4）===== -->
+  var N = 41, D0 = 4.0, DD = 1.0;
+  var TAN_H = Math.tan(20 * Math.PI / 180);
+  var TAN_V = Math.tan(13 * Math.PI / 180);
+  var EDGE_L = 48;
+  var RAY_Y = 0, RAY_Z = 0; // 解剖射线＝图像中心像素（光轴），不贴边界
+
+  function pt(ySlope, zSlope, d) { return [d, ySlope * d, zSlope * d]; }
+
+  var DEPTH_ON = false;
+  var alpha = [], aMax = 0;
+  (function () {
+    var c = 16, s = 3.2;
+    for (var i = 0; i < N; i++) {
+      var a = Math.exp(-((i - c) * (i - c)) / (2 * s * s));
+      alpha.push(a); if (a > aMax) { aMax = a; }
+    }
+  })();
+
+  var yaw = -0.55, pitch = 0.34;
+  var CENTER = [23, 0, 0], RADIUS = 78;
+  var F = 900, CX = 500, CY = 210;
+  var W = 880, H = 420;
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = canvas.clientWidth || 880; H = canvas.clientHeight || 420;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    F = H * 1.32; CX = W * 0.54; CY = H * 0.48;
+  }
+
+  function camBasis() {
+    var cp = Math.cos(pitch), sp = Math.sin(pitch);
+    var cyw = Math.cos(yaw), syw = Math.sin(yaw);
+    var eye = [CENTER[0] - RADIUS * cp * cyw, CENTER[1] - RADIUS * cp * syw, CENTER[2] + RADIUS * sp];
+    var w = [cp * cyw, cp * syw, -sp];
+    var u = [syw, -cyw, 0];
+    var v = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    return { eye: eye, u: u, v: v, w: w };
+  }
+
+  function project(b, p) {
+    var rx = p[0] - b.eye[0], ry = p[1] - b.eye[1], rz = p[2] - b.eye[2];
+    var zc = rx * b.w[0] + ry * b.w[1] + rz * b.w[2];
+    if (zc < 1) { return null; }
+    var xc = rx * b.u[0] + ry * b.u[1] + rz * b.u[2];
+    var yc = rx * b.v[0] + ry * b.v[1] + rz * b.v[2];
+    return { x: CX + F * xc / zc, y: CY - F * yc / zc, z: zc };
+  }
+
+  function draw() {
+    resize();
+    ctx.clearRect(0, 0, W, H);
+    var b = camBasis();
+    var prims = [];
+    function seg(p1, p2, style) {
+      var a = project(b, p1), q = project(b, p2);
+      if (!a || !q) { return; }
+      prims.push({ z: (a.z + q.z) / 2, t: 'l', a: a, q: q, s: style });
+    }
+    function dot(p, rBase, kind, frac) {
+      var a = project(b, p);
+      if (!a) { return; }
+      var persp = RADIUS / a.z;
+      prims.push({ z: a.z, t: 'p', a: a, r: rBase * persp, k: kind, f: frac });
+    }
+
+    var cs = [
+      pt(-TAN_H, -TAN_V, EDGE_L), pt(TAN_H, -TAN_V, EDGE_L),
+      pt(TAN_H, TAN_V, EDGE_L), pt(-TAN_H, TAN_V, EDGE_L)
+    ];
+    seg([0, 0, 0], cs[0], 'edge'); seg([0, 0, 0], cs[1], 'edge');
+    seg([0, 0, 0], cs[2], 'edge'); seg([0, 0, 0], cs[3], 'edge');
+    seg(cs[0], cs[1], 'far'); seg(cs[1], cs[2], 'far'); seg(cs[2], cs[3], 'far'); seg(cs[3], cs[0], 'far');
+
+    for (var i = 0; i < N; i++) {
+      var d = D0 + DD * i;
+      seg(pt(-TAN_H, -TAN_V, d), pt(TAN_H, -TAN_V, d), 'tick');
+    }
+
+    seg([0, 0, 0], pt(RAY_Y, RAY_Z, 44), 'ray');
+
+    for (var j = 0; j < N; j++) {
+      var dd = D0 + DD * j;
+      var p = pt(RAY_Y, RAY_Z, dd);
+      if (!DEPTH_ON) { dot(p, 4.6, 'off', 0); }
+      else { dot(p, 2.4 + 12.6 * (alpha[j] / aMax), 'on', alpha[j] / aMax); }
+    }
+
+    prims.sort(function (m, n) { return n.z - m.z; });
+    for (var k = 0; k < prims.length; k++) {
+      var pr = prims[k];
+      if (pr.t === 'l') {
+        ctx.beginPath(); ctx.moveTo(pr.a.x, pr.a.y); ctx.lineTo(pr.q.x, pr.q.y);
+        if (pr.s === 'edge') { ctx.strokeStyle = 'rgba(0,114,178,0.85)'; ctx.lineWidth = 1.6; ctx.setLineDash([7, 5]); }
+        else if (pr.s === 'far') { ctx.strokeStyle = 'rgba(0,114,178,0.4)'; ctx.lineWidth = 1.1; ctx.setLineDash([4, 5]); }
+        else if (pr.s === 'tick') { ctx.strokeStyle = 'rgba(0,114,178,0.28)'; ctx.lineWidth = 1; ctx.setLineDash([]); }
+        else { ctx.strokeStyle = 'rgba(0,114,178,0.75)'; ctx.lineWidth = 1.3; ctx.setLineDash([5, 4]); }
+        ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.beginPath(); ctx.arc(pr.a.x, pr.a.y, Math.max(1.2, pr.r), 0, Math.PI * 2);
+        if (pr.k === 'off') {
+          ctx.fillStyle = 'rgba(0,114,178,0.8)'; ctx.fill();
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.stroke();
+        } else {
+          ctx.fillStyle = 'rgba(213,94,0,' + (0.35 + 0.65 * pr.f).toFixed(3) + ')'; ctx.fill();
+          ctx.strokeStyle = 'rgba(213,94,0,0.95)'; ctx.lineWidth = 1.2; ctx.stroke();
+        }
+      }
+    }
+
+    function label(p, text, dx, dy, color, size, anchor) {
+      var a = project(b, p); if (!a) { return; }
+      ctx.font = (size || 11.5) + 'px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = color || '#5a6570'; ctx.textAlign = anchor || 'left';
+      ctx.fillText(text, a.x + (dx || 0), a.y + (dy || 0));
+      ctx.textAlign = 'left';
+    }
+    label([0, 0, 0], '相机（原点）', 8, -18);
+    label(pt(-TAN_H, -TAN_V, D0), '4.0 m', -4, 14, '#5a6570', 11);
+    label(pt(-TAN_H, -TAN_V, 44), '44.0 m（Δd=1.0 m × 41 档）', -10, 14, '#5a6570', 11);
+    label(pt(RAY_Y, RAY_Z, 27), '解剖射线（图像中心像素）', 14, -16, '#37424d', 11.5);
+
+    if (DEPTH_ON) {
+      var bw = Math.min(3, (W - 40) / N - 1.4);
+      var x0 = W - 22 - N * (bw + 1.4), yBase = H - 34, hMax = 44;
+      ctx.strokeStyle = 'rgba(90,101,112,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0, yBase + 0.5); ctx.lineTo(x0 + N * (bw + 1.4), yBase + 0.5); ctx.stroke();
+      for (var m = 0; m < N; m++) {
+        var hh = hMax * alpha[m] / aMax;
+        ctx.fillStyle = 'rgba(213,94,0,' + (0.35 + 0.65 * alpha[m] / aMax).toFixed(3) + ')';
+        ctx.fillRect(x0 + m * (bw + 1.4), yBase - hh, bw, hh);
+      }
+      ctx.font = '10.5px "Segoe UI","Microsoft YaHei",sans-serif'; ctx.fillStyle = '#5a6570';
+      ctx.fillText('示意 α_d（softmax）', x0, yBase - hMax - 6);
+      ctx.fillText('4.0', x0, yBase + 13);
+      ctx.textAlign = 'right'; ctx.fillText('44.0', x0 + N * (bw + 1.4), yBase + 13); ctx.textAlign = 'left';
+    }
+  }
+
+  var dragging = false, lastX = 0, lastY = 0;
+  function down(e) { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.classList.add('dragging'); try { canvas.setPointerCapture(e.pointerId); } catch (err) {} }
+  function move(e) {
+    if (!dragging) { return; }
+    yaw += (e.clientX - lastX) * 0.0075;
+    pitch = Math.max(-1.25, Math.min(1.25, pitch + (e.clientY - lastY) * 0.006));
+    lastX = e.clientX; lastY = e.clientY; draw();
+  }
+  function up() { dragging = false; canvas.classList.remove('dragging'); }
+  canvas.addEventListener('pointerdown', down);
+  canvas.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+
+  var STATE_OFF = '当前：常规视锥——41 个候选格中心沿解剖射线等大排布，几何全固定';
+  var STATE_ON = '已点亮：深度网络加入——点大小 ∝ α_d（示意 softmax），几何定落点，α 定权重';
+  toggle.addEventListener('click', function () {
+    DEPTH_ON = !DEPTH_ON;
+    toggle.classList.toggle('on', DEPTH_ON);
+    toggle.setAttribute('aria-pressed', DEPTH_ON ? 'true' : 'false');
+    stateEl.textContent = DEPTH_ON ? STATE_ON : STATE_OFF;
+    draw();
+  });
+
+  window.addEventListener('resize', draw);
+  draw();
+
+  window.__frustum3dState = function () { return { yaw: yaw, pitch: pitch, depthOn: DEPTH_ON }; };
+})();
+          </script>
+        </div>
+
+        <svg viewBox="0 0 1000 316" role="img" aria-label="LSS 端到端流水线（重绘自论文 Fig.4）：可学习参数全在两端，中间投影核零参数">
+          <g transform="translate(0,-316)">
+          <!-- ===== C · 端到端流水线（重绘自论文 Fig.4）===== -->
           <g font-size="13" fill="#2b3440">
-            <text x="16" y="344" font-size="14" font-weight="600" fill="#37424d">B · 端到端流水线（重绘自论文 Fig.4）：可学习参数全在两端，中间投影核零参数</text>
+            <text x="16" y="344" font-size="14" font-weight="600" fill="#37424d">C · 端到端流水线（重绘自论文 Fig.4）：可学习参数全在两端，中间投影核零参数</text>
 
             <rect x="20" y="428" width="120" height="64" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="80" y="450" text-anchor="middle">N 环视图输入</text>
@@ -357,6 +556,37 @@
 
             <text x="500" y="592" text-anchor="middle" font-size="12.5" fill="#4a5560">形状流：(B,N,3,128,352) → (B·N,64,41,8,22) → (B,64,200,200) → (B,1,200,200)</text>
             <text x="500" y="614" text-anchor="middle" font-size="11" fill="#5a6570">注：按 6 相机环视表达，训练默认随机抽 5/6（ncams=5）、验证用全 6；监督仅为 BEV 二值分割（BCEWithLogits，vehicle 框栅格化）。</text>
+          </g>
+          <!-- 悬停提示组：标签框 + 提示框（置于 SVG 末尾保证置顶；hover 或 Tab 聚焦显示） -->
+          <g class="tip" tabindex="0" aria-label="图像特征图 /16 的尺寸来源：原图 900×1600 → final_dim 128×352 → 高、宽各除以 16 得 8×22">
+            <rect class="learnable" x="20" y="48" width="120" height="44" rx="4"></rect>
+            <text x="80" y="66" text-anchor="middle">图像特征图 /16</text>
+            <text x="80" y="84" text-anchor="middle">(512, 8, 22)</text>
+            <g class="tipbox">
+              <rect x="20" y="100" width="336" height="82" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+              <text x="32" y="122" font-size="11" fill="#2b3440">nuScenes 原图 900×1600 经 resize/裁剪到 128×352</text>
+              <text x="32" y="140" font-size="11" fill="#4a5560">（train.py 的 final_dim=(128, 352)）</text>
+              <text x="32" y="158" font-size="11" fill="#2b3440">再除以 16 得 128/16=8 行、352/16=22 列</text>
+              <text x="32" y="174" font-size="11" fill="#5a6570">/16 指高、宽各除以 16（步距 16，非面积）</text>
+            </g>
+          </g>
+
+          <!-- 悬停提示组：depthnet 105=41+64 拆分关系（hover 或 Tab 聚焦显示） -->
+          <g class="tip" tabindex="0" aria-label="depthnet 输出 105＝41＋64：前 41 通道为深度 logits，softmax 后成 α；后 64 通道为上下文 c">
+            <rect class="learnable" x="170" y="48" width="140" height="44" rx="4"></rect>
+            <text x="240" y="66" text-anchor="middle">depthnet 1×1 conv</text>
+            <text x="240" y="84" text-anchor="middle">512 → 105</text>
+            <g class="tipbox">
+              <rect x="20" y="196" width="330" height="132" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+              <text x="32" y="218" font-size="11" fill="#2b3440">105 = 41 + 64：一个卷积当两个头用</text>
+              <text x="32" y="236" font-size="11" fill="#2b3440">前 41 通道＝深度 logits，后 64 通道＝上下文 c</text>
+              <text x="32" y="254" font-size="11" fill="#2b3440">α = softmax(前 41 通道)：softmax 零参数，</text>
+              <text x="32" y="270" font-size="11" fill="#2b3440">　学的是产生 logits 的 41 个滤波器（w_d·f+b_d）</text>
+              <text x="32" y="288" font-size="11" fill="#2b3440">α 第 d 档 ↔ 固定格中心 4.0–44.0 m（Δd=1.0 m）</text>
+              <text x="32" y="306" font-size="11" fill="#2b3440">分工无深度监督，由 BEV 损失回传逼出；</text>
+              <text x="32" y="322" font-size="11" fill="#2b3440">外积 c_d = α_d·c → 每相机 (64,41,8,22) 视锥</text>
+            </g>
+          </g>
           </g>
         </svg>
         <p>三明治结构：所有可学习参数都在投影桥两端——2D 侧（深度分布 α 与上下文特征 c 的产生<span class="cite">src/models.py:46</span>）与 BEV 侧（splat 之后的 CNN<span class="cite">src/models.py:90-126</span>）；中间的投影核——外积<span class="cite">src/models.py:57</span>、几何反投影 <code>get_geometry</code><span class="cite">src/models.py:166-186</span>、体素求和池化 <code>voxel_pooling</code><span class="cite">src/models.py:200-242</span>——零参数、纯固定几何。</p>
