@@ -532,9 +532,9 @@
 
     if (DEPTH_ON) {
       var bw = Math.min(3, (W - 40) / N - 1.4);
-      var x0 = W - 22 - N * (bw + 1.4), yBase = H - 34, hMax = 44;
+      var x0 = W - 22 - N * (bw + 1.4), yBase = H - 46, hMax = 44;
       var step = bw + 1.4;
-      inset.x0 = x0; inset.x1 = x0 + N * step; inset.top = yBase - hMax - 36; inset.bottom = yBase + 30; inset.step = step;
+      inset.x0 = x0; inset.x1 = x0 + N * step; inset.top = yBase - hMax - 16; inset.bottom = yBase + 42; inset.step = step;
       ctx.strokeStyle = 'rgba(90,101,112,0.5)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x0, yBase + 0.5); ctx.lineTo(x0 + N * step, yBase + 0.5); ctx.stroke();
       for (var m = 0; m < N; m++) {
@@ -549,10 +549,12 @@
       ctx.fillStyle = 'rgba(70,80,92,0.85)';
       ctx.beginPath(); ctx.moveTo(px - 5, yBase + 8); ctx.lineTo(px + 5, yBase + 8); ctx.lineTo(px, yBase + 1); ctx.closePath(); ctx.fill();
       ctx.font = '10.5px "Segoe UI","Microsoft YaHei",sans-serif'; ctx.fillStyle = '#5a6570';
-      ctx.fillText('示意 α_d（softmax）', x0, yBase - hMax - 24);
-      ctx.fillText('← 左右拖拽移动分布中心 →', x0, yBase - hMax - 10);
-      ctx.fillText('4.0', x0, yBase + 22);
-      ctx.textAlign = 'right'; ctx.fillText('44.0', x0 + N * step, yBase + 22); ctx.textAlign = 'left';
+      ctx.fillText('示意 α_d（softmax）', x0, yBase - hMax - 10);
+      ctx.fillText('4.0', x0, yBase + 20);
+      ctx.textAlign = 'center';
+      ctx.fillText('44.0', x0 + N * step - 4, yBase + 20);
+      ctx.fillText('← 左右拖拽移动分布中心 →', x0 + N * step / 2, yBase + 36);
+      ctx.textAlign = 'left';
     } else {
       inset.x0 = 0; inset.x1 = 0; inset.top = 0; inset.bottom = 0; inset.step = 1;
     }
