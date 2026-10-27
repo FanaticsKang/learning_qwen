@@ -334,13 +334,13 @@
             #frustum3d .f3d-state { font-size: 13px; color: #5a6570; }
             #frustum3d .f3d-note { font-size: 13px; color: #5a6570; margin: 8px 0 0; }
           </style>
-          <p class="f3d-title">B · Lift：2D 像平面 → 3D 视锥（固定几何 + 深度加权，可拖拽旋转）</p>
+          <p class="f3d-title">B · 3D 视锥：相平面与 41 档候选点云（固定几何 + 深度加权，可拖拽旋转）</p>
           <div class="f3d-controls">
             <button id="frustum3d-toggle" type="button" aria-pressed="false">加入深度估计</button>
             <span class="f3d-state" id="frustum3d-state">当前：常规视锥——8×22 个像素 × 41 档深度＝7216 个候选点（全灰等大），几何全固定</span>
           </div>
-          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：Lift 把 2D 像平面（8×22）抬升为 3D 视锥点云（8×22 像素 × 41 档深度）；拖拽旋转视角；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
-          <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——把 2D 图像特征变成 3D 视锥候选点，是 2D→3D 的核心一步。视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；像平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角。</p>
+          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：0–4 m 空档处的相平面（8×22）与 4.0 m 起的候选点云（8×22 像素 × 41 档）；拖拽旋转视角；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
+          <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——把 2D 图像特征变成 3D 视锥候选点，是 2D→3D 的核心一步（在图C 流程图中以"Lift＝2D→3D"徽标标出）。视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。相平面（8×22）画在 0–4 m 的空档里——候选点从第一档 4.0 m 才开始，光心到 4 m 之间没有数据。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；相平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角。</p>
           <script id="frustum3d-script">
 'use strict';
 (function () {
@@ -466,21 +466,21 @@
     }
 
     // 像平面（8×22，靠相机端）：中心像素格＝解剖射线起点
-    var D_IMG = 2.6;
+    var D_IMG = 3.0;
     (function () {
       var q = [project(b, quadPoint(0, 0, D_IMG)), project(b, quadPoint(1, 0, D_IMG)), project(b, quadPoint(1, 1, D_IMG)), project(b, quadPoint(0, 1, D_IMG))];
       if (q[0] && q[1] && q[2] && q[3]) {
         ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); ctx.lineTo(q[1].x, q[1].y); ctx.lineTo(q[2].x, q[2].y); ctx.lineTo(q[3].x, q[3].y); ctx.closePath();
-        ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fill();
-        ctx.strokeStyle = 'rgba(0,114,178,0.35)'; ctx.lineWidth = 0.9; ctx.stroke();
+        ctx.fillStyle = 'rgba(238,245,252,0.8)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(0,114,178,0.6)'; ctx.lineWidth = 1.2; ctx.stroke();
       }
       for (var ic = 1; ic < GRID_C; ic++) {
         var iu = ic / GRID_C, a1 = project(b, quadPoint(iu, 0, D_IMG)), a2 = project(b, quadPoint(iu, 1, D_IMG));
-        if (a1 && a2) { ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.strokeStyle = 'rgba(0,114,178,0.2)'; ctx.lineWidth = 0.7; ctx.stroke(); }
+        if (a1 && a2) { ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.strokeStyle = 'rgba(0,114,178,0.3)'; ctx.lineWidth = 0.8; ctx.stroke(); }
       }
       for (var ir = 1; ir < GRID_R; ir++) {
         var iv = ir / GRID_R, b1 = project(b, quadPoint(0, iv, D_IMG)), b2 = project(b, quadPoint(1, iv, D_IMG));
-        if (b1 && b2) { ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.strokeStyle = 'rgba(0,114,178,0.2)'; ctx.lineWidth = 0.7; ctx.stroke(); }
+        if (b1 && b2) { ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.strokeStyle = 'rgba(0,114,178,0.3)'; ctx.lineWidth = 0.8; ctx.stroke(); }
       }
       var cc = [project(b, quadPoint(10 / GRID_C, 3.5 / GRID_R, D_IMG)), project(b, quadPoint(11 / GRID_C, 3.5 / GRID_R, D_IMG)), project(b, quadPoint(11 / GRID_C, 4.5 / GRID_R, D_IMG)), project(b, quadPoint(10 / GRID_C, 4.5 / GRID_R, D_IMG))];
       if (cc[0] && cc[1] && cc[2] && cc[3]) {
@@ -525,33 +525,7 @@
       ctx.textAlign = 'left';
     }
     label([0, 0, 0], '相机（原点）', 8, -18);
-    label(quadPoint(0.5, 1, D_IMG), '2D · 像平面（8×22）', -40, 18, '#5a6570', 11);
-    label(quadPoint(0.5, 1.28, 36), '3D · 视锥点云（候选格点）', -56, -4, '#5a6570', 11);
-
-    // Lift 特殊标识：2D → 3D 抬升方向（加粗箭头，随视角投影）
-    (function () {
-      var aL = project(b, [3.2, 0, 1.55 * TAN_V * 3.2]);
-      var bL = project(b, [23, 0, 1.55 * TAN_V * 23]);
-      if (!aL || !bL) { return; }
-      var ang = Math.atan2(bL.y - aL.y, bL.x - aL.x);
-      ctx.strokeStyle = 'rgba(55,66,77,0.85)'; ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(aL.x, aL.y);
-      ctx.lineTo(bL.x - 11 * Math.cos(ang), bL.y - 11 * Math.sin(ang));
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(55,66,77,0.9)';
-      ctx.beginPath();
-      ctx.moveTo(bL.x, bL.y);
-      ctx.lineTo(bL.x - 12 * Math.cos(ang - 0.42), bL.y - 12 * Math.sin(ang - 0.42));
-      ctx.lineTo(bL.x - 12 * Math.cos(ang + 0.42), bL.y - 12 * Math.sin(ang + 0.42));
-      ctx.closePath(); ctx.fill();
-      var mx = (aL.x + bL.x) / 2, my = (aL.y + bL.y) / 2;
-      ctx.font = 'bold 13px "Segoe UI","Microsoft YaHei",sans-serif';
-      ctx.fillStyle = '#37424d';
-      ctx.textAlign = 'center';
-      ctx.fillText('Lift：2D → 3D', mx, my - 10);
-      ctx.textAlign = 'left';
-    })();
+    label(quadPoint(0.5, 1, D_IMG), '相平面（8×22 像素）· 0–4 m 无候选点', -86, 18, '#5a6570', 11);
 
     label(pt(-TAN_H, -TAN_V, D0), '4.0 m', -4, 14, '#5a6570', 11);
     label(pt(-TAN_H, -TAN_V, 44), '44.0 m（Δd=1.0 m × 41 档）', -10, 14, '#5a6570', 11);
@@ -663,12 +637,15 @@
             <rect class="fixed" x="382" y="378" width="200" height="40" rx="4"></rect>
             <text x="482" y="394" text-anchor="middle" font-size="11">每相机 K / rot / trans（cam→ego）</text>
             <text x="482" y="410" text-anchor="middle" font-size="11">post 增广校正（固定·逐样本）</text>
-            <line class="flow" x1="482" y1="418" x2="482" y2="426"></line>
+            <line class="flow" x1="457" y1="418" x2="457" y2="426"></line>
 
-            <rect class="fixed" x="382" y="428" width="150" height="64" rx="4"></rect>
-            <text x="457" y="448" text-anchor="middle" font-size="11.5">Lift：外积 Eq.(1)</text>
-            <text x="457" y="464" text-anchor="middle" font-size="11.5">视锥 + K⁻¹/E 反投影</text>
-            <text x="457" y="480" text-anchor="middle" font-size="11.5">点云 (41,8,22,3)/相机</text>
+            <rect x="382" y="428" width="150" height="64" rx="4" class="fixed" stroke-width="2.5"></rect>
+            <text x="457" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#37424d">Lift＝2D→3D</text>
+            <text x="457" y="459" text-anchor="middle" font-size="11">外积 Eq.(1)</text>
+            <text x="457" y="473" text-anchor="middle" font-size="11">视锥 + K⁻¹/E 反投影</text>
+            <text x="457" y="487" text-anchor="middle" font-size="11">点云 (41,8,22,3)/相机</text>
+            <text x="354" y="452" text-anchor="end" font-size="10.5" font-weight="bold" fill="#5a6570">2D</text>
+            <text x="554" y="452" text-anchor="end" font-size="10.5" font-weight="bold" fill="#5a6570">3D</text>
 
             <line class="flow" x1="532" y1="460" x2="558" y2="460"></line>
 
