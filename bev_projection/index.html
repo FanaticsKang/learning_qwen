@@ -221,7 +221,7 @@
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 316" role="img" aria-label="LSS 逐像素 lift（重绘自论文 Fig.3）：格中心固定，α 与 c 可学习">
+        <svg viewBox="0 0 1000 332" role="img" aria-label="LSS 逐像素 lift（重绘自论文 Fig.3）：格中心固定，α 与 c 可学习">
           <!-- ===== A · 逐像素 Lift（重绘自论文 Fig.3）===== -->
           <g font-size="13" fill="#2b3440">
             <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 逐像素 Lift（重绘自论文 Fig.3）：格中心固定，α 与 c 可学习</text>
@@ -289,6 +289,36 @@
             <text x="736" y="278" font-size="11.5">41 个固定深度格中心（图示 11 个，示意）4.0–44.0 m（Δd=1.0 m）</text>
             <text x="703" y="296" font-size="12" text-anchor="middle">8×22 像素格（/16，固定）</text>
           </g>
+          <!-- 悬停提示组：标签框 + 提示框（置于 SVG 末尾保证置顶；hover 或 Tab 聚焦显示） -->
+          <g class="tip" tabindex="0" aria-label="图像特征图 /16 的尺寸来源：原图 900×1600 → final_dim 128×352 → 高、宽各除以 16 得 8×22">
+            <rect class="learnable" x="20" y="48" width="120" height="44" rx="4"></rect>
+            <text x="80" y="66" text-anchor="middle">图像特征图 /16</text>
+            <text x="80" y="84" text-anchor="middle">(512, 8, 22)</text>
+            <g class="tipbox">
+              <rect x="20" y="100" width="336" height="82" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+              <text x="32" y="122" font-size="11" fill="#2b3440">nuScenes 原图 900×1600 经 resize/裁剪到 128×352</text>
+              <text x="32" y="140" font-size="11" fill="#4a5560">（train.py 的 final_dim=(128, 352)）</text>
+              <text x="32" y="158" font-size="11" fill="#2b3440">再除以 16 得 128/16=8 行、352/16=22 列</text>
+              <text x="32" y="174" font-size="11" fill="#5a6570">/16 指高、宽各除以 16（步距 16，非面积）</text>
+            </g>
+          </g>
+
+          <!-- 悬停提示组：depthnet 105=41+64 拆分关系（hover 或 Tab 聚焦显示） -->
+          <g class="tip" tabindex="0" aria-label="depthnet 输出 105＝41＋64：前 41 通道为深度 logits，softmax 后成 α；后 64 通道为上下文 c">
+            <rect class="learnable" x="170" y="48" width="140" height="44" rx="4"></rect>
+            <text x="240" y="66" text-anchor="middle">depthnet 1×1 conv</text>
+            <text x="240" y="84" text-anchor="middle">512 → 105</text>
+            <g class="tipbox">
+              <rect x="20" y="196" width="330" height="132" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+              <text x="32" y="218" font-size="11" fill="#2b3440">105 = 41 + 64：一个卷积当两个头用</text>
+              <text x="32" y="236" font-size="11" fill="#2b3440">前 41 通道＝深度 logits，后 64 通道＝上下文 c</text>
+              <text x="32" y="254" font-size="11" fill="#2b3440">α = softmax(前 41 通道)：softmax 零参数，</text>
+              <text x="32" y="270" font-size="11" fill="#2b3440">　学的是产生 logits 的 41 个滤波器（w_d·f+b_d）</text>
+              <text x="32" y="288" font-size="11" fill="#2b3440">α 第 d 档 ↔ 固定格中心 4.0–44.0 m（Δd=1.0 m）</text>
+              <text x="32" y="306" font-size="11" fill="#2b3440">分工无深度监督，由 BEV 损失回传逼出；</text>
+              <text x="32" y="322" font-size="11" fill="#2b3440">外积 c_d = α_d·c → 每相机 (64,41,8,22) 视锥</text>
+            </g>
+          </g>
         </svg>
 
         <div id="frustum3d">
@@ -346,8 +376,11 @@
   function resize() {
     var dpr = window.devicePixelRatio || 1;
     W = canvas.clientWidth || 880; H = canvas.clientHeight || 420;
-    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var bw = Math.round(W * dpr), bh = Math.round(H * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw; canvas.height = bh;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     F = H * 1.32; CX = W * 0.54; CY = H * 0.48;
   }
 
@@ -556,36 +589,6 @@
 
             <text x="500" y="592" text-anchor="middle" font-size="12.5" fill="#4a5560">形状流：(B,N,3,128,352) → (B·N,64,41,8,22) → (B,64,200,200) → (B,1,200,200)</text>
             <text x="500" y="614" text-anchor="middle" font-size="11" fill="#5a6570">注：按 6 相机环视表达，训练默认随机抽 5/6（ncams=5）、验证用全 6；监督仅为 BEV 二值分割（BCEWithLogits，vehicle 框栅格化）。</text>
-          </g>
-          <!-- 悬停提示组：标签框 + 提示框（置于 SVG 末尾保证置顶；hover 或 Tab 聚焦显示） -->
-          <g class="tip" tabindex="0" aria-label="图像特征图 /16 的尺寸来源：原图 900×1600 → final_dim 128×352 → 高、宽各除以 16 得 8×22">
-            <rect class="learnable" x="20" y="48" width="120" height="44" rx="4"></rect>
-            <text x="80" y="66" text-anchor="middle">图像特征图 /16</text>
-            <text x="80" y="84" text-anchor="middle">(512, 8, 22)</text>
-            <g class="tipbox">
-              <rect x="20" y="100" width="336" height="82" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
-              <text x="32" y="122" font-size="11" fill="#2b3440">nuScenes 原图 900×1600 经 resize/裁剪到 128×352</text>
-              <text x="32" y="140" font-size="11" fill="#4a5560">（train.py 的 final_dim=(128, 352)）</text>
-              <text x="32" y="158" font-size="11" fill="#2b3440">再除以 16 得 128/16=8 行、352/16=22 列</text>
-              <text x="32" y="174" font-size="11" fill="#5a6570">/16 指高、宽各除以 16（步距 16，非面积）</text>
-            </g>
-          </g>
-
-          <!-- 悬停提示组：depthnet 105=41+64 拆分关系（hover 或 Tab 聚焦显示） -->
-          <g class="tip" tabindex="0" aria-label="depthnet 输出 105＝41＋64：前 41 通道为深度 logits，softmax 后成 α；后 64 通道为上下文 c">
-            <rect class="learnable" x="170" y="48" width="140" height="44" rx="4"></rect>
-            <text x="240" y="66" text-anchor="middle">depthnet 1×1 conv</text>
-            <text x="240" y="84" text-anchor="middle">512 → 105</text>
-            <g class="tipbox">
-              <rect x="20" y="196" width="330" height="132" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
-              <text x="32" y="218" font-size="11" fill="#2b3440">105 = 41 + 64：一个卷积当两个头用</text>
-              <text x="32" y="236" font-size="11" fill="#2b3440">前 41 通道＝深度 logits，后 64 通道＝上下文 c</text>
-              <text x="32" y="254" font-size="11" fill="#2b3440">α = softmax(前 41 通道)：softmax 零参数，</text>
-              <text x="32" y="270" font-size="11" fill="#2b3440">　学的是产生 logits 的 41 个滤波器（w_d·f+b_d）</text>
-              <text x="32" y="288" font-size="11" fill="#2b3440">α 第 d 档 ↔ 固定格中心 4.0–44.0 m（Δd=1.0 m）</text>
-              <text x="32" y="306" font-size="11" fill="#2b3440">分工无深度监督，由 BEV 损失回传逼出；</text>
-              <text x="32" y="322" font-size="11" fill="#2b3440">外积 c_d = α_d·c → 每相机 (64,41,8,22) 视锥</text>
-            </g>
           </g>
           </g>
         </svg>
