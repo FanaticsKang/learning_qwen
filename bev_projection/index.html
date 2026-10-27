@@ -694,6 +694,253 @@ var F3D = {
   inst.expose(function () { return { depthOn: on, alphaC: alphaC }; });
   window.__frustum3dState = function () { return inst.state(); };
 })();
+
+// BEVFormer 面板：BEV 网格中心局部（200×200＝40000 格的抽样示意）/ 聚焦 query 的 pillar 与 4 z 锚 /
+// 六相机环视线框（命中点亮、其余灰影）/ 锚点到命中相机的 lidar2img 示意投影线 /
+// 点亮态 query 格＋参考点邻域采样簇（可学习偏移，示意）/ query 格 BEV 平面拖拽联动（cfg 形式挂到公共库）。
+(function () {
+  var EXT = 15;                                  // BEV 平面图示半宽（m，全图 200×200 格取中心局部抽样）
+  var GRID_PITCH = 5, LATTICE_PITCH = 2.5;       // 抽样网格线/格点间距（示意）
+  var ANCHORS = [-4.5, -2.167, 0.167, 2.5];      // 4 个固定 z 锚（modules/encoder.py:62-63）
+  var CELL = 0.512;                              // BEV 格边长（200×200 @0.512 m）
+  var CAM_ANGLES = [0, 60, 120, 180, 240, 300];  // 六相机环视（示意：等角布置）
+  var CAM_R = 2.0, CAM_H = 1.55, PLANE_D = 1.0;  // 相机环半径/光心高/线框像平面距离（示意）
+  var TH_H = Math.tan(40 * Math.PI / 180);       // 半视场水平正切（示意）
+  var TH_V = Math.tan(26 * Math.PI / 180);       // 半视场垂直正切（示意）
+  var qx = 7.5, qz = -4.5;                       // 聚焦 query 格的 BEV 平面坐标（世界 x/y，可拖拽）
+  var on = false;                                // 最近一帧的两态（供测试钩子读取）
+
+  function camGeom(k) {
+    var t = CAM_ANGLES[k] * Math.PI / 180;
+    return {
+      o: [Math.cos(t) * CAM_R, Math.sin(t) * CAM_R, CAM_H],
+      f: [Math.cos(t), Math.sin(t), 0],
+      r: [-Math.sin(t), Math.cos(t), 0],
+      u: [0, 0, 1]
+    };
+  }
+  // 3D 点 → 相机 k 的归一化像平面坐标（lidar2img 示意）；出视野或镜后返回 null
+  function toCam(g, p) {
+    var dx = p[0] - g.o[0], dy = p[1] - g.o[1], dz = p[2] - g.o[2];
+    var zc = dx * g.f[0] + dy * g.f[1] + dz * g.f[2];
+    if (zc < 0.1) { return null; }
+    var nx = (dx * g.r[0] + dy * g.r[1] + dz * g.r[2]) / zc;
+    var ny = (dx * g.u[0] + dy * g.u[1] + dz * g.u[2]) / zc;
+    if (Math.abs(nx) > TH_H || Math.abs(ny) > TH_V) { return null; }
+    return [nx, ny];
+  }
+  function planePoint(g, n) { // 归一化像平面坐标 → 像平面上的 3D 点
+    return [
+      g.o[0] + g.f[0] * PLANE_D + g.r[0] * n[0] * PLANE_D + g.u[0] * n[1] * PLANE_D,
+      g.o[1] + g.f[1] * PLANE_D + g.r[1] * n[0] * PLANE_D + g.u[1] * n[1] * PLANE_D,
+      g.o[2] + g.f[2] * PLANE_D + g.r[2] * n[0] * PLANE_D + g.u[2] * n[1] * PLANE_D
+    ];
+  }
+  function planeCorner(g, sx, sy) { return planePoint(g, [sx * TH_H, sy * TH_V]); }
+  function jit(i, seed) { // 采样簇确定性伪随机偏移（同参数恒定 → 重绘稳定）
+    var a = (i * 2.399963 + seed * 1.37) % (Math.PI * 2);
+    var rr = 0.35 + 0.65 * ((i * 53 + seed * 29) % 17) / 16;
+    return [Math.cos(a) * rr, Math.sin(a) * rr];
+  }
+
+  function drawScene(api) {
+    var ctx = api.ctx, W = api.W, H = api.H, project = api.project;
+    on = api.depthOn();
+
+    // 地面（半透明：负 z 锚点在地面以下仍可见）
+    var gf = [project([-EXT, -EXT, 0]), project([EXT, -EXT, 0]), project([EXT, EXT, 0]), project([-EXT, EXT, 0])];
+    if (gf[0] && gf[1] && gf[2] && gf[3]) {
+      ctx.beginPath();
+      ctx.moveTo(gf[0].x, gf[0].y); ctx.lineTo(gf[1].x, gf[1].y); ctx.lineTo(gf[2].x, gf[2].y); ctx.lineTo(gf[3].x, gf[3].y);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(238,245,252,0.5)'; ctx.fill();
+    }
+
+    var prims = [];
+    function seg(p1, p2, s) {
+      var a = project(p1), q = project(p2);
+      if (!a || !q) { return; }
+      prims.push({ z: (a.z + q.z) / 2, t: 'l', a: a, q: q, s: s });
+    }
+    function dot(p, r0, fill, stroke) {
+      var a = project(p);
+      if (!a) { return; }
+      prims.push({ z: a.z, t: 'p', a: a, r: r0, f: fill, st: stroke || null });
+    }
+
+    // BEV 网格（抽样示意）：边界＋稀疏网格线＋格点
+    seg([-EXT, -EXT, 0], [EXT, -EXT, 0], 'edge'); seg([EXT, -EXT, 0], [EXT, EXT, 0], 'edge');
+    seg([EXT, EXT, 0], [-EXT, EXT, 0], 'edge'); seg([-EXT, EXT, 0], [-EXT, -EXT, 0], 'edge');
+    for (var gx2 = -EXT + GRID_PITCH; gx2 < EXT; gx2 += GRID_PITCH) { seg([gx2, -EXT, 0], [gx2, EXT, 0], 'grid'); }
+    for (var gz2 = -EXT + GRID_PITCH; gz2 < EXT; gz2 += GRID_PITCH) { seg([-EXT, gz2, 0], [EXT, gz2, 0], 'grid'); }
+    for (var lx = -EXT + LATTICE_PITCH / 2; lx < EXT; lx += LATTICE_PITCH) {
+      for (var lz = -EXT + LATTICE_PITCH / 2; lz < EXT; lz += LATTICE_PITCH) { dot([lx, lz, 0], 1.1, 'rgba(0,114,178,0.3)'); }
+    }
+
+    // 自车占位（灰线框）
+    seg([-2.25, -1.1, 0], [2.25, -1.1, 0], 'ego'); seg([2.25, -1.1, 0], [2.25, 1.1, 0], 'ego');
+    seg([2.25, 1.1, 0], [-2.25, 1.1, 0], 'ego'); seg([-2.25, 1.1, 0], [-2.25, -1.1, 0], 'ego');
+
+    // 聚焦 query 的 pillar 与 4 个固定 z 锚（蓝虚线族＝固定几何）
+    seg([qx, qz, ANCHORS[0]], [qx, qz, ANCHORS[3]], 'pillar');
+    for (var ai = 0; ai < ANCHORS.length; ai++) { dot([qx, qz, ANCHORS[ai]], 2.8, 'rgba(0,114,178,0.9)', '#ffffff'); }
+
+    // 六相机环视：命中（任一 z 锚入视野）点亮，其余灰影；命中相机画投影线与参考点
+    for (var ck = 0; ck < CAM_ANGLES.length; ck++) {
+      var g = camGeom(ck);
+      var cs = [planeCorner(g, -1, -1), planeCorner(g, 1, -1), planeCorner(g, 1, 1), planeCorner(g, -1, 1)];
+      var hs = 'camG';
+      var refIdx = [];
+      for (var aj = 0; aj < ANCHORS.length; aj++) {
+        var n = toCam(g, [qx, qz, ANCHORS[aj]]);
+        if (n) { refIdx.push({ ai: aj, n: n }); }
+      }
+      if (refIdx.length > 0) { hs = 'camH'; }
+      for (var ci = 0; ci < 4; ci++) {
+        seg(cs[ci], cs[(ci + 1) % 4], hs);
+        seg(g.o, cs[ci], hs);
+      }
+      dot(g.o, 1.5, hs === 'camH' ? 'rgba(0,114,178,0.85)' : 'rgba(150,160,172,0.5)');
+      if (refIdx.length === 0) { continue; }
+      for (var rk = 0; rk < refIdx.length; rk++) {
+        var pt = planePoint(g, refIdx[rk].n);
+        seg([qx, qz, ANCHORS[refIdx[rk].ai]], pt, 'proj');
+        seg(pt, g.o, 'projf');
+        dot(pt, 2.6, 'rgba(0,114,178,0.95)', '#ffffff');
+        if (on) { // 参考点邻域采样簇＝可学习偏移（示意）
+          for (var si = 0; si < 8; si++) {
+            var j2 = jit(si, ck * 4 + refIdx[rk].ai);
+            var cp = [
+              pt[0] + g.r[0] * j2[0] * TH_H * PLANE_D * 0.35 + g.u[0] * j2[1] * TH_V * PLANE_D * 0.35,
+              pt[1] + g.r[1] * j2[0] * TH_H * PLANE_D * 0.35 + g.u[1] * j2[1] * TH_V * PLANE_D * 0.35,
+              pt[2] + g.r[2] * j2[0] * TH_H * PLANE_D * 0.35 + g.u[2] * j2[1] * TH_V * PLANE_D * 0.35
+            ];
+            seg(pt, cp, 'off');
+            dot(cp, 1.8, 'rgba(213,94,0,0.8)');
+          }
+        }
+      }
+    }
+
+    // 深度排序绘制（线与点统一按视距）
+    prims.sort(function (m, n2) { return n2.z - m.z; });
+    for (var pk = 0; pk < prims.length; pk++) {
+      var pr = prims[pk];
+      if (pr.t === 'l') {
+        ctx.beginPath(); ctx.moveTo(pr.a.x, pr.a.y); ctx.lineTo(pr.q.x, pr.q.y);
+        if (pr.s === 'edge') { ctx.strokeStyle = 'rgba(0,114,178,0.4)'; ctx.lineWidth = 1.1; ctx.setLineDash([4, 5]); }
+        else if (pr.s === 'grid') { ctx.strokeStyle = 'rgba(0,114,178,0.14)'; ctx.lineWidth = 0.8; ctx.setLineDash([]); }
+        else if (pr.s === 'ego') { ctx.strokeStyle = 'rgba(120,130,142,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([]); }
+        else if (pr.s === 'camH') { ctx.strokeStyle = 'rgba(0,114,178,0.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([]); }
+        else if (pr.s === 'camG') { ctx.strokeStyle = 'rgba(150,160,172,0.45)'; ctx.lineWidth = 1.1; ctx.setLineDash([3, 4]); }
+        else if (pr.s === 'proj') { ctx.strokeStyle = 'rgba(0,114,178,0.75)'; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]); }
+        else if (pr.s === 'projf') { ctx.strokeStyle = 'rgba(0,114,178,0.3)'; ctx.lineWidth = 1; ctx.setLineDash([2, 4]); }
+        else if (pr.s === 'off') { ctx.strokeStyle = 'rgba(213,94,0,0.55)'; ctx.lineWidth = 0.9; ctx.setLineDash([]); }
+        else { ctx.strokeStyle = 'rgba(0,114,178,0.85)'; ctx.lineWidth = 1.6; ctx.setLineDash([7, 5]); } // pillar
+        ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.beginPath(); ctx.arc(pr.a.x, pr.a.y, pr.r, 0, Math.PI * 2);
+        ctx.fillStyle = pr.f; ctx.fill();
+        if (pr.st) { ctx.strokeStyle = pr.st; ctx.lineWidth = 1; ctx.stroke(); }
+      }
+    }
+
+    // 点亮态：聚焦 query 格（真实 0.512 m 格＋放大标记）显橙
+    if (on) {
+      var qc = [
+        project([qx - CELL / 2, qz - CELL / 2, 0]), project([qx + CELL / 2, qz - CELL / 2, 0]),
+        project([qx + CELL / 2, qz + CELL / 2, 0]), project([qx - CELL / 2, qz + CELL / 2, 0])
+      ];
+      if (qc[0] && qc[1] && qc[2] && qc[3]) {
+        ctx.beginPath();
+        ctx.moveTo(qc[0].x, qc[0].y); ctx.lineTo(qc[1].x, qc[1].y); ctx.lineTo(qc[2].x, qc[2].y); ctx.lineTo(qc[3].x, qc[3].y);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(213,94,0,0.25)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(213,94,0,0.9)'; ctx.lineWidth = 1.4; ctx.stroke();
+      }
+      var qm = project([qx, qz, 0]);
+      if (qm) {
+        ctx.beginPath(); ctx.arc(qm.x, qm.y, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(213,94,0,0.9)'; ctx.fill();
+      }
+    }
+
+    // 标注（世界锚定）＋图例（屏幕锚定）
+    function label(p, text, dx, dy, color, size, anchor) {
+      var a = project(p); if (!a) { return; }
+      ctx.font = (size || 11) + 'px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = color || '#5a6570'; ctx.textAlign = anchor || 'left';
+      ctx.fillText(text, a.x + (dx || 0), a.y + (dy || 0));
+      ctx.textAlign = 'left';
+    }
+    label([qx, qz, ANCHORS[3]], 'pillar × 4 个固定 z 锚', 12, -8, '#37424d', 11);
+    for (var az = 0; az < ANCHORS.length; az++) { label([qx, qz, ANCHORS[az]], 'z=' + ANCHORS[az] + ' m', 10, 3.5, '#0072B2', 10); }
+    label([qx, qz, 0], on ? 'BEV query 格（可拖拽）' : 'query 格（可拖拽）', 12, 14, on ? '#D55E00' : '#5a6570', 11);
+    label([2.6, 0, 0], '自车', 8, 4, '#5a6570', 10.5);
+    for (var lk = 0; lk < CAM_ANGLES.length; lk++) {
+      var lg = camGeom(lk);
+      var hit = false;
+      for (var hj = 0; hj < ANCHORS.length; hj++) { if (toCam(lg, [qx, qz, ANCHORS[hj]])) { hit = true; break; } }
+      if (hit) { label(planeCorner(lg, 0, 1), '命中相机', 0, -8, '#0072B2', 10, 'middle'); }
+    }
+    ctx.font = '10.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    ctx.fillText('● 蓝＝固定几何（网格／pillar／z 锚／投影线·lidar2img 示意）　● 橙＝可学习（query 格／采样簇·示意）', 14, H - 30);
+    ctx.fillText('灰＝未命中相机（bev_mask 掩码）　● 拖 pillar 脚下的格＝移动 query，投影线与命中相机实时变化', 14, H - 14);
+  }
+
+  function hitTest(x, y, api) {
+    var a = api.project([qx, qz, 0]);
+    if (!a) { return null; }
+    var dx = x - a.x, dy = y - a.y;
+    return (dx * dx + dy * dy <= 30 * 30) ? 'query' : null;
+  }
+  function onCustomDrag(mode, x, y, api) { // 屏幕 → BEV 平面（z=0）：按 F3D 投影公式逆推
+    if (mode !== 'query') { return; }
+    var F = api.H * 1.32, CX2 = api.W * 0.54, CY2 = api.H * 0.48;
+    var cp = Math.cos(api.cam.pitch), sp = Math.sin(api.cam.pitch);
+    var cyw = Math.cos(api.cam.yaw), syw = Math.sin(api.cam.yaw);
+    var eye = [0 - api.cam.radius * cp * cyw, 0 - api.cam.radius * cp * syw, 1 + api.cam.radius * sp];
+    var w = [cp * cyw, cp * syw, -sp], u = [syw, -cyw, 0];
+    var v = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    var xc = (x - CX2) / F, yc = (CY2 - y) / F;
+    var d = [u[0] * xc + v[0] * yc + w[0], u[1] * xc + v[1] * yc + w[1], u[2] * xc + v[2] * yc + w[2]];
+    if (Math.abs(d[2]) < 1e-6) { return; }
+    var t = -eye[2] / d[2];
+    if (t <= 0) { return; }
+    qx = Math.max(-EXT + 1, Math.min(EXT - 1, eye[0] + t * d[0]));
+    qz = Math.max(-EXT + 1, Math.min(EXT - 1, eye[1] + t * d[1]));
+  }
+
+  var STATE_OFF = '当前：熄灭——仅固定几何：BEV 网格（抽样）、pillar 与 4 个 z 锚、lidar2img 投影线（示意）与相机线框；拖 pillar 脚下的格可移动 query';
+  var STATE_ON = '已点亮：BEV query 格与采样簇显橙——采样簇围绕各参考点散布＝可学习偏移（示意，每命中相机 256 采样位）；拖 pillar 脚下的格，投影线与命中相机实时变化';
+  function mountNow() { // 本面板 DOM 位于 script 块之后，需等 DOM 就绪再挂载
+    var inst = F3D.mount({
+      canvasId: 'bev3d-canvas',
+      toggleId: 'bev3d-toggle',
+      zoomId: 'bev3d-zoom',
+      stateId: 'bev3d-state',
+      center: [0, 0, 1],
+      yawInit: 2.6,
+      pitchInit: 0.5,
+      radiusInit: 34,
+      radiusMin: 16,
+      radiusMax: 70,
+      drawScene: drawScene,
+      hitTest: hitTest,
+      onCustomDrag: onCustomDrag,
+      stateText: function (d) { return d ? STATE_ON : STATE_OFF; }
+    });
+    if (!inst) { return; }
+    inst.expose(function () { return { depthOn: on, qx: qx, qz: qz }; });
+    window.__bev3dState = function () { return inst.state(); };
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountNow);
+  } else {
+    mountNow();
+  }
+})();
           </script>
         </div>
 
@@ -839,7 +1086,7 @@ var F3D = {
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 748" role="img" aria-label="BEVFormer 机制图：上半为 encoder 总览（重绘自论文 Fig.2(a)），下半为 SCA 柱采样（重绘自 Fig.2(b)）；BEV query 与采样偏移为可学习，pillar 网格、z 锚点与 lidar2img 投影为固定几何">
+        <svg viewBox="0 0 1000 366" role="img" aria-label="BEVFormer encoder 总览（重绘自论文 Fig.2(a)）：BEV query 与采样偏移为可学习，pillar 网格、z 锚点与 lidar2img 投影为固定几何">
           <!-- ===== A · Encoder 总览（重绘自论文 Fig.2(a)）===== -->
           <g font-size="13" fill="#2b3440">
             <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · Encoder 总览（重绘自论文 Fig.2(a)）：query 是学的（橙），锚点是标的（蓝）</text>
@@ -884,10 +1131,11 @@ var F3D = {
 
             <line class="flow" x1="656" y1="209" x2="670" y2="209"></line>
 
-            <rect class="learnable" x="670" y="174" width="100" height="70" rx="4"></rect>
-            <text x="720" y="192" text-anchor="middle" font-size="10.5">SCA 采样</text>
-            <text x="720" y="208" text-anchor="middle" font-size="9.5">deformable</text>
-            <text x="720" y="224" text-anchor="middle" font-size="9">offsets/weights</text>
+            <rect class="learnable" x="670" y="174" width="100" height="70" rx="4" style="stroke-width:2.5"></rect>
+            <text x="720" y="189" text-anchor="middle" font-size="11" font-weight="bold" fill="#37424d">拉＝3D→2D</text>
+            <text x="720" y="202" text-anchor="middle" font-size="10.5">SCA 采样</text>
+            <text x="720" y="214" text-anchor="middle" font-size="9.5">deformable</text>
+            <text x="720" y="226" text-anchor="middle" font-size="9">offsets/weights</text>
             <text x="720" y="238" text-anchor="middle" font-size="9">（可学习）</text>
 
             <line class="flow" x1="770" y1="209" x2="784" y2="209"></line>
@@ -925,12 +1173,24 @@ var F3D = {
             <text x="933" y="336" text-anchor="middle" font-size="10.5">3D 框＋速度</text>
             <text x="933" y="351" text-anchor="middle" font-size="9.5">（数据）</text>
           </g>
+        </svg>
 
-          <line x1="16" y1="376" x2="984" y2="376" stroke="#d0d7de" stroke-width="1"></line>
+        <div id="bev3d" class="f3d-panel">
+          <p class="f3d-title">B · 3D 拉取：BEV query 的 pillar 与投影（可拖拽/缩放）</p>
+          <div class="f3d-controls">
+            <button id="bev3d-toggle" class="f3d-toggle" type="button" aria-pressed="false">点亮 SCA 采样</button>
+            <label class="f3d-zoom"><span>缩放</span><input type="range" id="bev3d-zoom" class="f3d-zoom-input" min="16" max="70" value="34" step="1" aria-label="场景缩放"></label>
+            <span class="f3d-state" id="bev3d-state">当前：熄灭——仅固定几何：BEV 网格（抽样）、pillar 与 4 个 z 锚、lidar2img 投影线（示意）与相机线框；拖 pillar 脚下的格可移动 query</span>
+          </div>
+          <canvas id="bev3d-canvas" class="f3d-canvas" role="img" aria-label="3D 拉取演示：BEV 网格（200×200＝40000 格，图示取中心局部抽样）上，聚焦 query 格的 pillar 带 4 个固定 z 锚点（−4.5～2.5 m），六相机环视线框中投影入视野者点亮；锚点到命中相机的 lidar2img 投影线为示意；在 BEV 平面拖动 pillar 脚下的 query 格，投影线与命中相机实时变化；点亮按钮后，query 格与各参考点邻域的可学习采样簇（示意，每命中相机 256 采样位）显橙；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
+          <p class="f3d-note">小结：这一拉取就是 BEVFormer 的 <strong>SCA</strong>——3D 侧的可学习 BEV query（200×200＝40000 格的 <code>bev_embedding</code><span class="cite">dense_heads/bevformer_head.py:104-105</span>）把所在格抬成 pillar，取 4 个固定 z 锚<span class="cite">modules/encoder.py:62-63</span>（−4.5、−2.167、0.167、2.5 m），经 <code>lidar2img</code> 标定投影（示意）落到命中相机的特征图上，再在投影点邻域拉取特征。熄灭时只见固定几何：网格、pillar、z 锚、投影线（示意）与相机线框；点亮后橙色 query 格与围绕各参考点散布的采样簇显橙——采样簇＝可学习偏移（示意，每命中相机 256 采样位<span class="cite">modules/spatial_cross_attention.py:245-267</span>）。在 BEV 平面拖动 pillar 脚下的 query 格：pillar 与投影线随动，投影落入视野的相机点亮、其余保持灰影（<code>bev_mask</code> 掩码，命中＝任一 z 锚入视野，固定判定<span class="cite">modules/encoder.py:95-136</span>）。拖拽画布空白处旋转视角，"缩放"滑杆拉近拉远。</p>
+        </div>
 
-          <!-- ===== B · SCA 柱采样（重绘自论文 Fig.2(b)）===== -->
+        <svg viewBox="0 0 1000 372" role="img" aria-label="SCA 柱采样（重绘自论文 Fig.2(b)）：固定投影定锚，可学习偏移采样">
+          <g transform="translate(0,-376)">
+          <!-- ===== C · SCA 柱采样（重绘自论文 Fig.2(b)）===== -->
           <g font-size="13" fill="#2b3440">
-            <text x="16" y="398" font-size="14" font-weight="600" fill="#37424d">B · SCA 柱采样（重绘自论文 Fig.2(b)）：固定投影定锚，可学习偏移采样</text>
+            <text x="16" y="398" font-size="14" font-weight="600" fill="#37424d">C · SCA 柱采样（重绘自论文 Fig.2(b)）：固定投影定锚，可学习偏移采样</text>
 
             <!-- BEV 网格与 pillar -->
             <rect class="fixed" x="430" y="565" width="140" height="40" rx="2"></rect>
@@ -1030,6 +1290,7 @@ var F3D = {
             <text x="190" y="700" font-size="10" fill="#5a6570">6 相机环视：仅命中相机（蓝虚线框）参与 SCA，其余被 bev_mask 掩码——hit 判定：任一 z 锚点落入视锥（any-of-4，固定）</text>
 
             <text x="500" y="730" text-anchor="middle" font-size="11" fill="#4a5560">每 query 每命中相机采样位置 ＝ 8 head × 4 level × 8 point ＝ 256 个；聚合结果除以命中相机数 |V_hit|（论文 Eq.2）</text>
+          </g>
           </g>
         </svg>
         <p>拉取式桥：主动方是 3D 侧的可学习 BEV query 表 <code>bev_embedding</code>（<code>nn.Embedding(40000,256)</code><span class="cite">dense_heads/bevformer_head.py:104-105</span>）——每格 query 抬成 8 m pillar、取 4 个固定 z 锚点<span class="cite">modules/encoder.py:62-63</span><span class="cite">modules/encoder.py:189</span>，经 <code>lidar2img</code> 标定投影落到命中相机（仅命中相机参与，bev_mask 掩码）<span class="cite">modules/encoder.py:95-136</span>，再在投影点邻域以可学习偏移做 deformable 采样<span class="cite">modules/spatial_cross_attention.py:245-267</span>。"在哪采"的锚点全部来自固定标定几何，"采多远、权重多少"才是学习量；深度不预测、无深度头，仅由 4 个 z 锚点隐式离散。</p>
