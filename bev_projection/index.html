@@ -334,13 +334,13 @@
             #frustum3d .f3d-state { font-size: 13px; color: #5a6570; }
             #frustum3d .f3d-note { font-size: 13px; color: #5a6570; margin: 8px 0 0; }
           </style>
-          <p class="f3d-title">B · 3D 视锥：固定几何 + 深度加权（可拖拽旋转）</p>
+          <p class="f3d-title">B · Lift：2D 像平面 → 3D 视锥（固定几何 + 深度加权，可拖拽旋转）</p>
           <div class="f3d-controls">
             <button id="frustum3d-toggle" type="button" aria-pressed="false">加入深度估计</button>
             <span class="f3d-state" id="frustum3d-state">当前：常规视锥——8×22 个像素 × 41 档深度＝7216 个候选点（全灰等大），几何全固定</span>
           </div>
-          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：拖拽旋转视角；相机端像平面（8×22）与 8×22 像素 × 41 档深度的候选点云；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
-          <p class="f3d-note">小结：视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；像平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角。</p>
+          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：Lift 把 2D 像平面（8×22）抬升为 3D 视锥点云（8×22 像素 × 41 档深度）；拖拽旋转视角；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
+          <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——把 2D 图像特征变成 3D 视锥候选点，是 2D→3D 的核心一步。视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；像平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角。</p>
           <script id="frustum3d-script">
 'use strict';
 (function () {
@@ -525,7 +525,34 @@
       ctx.textAlign = 'left';
     }
     label([0, 0, 0], '相机（原点）', 8, -18);
-    label(quadPoint(0.5, 1, D_IMG), '像平面（8×22，图像）', -34, 18, '#5a6570', 11);
+    label(quadPoint(0.5, 1, D_IMG), '2D · 像平面（8×22）', -40, 18, '#5a6570', 11);
+    label(quadPoint(0.5, 1.28, 36), '3D · 视锥点云（候选格点）', -56, -4, '#5a6570', 11);
+
+    // Lift 特殊标识：2D → 3D 抬升方向（加粗箭头，随视角投影）
+    (function () {
+      var aL = project(b, [3.2, 0, 1.55 * TAN_V * 3.2]);
+      var bL = project(b, [23, 0, 1.55 * TAN_V * 23]);
+      if (!aL || !bL) { return; }
+      var ang = Math.atan2(bL.y - aL.y, bL.x - aL.x);
+      ctx.strokeStyle = 'rgba(55,66,77,0.85)'; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(aL.x, aL.y);
+      ctx.lineTo(bL.x - 11 * Math.cos(ang), bL.y - 11 * Math.sin(ang));
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(55,66,77,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(bL.x, bL.y);
+      ctx.lineTo(bL.x - 12 * Math.cos(ang - 0.42), bL.y - 12 * Math.sin(ang - 0.42));
+      ctx.lineTo(bL.x - 12 * Math.cos(ang + 0.42), bL.y - 12 * Math.sin(ang + 0.42));
+      ctx.closePath(); ctx.fill();
+      var mx = (aL.x + bL.x) / 2, my = (aL.y + bL.y) / 2;
+      ctx.font = 'bold 13px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = '#37424d';
+      ctx.textAlign = 'center';
+      ctx.fillText('Lift：2D → 3D', mx, my - 10);
+      ctx.textAlign = 'left';
+    })();
+
     label(pt(-TAN_H, -TAN_V, D0), '4.0 m', -4, 14, '#5a6570', 11);
     label(pt(-TAN_H, -TAN_V, 44), '44.0 m（Δd=1.0 m × 41 档）', -10, 14, '#5a6570', 11);
     label(pt(RAY_Y, RAY_Z, 27), '解剖射线（图像中心像素）', 14, -16, '#37424d', 11.5);
