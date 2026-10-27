@@ -334,6 +334,7 @@
             .f3d-state { font-size: 13px; color: #5a6570; }
             .f3d-zoom { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5a6570; }
             .f3d-zoom-input { width: 140px; accent-color: #0072B2; }
+            .f3d-gate-input { width: 110px; accent-color: #D55E00; } /* vox3d 门控滑杆：同款式样、窄一档、橙强调（门控＝可学习稀疏化） */
             .f3d-note { font-size: 13px; color: #5a6570; margin: 8px 0 0; }
           </style>
           <p class="f3d-title">B · 3D 视锥：相平面与 41 档候选点云（固定几何 + 深度加权，可拖拽旋转）</p>
@@ -1129,6 +1130,181 @@ var F3D = {
     if (!inst) { return; }
     inst.expose(function () { return { depthOn: on, vx: vx, vy: vy, vz: vz }; });
     window.__tpv3dState = function () { return inst.state(); };
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountNow);
+  } else {
+    mountNow();
+  }
+})();
+
+// VoxFormer 面板：128×128×16 @0.4 m query 体网格（全 262144 槽，抽样点阵示意）＋
+// 门控两态：熄灭＝全槽淡灰；点亮＝近相机可见带亮橙（N_p 示意）＋带内少量拉取线（示意）、
+// 其余全部槽位淡橙＝stage-2 可学习 mask token 广播补全（N_p→262144，淡橙集恒为亮带补集）＋
+// 「门控」滑杆联动（加宽/收窄亮带）（cfg 形式挂到公共库）。
+(function () {
+  var EXT = 25.6, ZMAX = 6.4;         // 网格范围：x/y ±25.6 m（128×0.4）、z 0～6.4 m（16×0.4）
+  var GX = 24, GY = 24, GZ = 8;       // 抽样点阵 24×24×8＝4608 点（全 262144 槽的抽样示意）
+  var CAM = [0, -29, 1.5];            // cam2 单目相机（示意）：网格前方，沿 +y 观察
+  var TAN_H = Math.tan(32 * Math.PI / 180); // 水平半视场（示意）
+  var TAN_V = Math.tan(20 * Math.PI / 180); // 垂直半视场（示意）
+  var on = false;                     // 最近一帧的两态（供测试钩子读取）
+  var gate = 4;                       // 门控滑杆值 1–10（mountNow 与 DOM 同步）
+
+  var LAT = [];                       // 抽样点阵（世界坐标，只建一次）
+  var PXS = [], PYS = [];             // 每帧点阵投影缓存（淡橙遍投影一次，亮橙带复用，省一半 project）
+  for (var ix = 0; ix < GX; ix++) {
+    for (var iy = 0; iy < GY; iy++) {
+      for (var iz = 0; iz < GZ; iz++) {
+        LAT.push([-EXT + (ix + 0.5) * (2 * EXT / GX), -EXT + (iy + 0.5) * (2 * EXT / GY), (iz + 0.5) * (ZMAX / GZ)]);
+      }
+    }
+  }
+
+  function gateDepth() { return 10 + 3.4 * gate; } // 亮带深度阈值：14.4～44 m（示意）
+  function inBand(p) { // 近相机可见带：相机前方深度 ≤ 阈值 且 落在水平视场楔内
+    var depth = p[1] - CAM[1];
+    if (depth <= 0 || depth > gateDepth()) { return false; }
+    return Math.abs(p[0] - CAM[0]) <= depth * TAN_H;
+  }
+
+  function drawScene(api) {
+    var ctx = api.ctx, W = api.W, H = api.H, project = api.project;
+    on = api.depthOn();
+
+    // 抽样点阵两态（同色点阵不参与深度排序——先画即背景层，叠序误差不可见；两遍设色控制每帧图元数）：
+    // 熄灭＝全槽淡灰；点亮＝先全阵淡橙（mask token 广播补全），带内点再重画为亮橙（N_p 示意）。
+    // 点用实心预混色而非半透明：画布位图本身透明，半透明点在位图里读回未混合的深色，两档橙将不可分。
+    var i, a;
+    if (on) {
+      ctx.fillStyle = '#F0CEB2';            // 淡橙（≈0.30 橙混白）：mask token 广播补全
+      ctx.beginPath();
+      for (i = 0; i < LAT.length; i++) {
+        a = project(LAT[i]);
+        if (a) { PXS[i] = a.x; PYS[i] = a.y; ctx.rect(a.x - 1.4, a.y - 1.4, 2.8, 2.8); } else { PXS[i] = NaN; }
+      }
+      ctx.fill();
+      ctx.fillStyle = '#CF6B0D';            // 亮橙（≈0.95 橙混白）：近相机可见带
+      ctx.beginPath();
+      for (i = 0; i < LAT.length; i++) {
+        if (isNaN(PXS[i]) || !inBand(LAT[i])) { continue; }
+        ctx.rect(PXS[i] - 1.8, PYS[i] - 1.8, 3.6, 3.6);
+      }
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#C8CED6';            // 淡灰（≈0.5 灰混白）：全部槽位无激活
+      ctx.beginPath();
+      for (i = 0; i < LAT.length; i++) {
+        a = project(LAT[i]); if (a) { ctx.rect(a.x - 1.3, a.y - 1.3, 2.6, 2.6); }
+      }
+      ctx.fill();
+    }
+
+    // 线框与拉取线（深度排序绘制）
+    var prims = [];
+    function seg(p1, p2, s) {
+      var a2 = project(p1), q2 = project(p2);
+      if (!a2 || !q2) { return; }
+      prims.push({ z: (a2.z + q2.z) / 2, a: a2, q: q2, s: s });
+    }
+
+    // 网格盒线框（128×128×16 全槽的边界；点亮后变淡）
+    var cs = [
+      [-EXT, -EXT, 0], [EXT, -EXT, 0], [EXT, EXT, 0], [-EXT, EXT, 0],
+      [-EXT, -EXT, ZMAX], [EXT, -EXT, ZMAX], [EXT, EXT, ZMAX], [-EXT, EXT, ZMAX]
+    ];
+    for (var ei = 0; ei < 4; ei++) {
+      seg(cs[ei], cs[(ei + 1) % 4], 'box');
+      seg(cs[ei + 4], cs[(ei + 1) % 4 + 4], 'box');
+      seg(cs[ei], cs[ei + 4], 'box');
+    }
+
+    // 相机线框（cam2 单目·示意）：光心＋视锥四棱＋像平面矩形
+    var D0 = 3.2, hw = D0 * TAN_H, hv = D0 * TAN_V;
+    var ic = [
+      [-hw, CAM[1] + D0, CAM[2] - hv], [hw, CAM[1] + D0, CAM[2] - hv],
+      [hw, CAM[1] + D0, CAM[2] + hv], [-hw, CAM[1] + D0, CAM[2] + hv]
+    ];
+    for (var ci = 0; ci < 4; ci++) {
+      seg(CAM, ic[ci], 'cam');
+      seg(ic[ci], ic[(ci + 1) % 4], 'cam');
+    }
+
+    // 点亮态：可见带内取 8 根拉取线（示意）——带内点均匀取样（确定性，无随机）
+    if (on) {
+      var band = [];
+      for (i = 0; i < LAT.length; i++) { if (inBand(LAT[i])) { band.push(LAT[i]); } }
+      for (var k = 0; k < 8; k++) {
+        var bp = band[Math.floor(k * band.length / 8)];
+        if (bp) { seg(CAM, bp, 'pull'); }
+      }
+    }
+
+    prims.sort(function (m, n2) { return n2.z - m.z; });
+    for (var pk = 0; pk < prims.length; pk++) {
+      var pr = prims[pk];
+      ctx.beginPath(); ctx.moveTo(pr.a.x, pr.a.y); ctx.lineTo(pr.q.x, pr.q.y);
+      if (pr.s === 'pull') { ctx.strokeStyle = 'rgba(0,114,178,0.6)'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]); }
+      else if (pr.s === 'cam') { ctx.strokeStyle = 'rgba(0,114,178,0.8)'; ctx.lineWidth = 1.3; ctx.setLineDash([]); }
+      else { ctx.strokeStyle = on ? 'rgba(120,130,142,0.25)' : 'rgba(120,130,142,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([]); }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // 标注（世界锚定）＋信息行与图例（屏幕锚定）
+    function label(p, text, dx, dy, color, size, anchor) {
+      var a2 = project(p); if (!a2) { return; }
+      ctx.font = (size || 11) + 'px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = color || '#5a6570'; ctx.textAlign = anchor || 'left';
+      ctx.fillText(text, a2.x + (dx || 0), a2.y + (dy || 0));
+      ctx.textAlign = 'left';
+    }
+    ctx.font = '11.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    if (on) {
+      ctx.fillText('门控生效：近相机可见带亮橙（N_p 示意）；其余全部槽位淡橙＝mask token 补全（N_p→262144）', 14, 22);
+      label(CAM, 'cam2（单目·示意）', -10, -4, '#0072B2', 10.5, 'end');
+      label([4, -17, 4.4], '亮橙＝可见带（N_p 示意）', 8, 4, '#5a6570', 11);
+      label([0, 15, 4.2], '淡橙＝mask token 广播补全（N_p→262144）', 0, 0, '#5a6570', 11, 'middle');
+    } else {
+      ctx.fillText('query 体网格 128×128×16 @0.4 m——全 262144 槽（抽样示意）无激活', 14, 22);
+      label(CAM, 'cam2（单目·示意）', -10, -4, '#0072B2', 10.5, 'end');
+    }
+    ctx.font = '10.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    if (on) {
+      ctx.fillText('● 亮橙＝可见带（N_p 示意，门控滑杆加宽/收窄）　● 淡橙＝mask token 补全（恒为补集）', 14, H - 30);
+      ctx.fillText('● 蓝虚线＝带内体素→相机拉取线（示意）　● 全网格 128×128×16 @0.4 m＝262144 槽（抽样示意）', 14, H - 14);
+    } else {
+      ctx.fillText('● 灰＝全部 262144 槽（抽样示意）　● 蓝线框＝cam2（示意）', 14, H - 30);
+      ctx.fillText('点亮按钮：看深度门控决定谁有 query；「门控」滑杆点亮后生效', 14, H - 14);
+    }
+  }
+
+  var STATE_OFF = '当前：熄灭——query 体网格 128×128×16 @0.4 m 全 262144 槽淡灰（抽样示意）、无激活；点亮后「门控」滑杆加宽亮带';
+  var STATE_ON = '已点亮：门控生效——近相机可见带亮橙（N_p 示意）＋拉取线示意，其余全部槽位淡橙＝mask token 广播补全（N_p→262144）；「门控」滑杆加宽或收窄亮带，淡橙集恒为补集';
+  function mountNow() { // 本面板 DOM 位于 script 块之后，需等 DOM 就绪再挂载
+    var inst = F3D.mount({
+      canvasId: 'vox3d-canvas',
+      toggleId: 'vox3d-toggle',
+      zoomId: 'vox3d-zoom',
+      stateId: 'vox3d-state',
+      center: [0, 0, 2],
+      yawInit: 2.0,
+      pitchInit: 0.26,
+      radiusInit: 70,
+      radiusMin: 30,
+      radiusMax: 100,
+      drawScene: drawScene,
+      stateText: function (d) { return d ? STATE_ON : STATE_OFF; }
+    });
+    if (!inst) { return; }
+    var gateEl = document.getElementById('vox3d-gate'); // 门控滑杆（本面板独有）：加宽/收窄亮带，淡橙集恒为补集
+    if (gateEl) {
+      gate = +gateEl.value;
+      gateEl.addEventListener('input', function () { gate = +gateEl.value; inst.redraw(); });
+    }
+    inst.expose(function () { return { depthOn: on, gate: gate }; });
+    window.__vox3dState = function () { return inst.state(); };
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mountNow);
@@ -1944,7 +2120,7 @@ var F3D = {
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 878" role="img" aria-label="VoxFormer 机制图：上半为 Stage-1 离线深度门控 query 提议（重绘自论文 Fig.2 上排），下半为 Stage-2 在线拉取与 MAE 式补全（重绘自 Fig.2 下排）；voxel query 表、mask token、QPN、DCA/DSA 采样偏移与两侧主干可学习，深度反投影、光线投射、格心锚点、lidar2img 投影与上采样为固定几何">
+        <svg viewBox="0 0 1000 408" role="img" aria-label="VoxFormer Stage-1 离线深度门控 query 提议（重绘自论文 Fig.2 上排）：QPN 占用预测（修正伪占用）可学习，深度反投影与 10-sweep 光线投射为固定几何">
           <!-- ===== A · Stage-1 离线深度门控（重绘自论文 Fig.2 上排）===== -->
           <g font-size="13" fill="#2b3440">
             <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · Stage-1 深度门控 query 提议（重绘自论文 Fig.2 上排）：全部离线预处理——深度不进在线图，只决定哪些 voxel 有 query</text>
@@ -1994,11 +2170,12 @@ var F3D = {
 
             <line class="flow" x1="825" y1="150" x2="825" y2="226"></line>
 
-            <rect x="750" y="230" width="150" height="44" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
-            <text x="825" y="248" text-anchor="middle" font-size="10.5">proposal 掩码 Qp</text>
-            <text x="825" y="266" text-anchor="middle" font-size="9.5">(128,128,16) 二值（数据）</text>
+            <rect x="750" y="230" width="150" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" style="stroke-width:2.5"></rect>
+            <text x="825" y="248" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#37424d">门控：谁有 query</text>
+            <text x="825" y="264" text-anchor="middle" font-size="10">proposal 掩码 Qp</text>
+            <text x="825" y="279" text-anchor="middle" font-size="9.5">(128,128,16) 二值（数据）</text>
 
-            <line class="flow" x1="750" y1="252" x2="352" y2="252"></line>
+            <line class="flow" x1="750" y1="258" x2="352" y2="258"></line>
 
             <!-- query 体网格（名场面：满网格、稀疏激活） -->
             <path class="fixed" d="M 30 240 L 300 240 L 350 208 L 80 208 Z"></path>
@@ -2033,22 +2210,36 @@ var F3D = {
 
             <text x="20" y="349" font-size="10.5">query 体网格 128×128×16 @0.4 m（N_q＝262,144，输出体 1/8 降采样）</text>
             <text x="20" y="367" font-size="10" fill="#D55E00">橙格＝Qp 选中＝该 voxel 获得 query（N_p 逐帧数据相关，无固定比例）</text>
-            <text x="20" y="385" font-size="10" fill="#5a6570">其余格＝masked——stage-2 由可学习 mask token 补齐（见 B）</text>
+            <text x="20" y="385" font-size="10" fill="#5a6570">其余格＝masked——stage-2 由可学习 mask token 补齐（见 C）</text>
 
             <text x="400" y="296" font-size="10">论文 Table 4 消融：occupancy 稀疏 query 44.0 IoU／14.6 G</text>
             <text x="400" y="314" font-size="10">vs 100% dense 34.6 IoU／18.5 G——稀疏既省显存又涨点</text>
 
-            <path class="flow" d="M 825 274 L 825 357 L 672 357"></path>
+            <path class="flow" d="M 825 286 L 825 357 L 672 357"></path>
             <rect x="400" y="335" width="270" height="44" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="535" y="353" text-anchor="middle" font-size="9.5">bit-pack .query 文件（QPN 指标标注于文件名）</text>
             <text x="535" y="371" text-anchor="middle" font-size="9.5">离线→在线唯一接口（数据）</text>
           </g>
 
-          <line x1="16" y1="408" x2="984" y2="408" stroke="#d0d7de" stroke-width="1"></line>
+        </svg>
 
-          <!-- ===== B · Stage-2 在线拉取＋补全（重绘自论文 Fig.2 下排）===== -->
+        <div id="vox3d" class="f3d-panel">
+          <p class="f3d-title">B · 3D 门控：深度决定谁有 query（可拖拽/缩放）</p>
+          <div class="f3d-controls">
+            <button id="vox3d-toggle" class="f3d-toggle" type="button" aria-pressed="false">点亮门控稀疏化</button>
+            <label class="f3d-zoom"><span>缩放</span><input type="range" id="vox3d-zoom" class="f3d-zoom-input" min="30" max="100" value="70" step="1" aria-label="场景缩放"></label>
+            <label class="f3d-zoom"><span>门控</span><input type="range" id="vox3d-gate" class="f3d-gate-input" min="1" max="10" value="4" step="1" aria-label="门控程度"></label>
+            <span class="f3d-state" id="vox3d-state">当前：熄灭——query 体网格 128×128×16 @0.4 m 全 262144 槽淡灰（抽样示意）、无激活；点亮后「门控」滑杆加宽亮带</span>
+          </div>
+          <canvas id="vox3d-canvas" class="f3d-canvas" role="img" aria-label="3D 门控演示：128×128×16 @0.4 m 的 query 体网格（全 262144 槽，抽样示意）上，深度门控决定谁有 query；点亮后近相机可见带亮橙（N_p 示意）并带少量拉取线（示意），其余全部槽位淡橙＝可学习 mask token 广播补全（N_p→262144）；「门控」滑杆加宽或收窄亮带，淡橙集恒为其补集；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
+          <p class="f3d-note">小结：这一门控就是 VoxFormer 的立身之本——全网格 128×128×16 @0.4 m 共 262144 个槽位都挂在可学习 query 表 <code>bev_embed</code> 上（(262144,128)，名片参数），但每帧只激活近相机可见带内的 N_p 条（示意；实际由离线 QPN 的 proposal 掩码 Qp 逐帧决定，数据相关、无固定比例）。熄灭时全 262144 槽淡灰（抽样示意）——无激活的代价感；点亮后亮橙可见带即 N_p 的示意，带内体素到相机的蓝虚线为拉取线示意（格心 <code>lidar2img</code> 投影，固定几何）；<strong>其余全部槽位淡橙——stage-2 由可学习 mask token 广播补齐（MAE 式 sparse-to-dense，N_p→262144），并非留空</strong>。「门控」滑杆加宽或收窄亮带，淡橙集恒为亮带的补集。拖拽画布空白处旋转视角，「缩放」滑杆拉近拉远。</p>
+        </div>
+
+        <svg viewBox="0 0 1000 470" role="img" aria-label="VoxFormer Stage-2 在线拉取与 MAE 式补全（重绘自论文 Fig.2 下排）：voxel query 表、mask token、DCA/DSA 采样偏移与两侧主干可学习，格心锚点、lidar2img 投影与上采样为固定几何">
+          <g transform="translate(0,-408)">
+          <!-- ===== C · Stage-2 在线拉取＋补全（重绘自论文 Fig.2 下排）===== -->
           <g font-size="13" fill="#2b3440">
-            <text x="16" y="432" font-size="14" font-weight="600" fill="#37424d">B · Stage-2 在线拉取＋补全（重绘自论文 Fig.2 下排）：格心标定定锚拉特征，mask token 补空格</text>
+            <text x="16" y="432" font-size="14" font-weight="600" fill="#37424d">C · Stage-2 在线拉取＋补全（重绘自论文 Fig.2 下排）：格心标定定锚拉特征，mask token 补空格</text>
 
             <rect x="20" y="470" width="110" height="64" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="75" y="494" text-anchor="middle" font-size="10.5">cam2 单目图像</text>
@@ -2147,6 +2338,7 @@ var F3D = {
             <text x="20" y="840" font-size="10">形状流：(1,3,370,1220) → (1,1848,B,128) → 激活 (N_p,B,128) → 补全 (262144,128) → (1,20,256,256,32)</text>
 
             <text x="500" y="862" text-anchor="middle" font-size="11" fill="#4a5560">构图要旨：深度把 query 推稀 · 标定把特征拉准 · 学习填满其余——四家中唯一由深度显式决定 query 集合</text>
+          </g>
           </g>
         </svg>
         <p>拉为主、推在门口：在线主体是拉（pull）——3D voxel query 以自身 0.4 m 格心<span class="cite">dense_heads/voxformer_head.py:191-216</span>经固定 <code>lidar2img</code> 投到图像、判 hit 后在命中相机上 deformable 采样"拉"取特征<span class="cite">modules/encoder.py:94-149</span><span class="cite">modules/deformable_cross_attention.py:140-176</span>（与 BEVFormer/TPVFormer 同为 MSDA 血统）；但进入在线模型之前有一次决定性的"推"（push）——像素深度经 Eq.1 反投影、光线投射、QPN 修正后形成 proposal 掩码，<strong>哪些 3D 位置有 query 由深度提议动态决定</strong>（"深度门控稀疏化"）。query 内容取自全网格可学习表 <code>bev_embed</code>（(262144,128)＝33.55 M，名片参数<span class="cite">dense_heads/voxformer_head.py:53</span>），每帧仅 N_p 行被激活；stage-2 用可学习 mask token 把空格补齐后经 DSA 稠密化（MAE 式 sparse-to-dense<span class="cite">dense_heads/voxformer_head.py:110-113</span>）。</p>
