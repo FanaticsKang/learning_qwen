@@ -321,39 +321,172 @@
           </g>
         </svg>
 
-        <div id="frustum3d">
+        <div id="frustum3d" class="f3d-panel">
           <style>
-            #frustum3d { margin: 18px 0 22px; }
-            #frustum3d .f3d-title { font-size: 14px; font-weight: 600; color: #37424d; margin: 0 0 8px; }
-            #frustum3d .f3d-controls { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; flex-wrap: wrap; }
-            #frustum3d-toggle { font: inherit; font-size: 13px; padding: 5px 14px; border: 1px solid #8a94a0; border-radius: 4px; background: #ffffff; color: #2b3440; cursor: pointer; }
-            #frustum3d-toggle.on { background: #D55E00; border-color: #D55E00; color: #ffffff; }
-            #frustum3d-toggle:focus-visible { outline: 2px solid #D55E00; outline-offset: 2px; }
-            #frustum3d-canvas { display: block; width: 100%; height: 420px; border: 1px solid #e3e8ee; border-radius: 4px; background: #fbfcfe; cursor: grab; touch-action: none; }
-            #frustum3d-canvas.dragging { cursor: grabbing; }
-            #frustum3d .f3d-state { font-size: 13px; color: #5a6570; }
-            #frustum3d .f3d-zoom { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5a6570; }
-            #frustum3d-zoom { width: 140px; accent-color: #0072B2; }
-            #frustum3d .f3d-note { font-size: 13px; color: #5a6570; margin: 8px 0 0; }
+            .f3d-panel { margin: 18px 0 22px; }
+            .f3d-title { font-size: 14px; font-weight: 600; color: #37424d; margin: 0 0 8px; }
+            .f3d-controls { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; flex-wrap: wrap; }
+            .f3d-toggle { font: inherit; font-size: 13px; padding: 5px 14px; border: 1px solid #8a94a0; border-radius: 4px; background: #ffffff; color: #2b3440; cursor: pointer; }
+            .f3d-toggle.on { background: #D55E00; border-color: #D55E00; color: #ffffff; }
+            .f3d-toggle:focus-visible { outline: 2px solid #D55E00; outline-offset: 2px; }
+            .f3d-canvas { display: block; width: 100%; height: 420px; border: 1px solid #e3e8ee; border-radius: 4px; background: #fbfcfe; cursor: grab; touch-action: none; }
+            .f3d-canvas.dragging { cursor: grabbing; }
+            .f3d-state { font-size: 13px; color: #5a6570; }
+            .f3d-zoom { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5a6570; }
+            .f3d-zoom-input { width: 140px; accent-color: #0072B2; }
+            .f3d-note { font-size: 13px; color: #5a6570; margin: 8px 0 0; }
           </style>
           <p class="f3d-title">B · 3D 视锥：相平面与 41 档候选点云（固定几何 + 深度加权，可拖拽旋转）</p>
           <div class="f3d-controls">
-            <button id="frustum3d-toggle" type="button" aria-pressed="false">加入深度估计</button>
-            <label class="f3d-zoom"><span>缩放</span><input type="range" id="frustum3d-zoom" min="40" max="160" value="78" step="1" aria-label="视锥缩放"></label>
+            <button id="frustum3d-toggle" class="f3d-toggle" type="button" aria-pressed="false">加入深度估计</button>
+            <label class="f3d-zoom"><span>缩放</span><input type="range" id="frustum3d-zoom" class="f3d-zoom-input" min="40" max="160" value="78" step="1" aria-label="视锥缩放"></label>
             <span class="f3d-state" id="frustum3d-state">当前：常规视锥——8×22 个像素 × 41 档深度＝7216 个候选点（全灰等大），几何全固定</span>
           </div>
-          <canvas id="frustum3d-canvas" role="img" aria-label="3D 视锥演示：0–4 m 空档处的相平面（8×22）与 4.0 m 起的候选点云（8×22 像素 × 41 档）；拖拽旋转视角，滑杆缩放；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
+          <canvas id="frustum3d-canvas" class="f3d-canvas" role="img" aria-label="3D 视锥演示：0–4 m 空档处的相平面（8×22）与 4.0 m 起的候选点云（8×22 像素 × 41 档）；拖拽旋转视角，滑杆缩放；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
           <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——把 2D 图像特征变成 3D 视锥候选点，是 2D→3D 的核心一步（在图C 流程图中以"Lift＝2D→3D"徽标标出）。视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。相平面（8×22）画在 0–4 m 的空档里——候选点从第一档 4.0 m 才开始，光心到 4 m 之间没有数据。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；相平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角，"缩放"滑杆可拉近拉远。</p>
           <script id="frustum3d-script">
 'use strict';
-(function () {
-  var canvas = document.getElementById('frustum3d-canvas');
-  var toggle = document.getElementById('frustum3d-toggle');
-  var stateEl = document.getElementById('frustum3d-state');
-  var zoomEl = document.getElementById('frustum3d-zoom');
-  if (!canvas || !toggle || !stateEl || !canvas.getContext) { return; }
-  var ctx = canvas.getContext('2d');
+// 公共库 F3D：透视投影 / 相机基 / 画家式深度排序的画布 / 拖拽旋转 / 缩放滑杆 / 两态按钮 /
+// 自定义命中拖拽（hitTest 命中→onCustomDrag 联动）/ DPR resize / 只读测试钩子装配。
+// 场景内容（几何、着色、直方图等）由各面板经 cfg.drawScene(api) 注入，多个面板可共用本库。
+var F3D = {
+  mount: function (cfg) {
+    var canvas = document.getElementById(cfg.canvasId);
+    var toggle = document.getElementById(cfg.toggleId);
+    var stateEl = cfg.stateId ? document.getElementById(cfg.stateId) : null;
+    var zoomEl = cfg.zoomId ? document.getElementById(cfg.zoomId) : null;
+    if (!canvas || !toggle || !canvas.getContext) { return null; }
+    var ctx = canvas.getContext('2d');
 
+    var yaw = cfg.yawInit, pitch = cfg.pitchInit;
+    var CENTER = cfg.center;
+    var RADIUS = zoomEl ? Math.max(cfg.radiusMin, Math.min(cfg.radiusMax, +zoomEl.value)) : cfg.radiusInit;
+    var depthOn = false;
+    var F = 900, CX = 500, CY = 210;
+    var W = 880, H = 420;
+    var liveApi = null; // 最近一帧的 api（指针命中与自定义拖拽回调用）
+
+    var cam = {};
+    Object.defineProperty(cam, 'yaw', { get: function () { return yaw; } });
+    Object.defineProperty(cam, 'pitch', { get: function () { return pitch; } });
+    Object.defineProperty(cam, 'radius', { get: function () { return RADIUS; } });
+
+    function resize() {
+      var dpr = window.devicePixelRatio || 1;
+      W = canvas.clientWidth || 880; H = canvas.clientHeight || 420;
+      var bw = Math.round(W * dpr), bh = Math.round(H * dpr);
+      if (canvas.width !== bw || canvas.height !== bh) {
+        canvas.width = bw; canvas.height = bh;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      F = H * 1.32; CX = W * 0.54; CY = H * 0.48;
+    }
+
+    function camBasis() {
+      var cp = Math.cos(pitch), sp = Math.sin(pitch);
+      var cyw = Math.cos(yaw), syw = Math.sin(yaw);
+      var eye = [CENTER[0] - RADIUS * cp * cyw, CENTER[1] - RADIUS * cp * syw, CENTER[2] + RADIUS * sp];
+      var w = [cp * cyw, cp * syw, -sp];
+      var u = [syw, -cyw, 0];
+      var v = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+      return { eye: eye, u: u, v: v, w: w };
+    }
+
+    function project(b, p) {
+      var rx = p[0] - b.eye[0], ry = p[1] - b.eye[1], rz = p[2] - b.eye[2];
+      var zc = rx * b.w[0] + ry * b.w[1] + rz * b.w[2];
+      if (zc < 1) { return null; }
+      var xc = rx * b.u[0] + ry * b.u[1] + rz * b.u[2];
+      var yc = rx * b.v[0] + ry * b.v[1] + rz * b.v[2];
+      return { x: CX + F * xc / zc, y: CY - F * yc / zc, z: zc };
+    }
+
+    function draw() {
+      resize();
+      ctx.clearRect(0, 0, W, H);
+      var b = camBasis();
+      liveApi = {
+        ctx: ctx, W: W, H: H,
+        project: function (p) { return project(b, p); },
+        cam: cam,
+        depthOn: function () { return depthOn; }
+      };
+      cfg.drawScene(liveApi);
+    }
+
+    var dragging = false, customDrag = false, customMode = null, lastX = 0, lastY = 0;
+    function down(e) {
+      var r = canvas.getBoundingClientRect();
+      var x = e.clientX - r.left, y = e.clientY - r.top;
+      var mode = cfg.hitTest ? cfg.hitTest(x, y, liveApi) : null;
+      if (mode) {
+        customDrag = true; customMode = mode;
+        if (cfg.onCustomDrag) { cfg.onCustomDrag(mode, x, y, liveApi); }
+        draw(); canvas.classList.add('dragging');
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+        return;
+      }
+      dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.classList.add('dragging');
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    function move(e) {
+      var r = canvas.getBoundingClientRect();
+      var x = e.clientX - r.left, y = e.clientY - r.top;
+      if (customDrag) {
+        if (cfg.onCustomDrag) { cfg.onCustomDrag(customMode, x, y, liveApi); }
+        draw(); return;
+      }
+      if (!dragging) {
+        var hov = cfg.hitTest ? cfg.hitTest(x, y, liveApi) : null;
+        canvas.style.cursor = hov ? 'ew-resize' : (canvas.classList.contains('dragging') ? 'grabbing' : 'grab');
+        return;
+      }
+      yaw += (e.clientX - lastX) * 0.0075;
+      pitch = Math.max(-1.25, Math.min(1.25, pitch + (e.clientY - lastY) * 0.006));
+      lastX = e.clientX; lastY = e.clientY; draw();
+    }
+    function up() { dragging = false; customDrag = false; customMode = null; canvas.classList.remove('dragging'); canvas.style.cursor = 'grab'; }
+    canvas.addEventListener('pointerdown', down);
+    canvas.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
+
+    toggle.addEventListener('click', function () {
+      depthOn = !depthOn;
+      toggle.classList.toggle('on', depthOn);
+      toggle.setAttribute('aria-pressed', depthOn ? 'true' : 'false');
+      if (stateEl && cfg.stateText) { stateEl.textContent = cfg.stateText(depthOn); }
+      draw();
+    });
+
+    if (zoomEl) {
+      zoomEl.addEventListener('input', function () {
+        RADIUS = Math.max(cfg.radiusMin, Math.min(cfg.radiusMax, +zoomEl.value));
+        draw();
+      });
+    }
+
+    window.addEventListener('resize', draw);
+    draw();
+
+    var exposed = [];
+    return {
+      redraw: function () { draw(); },
+      expose: function (fn) { exposed.push(fn); },
+      state: function () {
+        var s = { yaw: yaw, pitch: pitch, radius: RADIUS };
+        for (var i = 0; i < exposed.length; i++) {
+          var ex = exposed[i]();
+          for (var k in ex) { if (Object.prototype.hasOwnProperty.call(ex, k)) { s[k] = ex[k]; } }
+        }
+        return s;
+      }
+    };
+  }
+};
+
+// LSS 面板：8×22 像素 × 41 档候选点云 / 相平面 / α 直方图（场景与 α 拖拽以 cfg 形式挂到公共库）
+(function () {
   var N = 41, D0 = 4.0, DD = 1.0;
   var TAN_H = Math.tan(20 * Math.PI / 180);
   var TAN_V = Math.tan(13 * Math.PI / 180);
@@ -372,7 +505,6 @@
 
   function pt(ySlope, zSlope, d) { return [d, ySlope * d, zSlope * d]; }
 
-  var DEPTH_ON = false;
   var alpha = [], aMax = 0, alphaC = 16;
   function recomputeAlpha() { // 示意 softmax：中心档 alphaC 可拖拽（非真实网络输出）
     aMax = 0;
@@ -383,54 +515,20 @@
   }
   recomputeAlpha();
 
-  var yaw = -0.55, pitch = 0.34;
-  var CENTER = [23, 0, 0], RADIUS = zoomEl ? +zoomEl.value : 78;
-  var F = 900, CX = 500, CY = 210;
-  var W = 880, H = 420;
-  var inset = { x0: 0, x1: 0, top: 0, bottom: 0, step: 1 }; // α 直方图命中区
+  var inset = { x0: 0, x1: 0, top: 0, bottom: 0, step: 1 }; // α 直方图命中区（面板侧维护）
+  var on = false; // 最近一帧的两态（供测试钩子读取）
 
-  function resize() {
-    var dpr = window.devicePixelRatio || 1;
-    W = canvas.clientWidth || 880; H = canvas.clientHeight || 420;
-    var bw = Math.round(W * dpr), bh = Math.round(H * dpr);
-    if (canvas.width !== bw || canvas.height !== bh) {
-      canvas.width = bw; canvas.height = bh;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    F = H * 1.32; CX = W * 0.54; CY = H * 0.48;
-  }
-
-  function camBasis() {
-    var cp = Math.cos(pitch), sp = Math.sin(pitch);
-    var cyw = Math.cos(yaw), syw = Math.sin(yaw);
-    var eye = [CENTER[0] - RADIUS * cp * cyw, CENTER[1] - RADIUS * cp * syw, CENTER[2] + RADIUS * sp];
-    var w = [cp * cyw, cp * syw, -sp];
-    var u = [syw, -cyw, 0];
-    var v = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
-    return { eye: eye, u: u, v: v, w: w };
-  }
-
-  function project(b, p) {
-    var rx = p[0] - b.eye[0], ry = p[1] - b.eye[1], rz = p[2] - b.eye[2];
-    var zc = rx * b.w[0] + ry * b.w[1] + rz * b.w[2];
-    if (zc < 1) { return null; }
-    var xc = rx * b.u[0] + ry * b.u[1] + rz * b.u[2];
-    var yc = rx * b.v[0] + ry * b.v[1] + rz * b.v[2];
-    return { x: CX + F * xc / zc, y: CY - F * yc / zc, z: zc };
-  }
-
-  function draw() {
-    resize();
-    ctx.clearRect(0, 0, W, H);
-    var b = camBasis();
+  function drawScene(api) {
+    var ctx = api.ctx, W = api.W, H = api.H, project = api.project;
+    on = api.depthOn();
     var prims = [];
     function seg(p1, p2, style) {
-      var a = project(b, p1), q = project(b, p2);
+      var a = project(p1), q = project(p2);
       if (!a || !q) { return; }
       prims.push({ z: (a.z + q.z) / 2, t: 'l', a: a, q: q, s: style });
     }
     function dotGray(p) {
-      var a = project(b, p);
+      var a = project(p);
       if (!a) { return; }
       ctx.fillStyle = 'rgba(150,160,172,0.38)';
       ctx.beginPath(); ctx.arc(a.x, a.y, 1.8, 0, Math.PI * 2); ctx.fill();
@@ -472,24 +570,24 @@
     // 像平面（8×22，靠相机端）：中心像素格＝解剖射线起点
     var D_IMG = 3.0;
     (function () {
-      var q = [project(b, quadPoint(0, 0, D_IMG)), project(b, quadPoint(1, 0, D_IMG)), project(b, quadPoint(1, 1, D_IMG)), project(b, quadPoint(0, 1, D_IMG))];
+      var q = [project(quadPoint(0, 0, D_IMG)), project(quadPoint(1, 0, D_IMG)), project(quadPoint(1, 1, D_IMG)), project(quadPoint(0, 1, D_IMG))];
       if (q[0] && q[1] && q[2] && q[3]) {
         ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y); ctx.lineTo(q[1].x, q[1].y); ctx.lineTo(q[2].x, q[2].y); ctx.lineTo(q[3].x, q[3].y); ctx.closePath();
         ctx.fillStyle = 'rgba(238,245,252,0.8)'; ctx.fill();
         ctx.strokeStyle = 'rgba(0,114,178,0.6)'; ctx.lineWidth = 1.2; ctx.stroke();
       }
       for (var ic = 1; ic < GRID_C; ic++) {
-        var iu = ic / GRID_C, a1 = project(b, quadPoint(iu, 0, D_IMG)), a2 = project(b, quadPoint(iu, 1, D_IMG));
+        var iu = ic / GRID_C, a1 = project(quadPoint(iu, 0, D_IMG)), a2 = project(quadPoint(iu, 1, D_IMG));
         if (a1 && a2) { ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.strokeStyle = 'rgba(0,114,178,0.3)'; ctx.lineWidth = 0.8; ctx.stroke(); }
       }
       for (var ir = 1; ir < GRID_R; ir++) {
-        var iv = ir / GRID_R, b1 = project(b, quadPoint(0, iv, D_IMG)), b2 = project(b, quadPoint(1, iv, D_IMG));
+        var iv = ir / GRID_R, b1 = project(quadPoint(0, iv, D_IMG)), b2 = project(quadPoint(1, iv, D_IMG));
         if (b1 && b2) { ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.strokeStyle = 'rgba(0,114,178,0.3)'; ctx.lineWidth = 0.8; ctx.stroke(); }
       }
-      var cc = [project(b, quadPoint(10 / GRID_C, 3.5 / GRID_R, D_IMG)), project(b, quadPoint(11 / GRID_C, 3.5 / GRID_R, D_IMG)), project(b, quadPoint(11 / GRID_C, 4.5 / GRID_R, D_IMG)), project(b, quadPoint(10 / GRID_C, 4.5 / GRID_R, D_IMG))];
+      var cc = [project(quadPoint(10 / GRID_C, 3.5 / GRID_R, D_IMG)), project(quadPoint(11 / GRID_C, 3.5 / GRID_R, D_IMG)), project(quadPoint(11 / GRID_C, 4.5 / GRID_R, D_IMG)), project(quadPoint(10 / GRID_C, 4.5 / GRID_R, D_IMG))];
       if (cc[0] && cc[1] && cc[2] && cc[3]) {
         ctx.beginPath(); ctx.moveTo(cc[0].x, cc[0].y); ctx.lineTo(cc[1].x, cc[1].y); ctx.lineTo(cc[2].x, cc[2].y); ctx.lineTo(cc[3].x, cc[3].y); ctx.closePath();
-        if (DEPTH_ON) { ctx.fillStyle = 'rgba(213,94,0,0.22)'; ctx.fill(); ctx.strokeStyle = 'rgba(213,94,0,0.85)'; }
+        if (on) { ctx.fillStyle = 'rgba(213,94,0,0.22)'; ctx.fill(); ctx.strokeStyle = 'rgba(213,94,0,0.85)'; }
         else { ctx.strokeStyle = 'rgba(110,120,132,0.9)'; }
         ctx.lineWidth = 1.2; ctx.stroke();
       }
@@ -507,10 +605,10 @@
     }
 
     // 点亮态：图像中心射线 41 点按 α 着色（橙→红→深红，等大）
-    if (DEPTH_ON) {
+    if (on) {
       var hi = [];
       for (var j = 0; j < N; j++) {
-        var a2 = project(b, pt(RAY_Y, RAY_Z, D0 + DD * j));
+        var a2 = project(pt(RAY_Y, RAY_Z, D0 + DD * j));
         if (a2) { hi.push({ z: a2.z, x: a2.x, y: a2.y, t: alpha[j] / aMax }); }
       }
       hi.sort(function (m, n) { return n.z - m.z; });
@@ -522,7 +620,7 @@
     }
 
     function label(p, text, dx, dy, color, size, anchor) {
-      var a = project(b, p); if (!a) { return; }
+      var a = project(p); if (!a) { return; }
       ctx.font = (size || 11.5) + 'px "Segoe UI","Microsoft YaHei",sans-serif';
       ctx.fillStyle = color || '#5a6570'; ctx.textAlign = anchor || 'left';
       ctx.fillText(text, a.x + (dx || 0), a.y + (dy || 0));
@@ -535,7 +633,7 @@
     label(pt(-TAN_H, -TAN_V, 44), '44.0 m（Δd=1.0 m × 41 档）', -10, 14, '#5a6570', 11);
     label(pt(RAY_Y, RAY_Z, 27), '解剖射线（图像中心像素）', 14, -16, '#37424d', 11.5);
 
-    if (DEPTH_ON) {
+    if (on) {
       var bw = Math.min(3, (W - 40) / N - 1.4);
       var x0 = W - 22 - N * (bw + 1.4), yBase = H - 46, hMax = 44;
       var step = bw + 1.4;
@@ -565,55 +663,36 @@
     }
   }
 
-  var dragging = false, alphaDrag = false, lastX = 0, lastY = 0;
-  function overInset(x, y) { return DEPTH_ON && inset.x1 > inset.x0 && x >= inset.x0 - 14 && x <= inset.x1 + 14 && y >= inset.top && y <= inset.bottom; }
-  function setAlphaFromX(x) {
+  function hitTest(x, y, api) {
+    return (api.depthOn() && inset.x1 > inset.x0 && x >= inset.x0 - 14 && x <= inset.x1 + 14 && y >= inset.top && y <= inset.bottom) ? 'alpha' : null;
+  }
+  function onCustomDrag(mode, x, y, api) {
+    if (mode !== 'alpha') { return; }
     var t = Math.max(0, Math.min(N - 1, (x - inset.x0) / inset.step));
-    alphaC = Math.round(t); recomputeAlpha(); draw();
+    alphaC = Math.round(t); recomputeAlpha();
   }
-  function down(e) {
-    var r = canvas.getBoundingClientRect();
-    var x = e.clientX - r.left, y = e.clientY - r.top;
-    if (overInset(x, y)) { alphaDrag = true; setAlphaFromX(x); canvas.classList.add('dragging'); try { canvas.setPointerCapture(e.pointerId); } catch (err) {} return; }
-    dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.classList.add('dragging');
-    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
-  }
-  function move(e) {
-    var r = canvas.getBoundingClientRect();
-    var x = e.clientX - r.left, y = e.clientY - r.top;
-    if (alphaDrag) { setAlphaFromX(x); return; }
-    if (!dragging) {
-      canvas.style.cursor = overInset(x, y) ? 'ew-resize' : (canvas.classList.contains('dragging') ? 'grabbing' : 'grab');
-      return;
-    }
-    yaw += (e.clientX - lastX) * 0.0075;
-    pitch = Math.max(-1.25, Math.min(1.25, pitch + (e.clientY - lastY) * 0.006));
-    lastX = e.clientX; lastY = e.clientY; draw();
-  }
-  function up() { dragging = false; alphaDrag = false; canvas.classList.remove('dragging'); canvas.style.cursor = 'grab'; }
-  canvas.addEventListener('pointerdown', down);
-  canvas.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', up);
-  canvas.addEventListener('pointercancel', up);
 
   var STATE_OFF = '当前：常规视锥——8×22 个像素 × 41 档深度＝7216 个候选点（全灰等大），几何全固定';
   var STATE_ON = '已点亮：深度网络加入——图像中心射线按 α_d 加权着色（橙→红→深红，示意 softmax，大小不变）；直方图可左右拖拽移动分布中心，3D 着色实时联动';
-  toggle.addEventListener('click', function () {
-    DEPTH_ON = !DEPTH_ON;
-    toggle.classList.toggle('on', DEPTH_ON);
-    toggle.setAttribute('aria-pressed', DEPTH_ON ? 'true' : 'false');
-    stateEl.textContent = DEPTH_ON ? STATE_ON : STATE_OFF;
-    draw();
+  var inst = F3D.mount({
+    canvasId: 'frustum3d-canvas',
+    toggleId: 'frustum3d-toggle',
+    zoomId: 'frustum3d-zoom',
+    stateId: 'frustum3d-state',
+    center: [23, 0, 0],
+    yawInit: -0.55,
+    pitchInit: 0.34,
+    radiusInit: 78,
+    radiusMin: 40,
+    radiusMax: 160,
+    drawScene: drawScene,
+    hitTest: hitTest,
+    onCustomDrag: onCustomDrag,
+    stateText: function (d) { return d ? STATE_ON : STATE_OFF; }
   });
-
-  if (zoomEl) {
-    zoomEl.addEventListener('input', function () { RADIUS = +zoomEl.value; draw(); });
-  }
-
-  window.addEventListener('resize', draw);
-  draw();
-
-  window.__frustum3dState = function () { return { yaw: yaw, pitch: pitch, depthOn: DEPTH_ON, alphaC: alphaC, radius: RADIUS }; };
+  if (!inst) { return; }
+  inst.expose(function () { return { depthOn: on, alphaC: alphaC }; });
+  window.__frustum3dState = function () { return inst.state(); };
 })();
           </script>
         </div>
