@@ -941,6 +941,201 @@ var F3D = {
     mountNow();
   }
 })();
+
+// TPVFormer 面板：稠密 voxel 体积（200×200×16＝640000 的代价感，中心局部抽样示意）＋
+// 三正交平面 query 表（hw 200×200、zh 16×200、wz 200×16＝46400；点亮显橙、体素退为淡影）＋
+// 选中体素→三平面双线性采样连线与“等权求和（零参数）”标注（投影为示意）＋
+// 体素盒内拖拽联动：三平面采样点跟随（cfg 形式挂到公共库）。
+(function () {
+  var EXT = 12, ZMIN = -4, ZMAX = 4;   // 体积盒：x/y ±12 m、z −4～+4 m（200×200×16 体积的中心局部抽样，示意）
+  var LAT_XY = 1.5, LAT_Z = 1.0;       // 抽样点距（示意；真实格距 0.512/0.5 m）
+  var vx = 4.5, vy = -3, vz = 1;       // 选中体素的世界坐标（盒内可拖拽 → 三平面采样点联动）
+  var on = false;                      // 最近一帧的两态（供测试钩子读取）
+
+  function drawScene(api) {
+    var ctx = api.ctx, W = api.W, H = api.H, project = api.project;
+    on = api.depthOn();
+
+    // 稠密体素抽样点阵：淡灰小方点（熄灭＝640000 的代价感；点亮退为淡影）。
+    // 同色点阵不参与深度排序（先画即背景层，叠序误差不可见），控制每帧图元数。
+    ctx.fillStyle = on ? 'rgba(150,160,172,0.16)' : 'rgba(150,160,172,0.5)';
+    var sz = on ? 2.2 : 2.6;
+    for (var lx = -EXT + LAT_XY / 2; lx < EXT; lx += LAT_XY) {
+      for (var ly = -EXT + LAT_XY / 2; ly < EXT; ly += LAT_XY) {
+        for (var lz = ZMIN + LAT_Z / 2; lz < ZMAX; lz += LAT_Z) {
+          var a = project([lx, ly, lz]);
+          if (a) { ctx.fillRect(a.x - sz / 2, a.y - sz / 2, sz, sz); }
+        }
+      }
+    }
+
+    var prims = [];
+    function seg(p1, p2, s) {
+      var a2 = project(p1), q2 = project(p2);
+      if (!a2 || !q2) { return; }
+      prims.push({ z: (a2.z + q2.z) / 2, t: 'l', a: a2, q: q2, s: s });
+    }
+    function dot(p, r0, fill, stroke) {
+      var a2 = project(p);
+      if (!a2) { return; }
+      prims.push({ z: a2.z, t: 'p', a: a2, r: r0, f: fill, st: stroke || null });
+    }
+    function quad(p1, p2, p3, p4, s) {
+      var a2 = project(p1), b2 = project(p2), c2 = project(p3), d2 = project(p4);
+      if (!a2 || !b2 || !c2 || !d2) { return; }
+      prims.push({ z: (a2.z + b2.z + c2.z + d2.z) / 4, t: 'q', pts: [a2, b2, c2, d2], s: s });
+    }
+
+    // 体积盒线框（稠密体积的边界；点亮后同步变淡）
+    var cs = [
+      [-EXT, -EXT, ZMIN], [EXT, -EXT, ZMIN], [EXT, EXT, ZMIN], [-EXT, EXT, ZMIN],
+      [-EXT, -EXT, ZMAX], [EXT, -EXT, ZMAX], [EXT, EXT, ZMAX], [-EXT, EXT, ZMAX]
+    ];
+    for (var ei = 0; ei < 4; ei++) {
+      seg(cs[ei], cs[(ei + 1) % 4], 'box');
+      seg(cs[ei + 4], cs[(ei + 1) % 4 + 4], 'box');
+      seg(cs[ei], cs[ei + 4], 'box');
+    }
+
+    // 点亮态：三正交平面 query 表（hw 地面 200×200＋wz 前壁 200×16＋zh 侧壁 16×200，亮橙）＋抽样网格
+    if (on) {
+      quad([-EXT, -EXT, ZMIN], [EXT, -EXT, ZMIN], [EXT, EXT, ZMIN], [-EXT, EXT, ZMIN], 'plane'); // hw
+      quad([-EXT, -EXT, ZMIN], [EXT, -EXT, ZMIN], [EXT, -EXT, ZMAX], [-EXT, -EXT, ZMAX], 'plane'); // wz（y=−EXT 前壁）
+      quad([EXT, -EXT, ZMIN], [EXT, EXT, ZMIN], [EXT, EXT, ZMAX], [EXT, -EXT, ZMAX], 'plane');   // zh（x=+EXT 侧壁）
+      for (var gx = -EXT + 4; gx < EXT; gx += 4) {
+        seg([gx, -EXT, ZMIN], [gx, EXT, ZMIN], 'pgrid');
+        seg([gx, -EXT, ZMIN], [gx, -EXT, ZMAX], 'pgrid');
+        seg([EXT, gx, ZMIN], [EXT, gx, ZMAX], 'pgrid');
+      }
+      for (var gy = -EXT + 4; gy < EXT; gy += 4) {
+        seg([-EXT, gy, ZMIN], [EXT, gy, ZMIN], 'pgrid');
+        seg([EXT, gy, ZMIN], [EXT, gy, ZMAX], 'pgrid');
+      }
+      for (var gz = ZMIN + 1; gz < ZMAX; gz += 1) {
+        seg([-EXT, -EXT, gz], [EXT, -EXT, gz], 'pgrid');
+        seg([EXT, -EXT, gz], [EXT, EXT, gz], 'pgrid');
+      }
+
+      // 选中体素 → 三平面正交投影采样（蓝虚线＝固定几何·示意；橙点＝落在各 query 表上的采样位）
+      seg([vx, vy, vz], [vx, vy, ZMIN], 'samp');
+      seg([vx, vy, vz], [vx, -EXT, vz], 'samp');
+      seg([vx, vy, vz], [EXT, vy, vz], 'samp');
+      dot([vx, vy, ZMIN], 2.8, 'rgba(213,94,0,0.95)', '#ffffff');
+      dot([vx, -EXT, vz], 2.8, 'rgba(213,94,0,0.95)', '#ffffff');
+      dot([EXT, vy, vz], 2.8, 'rgba(213,94,0,0.95)', '#ffffff');
+    }
+
+    // 选中体素标记（两态常在，盒内可拖拽）
+    dot([vx, vy, vz], 3.6, on ? 'rgba(213,94,0,0.95)' : 'rgba(70,80,92,0.9)', '#ffffff');
+
+    // 深度排序绘制（面/线/点统一按视距）
+    prims.sort(function (m, n2) { return n2.z - m.z; });
+    for (var pk = 0; pk < prims.length; pk++) {
+      var pr = prims[pk];
+      if (pr.t === 'q') {
+        ctx.beginPath();
+        ctx.moveTo(pr.pts[0].x, pr.pts[0].y); ctx.lineTo(pr.pts[1].x, pr.pts[1].y);
+        ctx.lineTo(pr.pts[2].x, pr.pts[2].y); ctx.lineTo(pr.pts[3].x, pr.pts[3].y);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(213,94,0,0.12)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(213,94,0,0.85)'; ctx.lineWidth = 1.6; ctx.stroke();
+      } else if (pr.t === 'l') {
+        ctx.beginPath(); ctx.moveTo(pr.a.x, pr.a.y); ctx.lineTo(pr.q.x, pr.q.y);
+        if (pr.s === 'pgrid') { ctx.strokeStyle = 'rgba(213,94,0,0.3)'; ctx.lineWidth = 0.8; ctx.setLineDash([]); }
+        else if (pr.s === 'samp') { ctx.strokeStyle = 'rgba(0,114,178,0.75)'; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]); }
+        else { ctx.strokeStyle = on ? 'rgba(120,130,142,0.25)' : 'rgba(120,130,142,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([]); }
+        ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.beginPath(); ctx.arc(pr.a.x, pr.a.y, pr.r, 0, Math.PI * 2);
+        ctx.fillStyle = pr.f; ctx.fill();
+        if (pr.st) { ctx.strokeStyle = pr.st; ctx.lineWidth = 1; ctx.stroke(); }
+      }
+    }
+
+    // 标注（世界锚定）＋图例（屏幕锚定）
+    function label(p, text, dx, dy, color, size, anchor) {
+      var a2 = project(p); if (!a2) { return; }
+      ctx.font = (size || 11) + 'px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = color || '#5a6570'; ctx.textAlign = anchor || 'left';
+      ctx.fillText(text, a2.x + (dx || 0), a2.y + (dy || 0));
+      ctx.textAlign = 'left';
+    }
+    ctx.font = '11.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    if (on) {
+      ctx.fillText('三平面 query 表：hw 200×200＋zh 16×200＋wz 200×16＝46400 条（7.25%）', 14, 22);
+      label([0, 0, ZMIN], 'hw 200×200', 0, 16, '#D55E00', 11, 'middle');
+      label([0, -EXT, 0], 'wz 200×16', 0, -10, '#D55E00', 11, 'middle');
+      label([EXT, 0, 0], 'zh 16×200', 12, 0, '#D55E00', 11);
+      label([vx, vy, ZMIN], '双线性采样点（示意）', 8, 16, '#5a6570', 10.5);
+      label([vx, vy, vz], '等权求和（零参数）', 12, -12, '#37424d', 11.5);
+    } else {
+      ctx.fillText('稠密 voxel 体积 200×200×16＝640000 格（抽样示意）', 14, 22);
+      label([vx, vy, vz], '选中体素（可拖拽）', 10, 4, '#5a6570', 11);
+    }
+    ctx.font = '10.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    if (on) {
+      ctx.fillText('● 橙＝三平面 query 表（可学习·46400 条）　● 蓝虚线＝体素→平面投影（固定·示意）', 14, H - 30);
+      ctx.fillText('三路特征等权求和（零参数）；拖动选中体素，三平面采样点实时跟随', 14, H - 14);
+    } else {
+      ctx.fillText('● 灰＝稠密 voxel 槽位（抽样示意）　● 深灰＝选中体素（盒内可拖拽）', 14, H - 30);
+      ctx.fillText('点亮按钮：看三平面 query 表以 7.25% 的预算接管全空间', 14, H - 14);
+    }
+  }
+
+  function hitTest(x, y, api) {
+    var a = api.project([vx, vy, vz]);
+    if (!a) { return null; }
+    var dx = x - a.x, dy = y - a.y;
+    return (dx * dx + dy * dy <= 30 * 30) ? 'voxel' : null;
+  }
+  function onCustomDrag(mode, x, y, api) { // 屏幕 → 过体素、法向＝视向的平面（u/v/w 正交 → t＝体素视深）
+    if (mode !== 'voxel') { return; }
+    // 与公共库 F3D 投影公式镜像（F＝H×1.32、CX＝W×0.54、CY＝H×0.48；eye/u/v/w 同 camBasis）——已知耦合：库内公式变更需同步此处
+    var F = api.H * 1.32, CX2 = api.W * 0.54, CY2 = api.H * 0.48;
+    var cp = Math.cos(api.cam.pitch), sp = Math.sin(api.cam.pitch);
+    var cyw = Math.cos(api.cam.yaw), syw = Math.sin(api.cam.yaw);
+    var eye = [0 - api.cam.radius * cp * cyw, 0 - api.cam.radius * cp * syw, 0 + api.cam.radius * sp];
+    var w = [cp * cyw, cp * syw, -sp], u = [syw, -cyw, 0];
+    var v = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    var xc = (x - CX2) / F, yc = (CY2 - y) / F;
+    var d = [u[0] * xc + v[0] * yc + w[0], u[1] * xc + v[1] * yc + w[1], u[2] * xc + v[2] * yc + w[2]];
+    var t = (vx - eye[0]) * w[0] + (vy - eye[1]) * w[1] + (vz - eye[2]) * w[2];
+    vx = Math.max(-EXT + 0.8, Math.min(EXT - 0.8, eye[0] + t * d[0]));
+    vy = Math.max(-EXT + 0.8, Math.min(EXT - 0.8, eye[1] + t * d[1]));
+    vz = Math.max(ZMIN + 0.5, Math.min(ZMAX - 0.5, eye[2] + t * d[2]));
+  }
+
+  var STATE_OFF = '当前：熄灭——稠密 voxel 体积 200×200×16＝640000 格（抽样示意）占满全部预算；拖动选中体素仅见其自身移动';
+  var STATE_ON = '已点亮：三平面 query 表（hw 200×200＋zh 16×200＋wz 200×16＝46400 条，仅 7.25%）亮橙、体素体积退为淡影；选中体素到三平面的采样点随拖拽实时跟随，三路等权求和（零参数）';
+  function mountNow() { // 本面板 DOM 位于 script 块之后，需等 DOM 就绪再挂载
+    var inst = F3D.mount({
+      canvasId: 'tpv3d-canvas',
+      toggleId: 'tpv3d-toggle',
+      zoomId: 'tpv3d-zoom',
+      stateId: 'tpv3d-state',
+      center: [0, 0, 0],
+      yawInit: 2.35,
+      pitchInit: 0.46,
+      radiusInit: 42,
+      radiusMin: 22,
+      radiusMax: 90,
+      drawScene: drawScene,
+      hitTest: hitTest,
+      onCustomDrag: onCustomDrag,
+      stateText: function (d) { return d ? STATE_ON : STATE_OFF; }
+    });
+    if (!inst) { return; }
+    inst.expose(function () { return { depthOn: on, vx: vx, vy: vy, vz: vz }; });
+    window.__tpv3dState = function () { return inst.state(); };
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountNow);
+  } else {
+    mountNow();
+  }
+})();
           </script>
         </div>
 
@@ -1407,7 +1602,7 @@ var F3D = {
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 872" role="img" aria-label="TPVFormer 机制图：上半为三平面 TPV 表示与正交轴射线拉取（重绘自论文 Fig.3 概念与 Fig.4 采样机制），下半为端到端流水线（重绘自 Fig.4）；三张 query 表、采样偏移/权重与 CVHA 平面门控可学习，平面网格、锚点射线、投影与聚合为固定几何">
+        <svg viewBox="0 0 1000 424" role="img" aria-label="TPVFormer 三平面 TPV 表示与正交轴射线拉取（重绘自论文 Fig.3 概念与 Fig.4 采样机制）：三张 query 表、采样偏移/权重与 CVHA 平面门控可学习，平面网格、锚点射线与投影为固定几何">
           <!-- ===== A · 三平面 TPV 表示与射线拉取（重绘自论文 Fig.3 概念 ＋ Fig.4 采样机制）===== -->
           <g font-size="13" fill="#2b3440">
             <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 三平面 TPV 表示与射线拉取（重绘自论文 Fig.3 概念 ＋ Fig.4 采样机制）：query 是学的（橙），锚点射线与投影是标的（蓝）</text>
@@ -1493,15 +1688,28 @@ var F3D = {
 
             <!-- CVHA 与采样位置数注记 -->
             <text x="16" y="368" font-size="10.5">CVHA（每层第一步）：三平面互为 key/value（跨平面 deformable 自注意力）；attention_weights 第 33 个 logit 在 3 平面间 softmax＝层级门控</text>
-            <text x="16" y="386" font-size="10.5">（可学习，初始偏置 10 偏向本平面）——平面间的可学习混合在此，不在聚合处（见 B）</text>
+            <text x="16" y="386" font-size="10.5">（可学习，初始偏置 10 偏向本平面）——平面间的可学习混合在此，不在聚合处（见 C）</text>
             <text x="16" y="406" font-size="10" fill="#4a5560">采样位置数：ICA 每 query 每命中相机 hw 8head×4level×8point＝256、zh/wz 8 子查询×256＝2048；CVHA 每查询 8head×3plane×32point＝768</text>
           </g>
 
-          <line x1="16" y1="428" x2="984" y2="428" stroke="#d0d7de" stroke-width="1"></line>
+        </svg>
 
-          <!-- ===== B · 端到端流水线（重绘自论文 Fig.4）===== -->
+        <div id="tpv3d" class="f3d-panel">
+          <p class="f3d-title">B · 3D 压缩：三平面 query 代替稠密体素（可拖拽/缩放）</p>
+          <div class="f3d-controls">
+            <button id="tpv3d-toggle" class="f3d-toggle" type="button" aria-pressed="false">点亮三平面压缩</button>
+            <label class="f3d-zoom"><span>缩放</span><input type="range" id="tpv3d-zoom" class="f3d-zoom-input" min="22" max="90" value="42" step="1" aria-label="场景缩放"></label>
+            <span class="f3d-state" id="tpv3d-state">当前：熄灭——稠密 voxel 体积 200×200×16＝640000 格（抽样示意）占满全部预算；拖动选中体素仅见其自身移动</span>
+          </div>
+          <canvas id="tpv3d-canvas" class="f3d-canvas" role="img" aria-label="3D 压缩演示：200×200×16＝640000 格的稠密 voxel 体积（中心局部抽样示意）；点亮后三张正交平面 query 表——hw 200×200、zh 16×200、wz 200×16 共 46400 条——亮橙，体素体积变淡，选中体素到三平面的双线性采样连线与等权求和（零参数）标注出现；在体积内拖动选中体素，三个平面上的采样点实时跟随；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
+          <p class="f3d-note">小结：这一压缩就是 TPVFormer 的立身之本——覆盖同一范围需要稠密 voxel 200×200×16＝640000 个格槽，而三平面只要三张可学习 query 表：hw 200×200、zh 16×200、wz 200×16，合计 (40000,128)＋(3200,128)＋(3200,128)＝46400 条<span class="cite">tpvformer10/tpv_head.py:53-55</span>，仅为稠密体素的 7.25%。熄灭时全灰的体积（抽样示意）给出 640000 的代价感；点亮后三张平面表亮橙、体素退为淡影，任意格位的特征＝沿三根正交轴投影到三平面做双线性采样，再等权求和（零参数<span class="cite">tpvformer10/tpv_aggregator.py:69-84</span>，Eq.5；平面间的可学习混合在 CVHA 门控，不在聚合处）。在体积内拖动选中的体素，三个平面上的采样点实时跟随（投影与抽样密度均为示意）。拖拽画布空白处旋转视角，"缩放"滑杆拉近拉远。</p>
+        </div>
+
+        <svg viewBox="0 0 1000 444" role="img" aria-label="TPVFormer 端到端流水线（重绘自论文 Fig.4）：可学习＝三张 query 表＋采样偏移/权重＋CVHA 门控；固定＝锚点射线/投影/聚合">
+          <g transform="translate(0,-428)">
+          <!-- ===== C · 端到端流水线（重绘自论文 Fig.4）===== -->
           <g font-size="13" fill="#2b3440">
-            <text x="16" y="452" font-size="14" font-weight="600" fill="#37424d">B · 端到端流水线（重绘自论文 Fig.4）：可学习＝三张 query 表＋采样偏移/权重＋CVHA 门控；固定＝锚点射线/投影/聚合</text>
+            <text x="16" y="452" font-size="14" font-weight="600" fill="#37424d">C · 端到端流水线（重绘自论文 Fig.4）：可学习＝三张 query 表＋采样偏移/权重＋CVHA 门控；固定＝锚点射线/投影/聚合</text>
 
             <rect x="20" y="486" width="112" height="58" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="76" y="508" text-anchor="middle">6 环视图输入</text>
@@ -1560,10 +1768,11 @@ var F3D = {
 
             <text x="655" y="704" text-anchor="middle" font-size="9.5" fill="#5a6570">HCAB ×3 ＝ CVHA→ICA→FFN；HAB ×2 ＝ CVHA→FFN（ICA 仅前 3 层）</text>
 
-            <rect class="learnable" x="20" y="586" width="414" height="74" rx="4"></rect>
-            <text x="32" y="606" font-size="11">三平面 TPV query 表（可学习·3D 侧，桥的主动方）</text>
-            <text x="32" y="624" font-size="10">hw (40000,128)＋zh (3200,128)＋wz (3200,128)＝46400 条 @128 维（5.94M）</text>
-            <text x="32" y="642" font-size="10">＝同范围稠密 voxel 640000 格的 7.25%；pos 编码逐层注入 CVHA</text>
+            <rect class="learnable" x="20" y="586" width="414" height="82" rx="4" style="stroke-width:2.5"></rect>
+            <text x="32" y="604" font-size="11.5" font-weight="bold" fill="#37424d">压缩：640000→46400</text>
+            <text x="32" y="621" font-size="10.5">三平面 TPV query 表（可学习·3D 侧，桥的主动方）</text>
+            <text x="32" y="638" font-size="10">hw (40000,128)＋zh (3200,128)＋wz (3200,128)＝46400 条 @128 维（5.94M）</text>
+            <text x="32" y="655" font-size="10">＝同范围稠密 voxel 640000 格的 7.25%；pos 编码逐层注入 CVHA</text>
 
             <line class="flow" x1="434" y1="623" x2="462" y2="623"></line>
 
@@ -1601,6 +1810,7 @@ var F3D = {
 
             <text x="500" y="746" text-anchor="middle" font-size="10.5" fill="#4a5560">形状流：(B,6,3,928,1600) → (6,30825,B,128) → 三平面 (B,46400,128) → 体 (B,128,200,200,16)＋点 (B,C,n)</text>
             <text x="500" y="766" text-anchor="middle" font-size="10" fill="#5a6570">注：单帧模型，无时序模块；损失＝CE(体)＋lovasz(点)；hit 判定＝任一锚点入像即该相机参与（查询×相机粒度，固定）。</text>
+          </g>
           </g>
         </svg>
         <p>三平面压缩的拉取式桥：主动方是 3D 侧的三张可学习 query 表 <code>tpv_embedding_hw/zh/wz</code>（(40000,128)＋(3200,128)＋(3200,128)＝46400 条<span class="cite">tpvformer10/tpv_head.py:53-55</span>，把 BEVFormer 单平面 40000 条的 query 预算推广到三根正交轴，仅为同范围稠密 voxel 640000 格的 7.25%）。每个平面查询沿本平面正交轴取固定锚点射线——hw 沿 Z 4 锚、zh/wz 沿水平轴 32 锚<span class="cite">tpvformer10/modules/encoder.py:36-47</span>——经 <code>lidar2img</code> 投到 6 相机、以 hit 掩码筛出命中相机<span class="cite">tpvformer10/modules/encoder.py:167-220</span>，再由 ICA 在投影点邻域做可学习偏移的 deformable 采样<span class="cite">tpvformer10/modules/image_cross_attention.py:104-164</span>；三平面之间由 CVHA 互为 key/value，平面间的可学习混合在 attention_weights 第 33 个 logit 的 3-way 门控<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>。而三平面→体素的聚合是广播＋双线性＋等权求和，零参数<span class="cite">tpvformer10/tpv_aggregator.py:69-84</span>（论文 Eq.5 与代码一致）；深度不预测、无深度头，由锚点射线隐式离散。</p>
