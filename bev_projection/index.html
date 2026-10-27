@@ -767,20 +767,6 @@
         <li><strong>query 有无：无 query。</strong>不存在可学习的 3D query / BEV embedding / position embedding；3D 位置全部来自固定视锥网格点（每相机 41×8×22=7216 个），BEV 格内容由落入该 pillar 的点求和得到<span class="cite">src/models.py:236-240</span>。这也是 LSS 与 BEVFormer（可学习 BEV query 拉取）对比时最根本的形态差异。</li>
       </ul>
 
-      <h3>④ 代码校对</h3>
-      <div class="code-check">
-        <p><strong>配置入口：</strong>LSS 无独立 config 文件——<code>main.py</code> 为 fire 入口<span class="cite">main.py:13-20</span>，全部默认值写在 <code>src/train.py::train()</code> 的函数签名<span class="cite">src/train.py:18-43</span>，且 train.py 默认值即 nuScenes 口径：输入 H=900、W=1600，<code>resize_lim=(0.193,0.225)</code>，<code>final_dim=(128,352)</code><span class="cite">src/train.py:23-25</span>；<code>ncams=5</code><span class="cite">src/train.py:29</span>；BEV 网格 <code>xbound=ybound=[-50.0,50.0,0.5]</code>、<code>zbound=[-10.0,10.0,20.0]</code>（单层 pillar）<span class="cite">src/train.py:34-36</span>；<code>dbound=[4.0,45.0,1.0]</code><span class="cite">src/train.py:37</span>；<code>outC=1</code><span class="cite">src/train.py:67</span>。派生量：D=41、特征格 8×22（downsample=16）<span class="cite">src/models.py:143</span>、C=64<span class="cite">src/models.py:144</span>、depthnet 输出通道 D+C=105<span class="cite">src/models.py:46</span>。</p>
-        <p><strong>论文 ↔ 代码印证（一致项）：</strong>骨干 EfficientNet-B0（ImageNet 预训练）与 BEV 侧 resnet18 前三段 + ×4/×2 上采样逐层吻合（§4.1 ↔ <span class="cite">src/models.py:43</span><span class="cite">src/models.py:94-112</span>）；Eq.(1) 外积逐元素乘（§3.1 ↔ <span class="cite">src/models.py:57</span>）；sum-pooling + cumsum trick（§4.2 ↔ <span class="cite">src/tools.py:193-219</span>）；输入 128×352 与 BEV ±50 m、0.5 m 格、200×200 栅格亦与论文一致。</p>
-        <p><strong>差异与勘正（要点）：</strong></p>
-        <ul>
-          <li>深度区间端点：论文 §4.1 写 "D between 4.0 meters and 45.0 meters spaced by 1.0 meters"，但代码 <code>torch.arange(4.0,45.0,1.0)</code> 左闭右开——实际 41 个格中心 4.0–44.0 m，45.0 不含<span class="cite">src/models.py:157</span>，以代码为准。</li>
-          <li>相机数量：论文 §5 称 6 相机环视；代码训练默认随机抽 5（<code>ncams=5</code><span class="cite">src/train.py:29</span>；<span class="cite">src/data.py:196-201</span>），验证用全 6。</li>
-          <li>正样本权重：论文 §5 给对象分割 1.0、车道 5.0，代码默认 <code>pos_weight=2.13</code><span class="cite">src/train.py:31</span>——任务口径差异，不影响投影机制。</li>
-          <li>可训练参数量 14.3M 为论文值（§4.1），仓库无复现脚本，未在代码侧逐参数复算。</li>
-          <li>机制图编号勘正：论文 Fig.2 是动机图，lift 机制图为 Fig.3、端到端流程为 Fig.4——本节机制总览按 Fig.3 + Fig.4 重绘；另 arXiv v1 无附录，深度离散化仅有 §3.1 与 §4.1 两处描述。</li>
-        </ul>
-        <p><strong>版本锚定：</strong>本节代码均指 commit <code>2903467c</code>（2024-10-14，完整 hash 与克隆口径见页脚来源表）。</p>
-      </div>
     </section>
 
     <!-- ======================= 二、BEVFormer ======================= -->
@@ -1088,23 +1074,6 @@
         <li><strong>query 有无及形态：有，且是网格形嵌入表。</strong>BEV query 是一张 (40000, 256) 的可学习嵌入表，逐格与 BEV 平面一一对应（论文 §3.2 "grid-shaped learnable parameters"<span class="cite">dense_heads/bevformer_head.py:104-105</span>），另有 (900, 512) 的 object query 供 decoder 用（桥之外<span class="cite">dense_heads/bevformer_head.py:106-107</span>）。这与 LSS 的"无 query、固定视锥点"构成四模型对比中的两极。</li>
       </ul>
 
-      <h3>④ 代码校对</h3>
-      <div class="code-check">
-        <p><strong>配置入口：</strong><code>projects/configs/bevformer/bevformer_base.py</code>（本节范围限定 v1；repo master 同时含有 BEVFormerV2（<code>projects/configs/bevformerv2/</code>、<code>detectors/bevformerV2.py</code>），一律不引用）。核心量：<code>_dim_=256</code><span class="cite">bevformer_base.py:31</span>、<code>_num_levels_=4</code><span class="cite">bevformer_base.py:34</span>、<code>bev_h_=bev_w_=200</code><span class="cite">bevformer_base.py:35-36</span>、<code>point_cloud_range=[-51.2,-51.2,-5.0,51.2,51.2,3.0]</code><span class="cite">bevformer_base.py:11</span>、encoder <code>num_layers=6</code><span class="cite">bevformer_base.py:80</span>、<code>num_points_in_pillar=4</code><span class="cite">bevformer_base.py:82</span>、SCA <code>num_points=8</code>/<code>num_levels=4</code><span class="cite">bevformer_base.py:97-98</span>、<code>num_query=900</code><span class="cite">bevformer_base.py:66</span>；输入 900×1600<span class="cite">bevformer_base.py:185</span>，pad 到 32 整除→928×1600<span class="cite">bevformer_base.py:174</span>。派生量：BEV query 数 200×200=40000、格边长 102.4/200=0.512 m<span class="cite">dense_heads/bevformer_head.py:61-62</span>；pillar 高 Z=3.0−(−5.0)=8 m<span class="cite">modules/encoder.py:189</span>；FPN 四层 256ch @ /8、/16、/32、/64<span class="cite">bevformer_base.py:54-61</span>。</p>
-        <p><strong>论文 ↔ 代码印证（一致项）：</strong>6 层 encoder、200×200、±51.2 m、s=0.512、N_ref=4、C=256（§3.1/§4.2 ↔ <span class="cite">bevformer_base.py:80</span><span class="cite">bevformer_base.py:35-36</span><span class="cite">bevformer_base.py:11</span><span class="cite">bevformer_base.py:82</span><span class="cite">bevformer_base.py:31</span>）；Eq.3 格→世界坐标取格中心（§3.3 ↔ <span class="cite">modules/encoder.py:64-67</span>）；hit-view 机制（§3.3/A.4 ↔ <span class="cite">modules/spatial_cross_attention.py:137-141</span>）；Eq.2 的 1/|V_hit| 归一化（slots 汇总后除以命中相机数，clamp≥1，<span class="cite">modules/spatial_cross_attention.py:169-172</span>）；900 query/300 框/24 epochs/lr=2e-4/backbone lr_mult=0.1（§A.3/§A.1/§4.2 ↔ <span class="cite">bevformer_base.py:66</span><span class="cite">bevformer_base.py:132</span><span class="cite">bevformer_base.py:228-245</span>）。</p>
-        <p><strong>差异与勘正（要点）：</strong></p>
-        <ul>
-          <li>多尺度层数：论文 §4.2 写 "FPN with sizes of 1/16, 1/32, 1/64"（3 层），代码 FPN <code>num_outs=4</code> 且 SCA <code>num_levels=4</code>，实际消费 /8、/16、/32、/64 四层<span class="cite">bevformer_base.py:34</span><span class="cite">bevformer_base.py:60</span><span class="cite">bevformer_base.py:98</span>——以代码为准：四层，论文少写了 /8 层（① 图按四层标注）。</li>
-          <li>每参考点采样数：论文 §4.2 称每头 4 个采样点；代码 <code>num_points=8</code>（每头每层），经 reshape 按 4 个 z 锚点拆分→每锚点每头每层 2 个<span class="cite">bevformer_base.py:97</span><span class="cite">modules/spatial_cross_attention.py:360-369</span>——论文"4 点"与发布代码数值对不上，疑为早期版本口径，以代码为准。</li>
-          <li>z 锚点取值：论文 §4.2 称 "height anchors are sampled uniformly from −5 meters to 3 meters"；代码 <code>linspace(0.5,7.5,4)/8</code> 给开区间内 4 个等距点 {−4.5, −2.167, 0.167, 2.5} m，不含 −5/3 端点<span class="cite">modules/encoder.py:62-63</span>——论文表述含糊而非矛盾，图按代码值标注。</li>
-          <li>位置编码消费点：论文 §3.2 说位置编码加在 BEV query 上（未区分两个 attention）；代码 <code>bev_pos</code> 仅作为 query_pos 注入 TSA，SCA 调用时 query_pos=None<span class="cite">modules/encoder.py:365-366</span>——代码更细，① 图将 bev_pos 标注在 query 侧。</li>
-          <li>投影矩阵形式：论文 Eq.4 用 3×4 的 T_i；代码用 4×4 齐次矩阵乘后除以 z<span class="cite">modules/encoder.py:109-128</span>，数学等价，非差异。</li>
-          <li>机制图编号：论文 Fig.2 即总架构图，含 (a) encoder 层组成、(b) SCA、(c) TSA 三幅子图（p.4）——与 LSS 分册的图号勘正不同，此处图号无误，① 图按 Fig.2(a)＋(b) 重绘。</li>
-          <li>GridMask 为代码侧训练细节（prob 0.7，论文未提<span class="cite">bevformer_base.py:41</span><span class="cite">detectors/bevformer.py:52-53</span>）；参数量 68.7M（Tab.5，BEVFormer-S）为论文值，仓库无复算脚本。</li>
-          <li>时序项（TSA、can_bus 注入及 <code>modules/encoder.py:196-198</code> 处 "keep this bug for reproducing" 的作者自注）仅一句带过，非本节目标。</li>
-        </ul>
-        <p><strong>版本锚定：</strong>本节代码均指 commit <code>66b65f3a</code>（2024-05-03，完整 hash 与克隆口径见页脚来源表）。</p>
-      </div>
     </section>
 
     <!-- ======================= 三、TPVFormer ======================= -->
@@ -1339,7 +1308,7 @@
           <tr>
             <td>位置编码 <code>h_embed</code>＋<code>w_embed</code>＋<code>z_embed</code>（CustomPositionalEncoding，本仓自研注册）</td>
             <td>Embedding(200,48)＋Embedding(200,48)＋Embedding(16,32)，输出拼 128 维（忽略轴槽位置零）</td>
-            <td>3D 侧（逐层注入 CVHA，见 ④ 差异）</td>
+            <td>3D 侧（逐层注入 CVHA）</td>
             <td><span class="cite">tpvformer10/tpv_head.py:141-143</span> <span class="cite">tpvformer10/tpv_head.py:147-170</span> <span class="cite">tpv_lidarseg.py:159-165</span></td>
           </tr>
           <tr>
@@ -1428,22 +1397,6 @@
         <li><strong>三平面交互（BEVFormer 没有的）。</strong>CVHA 让三平面 query 互为 key/value（跨平面 deformable 自注意力），是"3D 侧自注意力"<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:36-50</span>；BEVFormer 的 self-attn 是 BEV 平面内＋时序，TPVFormer 无时序（单帧模型）。</li>
       </ul>
 
-      <h3>④ 代码校对</h3>
-      <div class="code-check">
-        <p><strong>配置入口：</strong><code>config/tpv_lidarseg.py</code>（README 的 A100 主训练命令<span class="cite">README.md:78</span>；<code>_dim_=128</code> 与论文 TPVFormer-Base（TPV 200×200×16、特征 128）一致，故取为主口径；同目录 dim64/dim96 为轻量变体，不引用）。核心量：<code>point_cloud_range=[-51.2,-51.2,-5.0,51.2,51.2,3.0]</code><span class="cite">tpv_lidarseg.py:11</span>、<code>_dim_=128</code><span class="cite">tpv_lidarseg.py:13</span>、<code>num_heads=8</code><span class="cite">tpv_lidarseg.py:14</span>、<code>_pos_dim_=[48,48,32]</code><span class="cite">tpv_lidarseg.py:15</span>、<code>_num_levels_=4</code><span class="cite">tpv_lidarseg.py:17</span>、<code>_num_cams_=6</code><span class="cite">tpv_lidarseg.py:18</span>、<code>tpv_h_=tpv_w_=200、tpv_z_=16</code><span class="cite">tpv_lidarseg.py:20-22</span>、<code>tpv_encoder_layers=5</code><span class="cite">tpv_lidarseg.py:26</span>、<code>num_points_in_pillar=[4,32,32]</code><span class="cite">tpv_lidarseg.py:27</span>、<code>num_points=[8,64,64]</code><span class="cite">tpv_lidarseg.py:28</span>、<code>num_points_in_pillar_cross_view=[16,16,16]</code><span class="cite">tpv_lidarseg.py:150</span>、<code>nbr_class=17</code><span class="cite">tpv_lidarseg.py:34</span>。插件代码取 <code>tpvformer10/</code>（<code>occupancy=False</code><span class="cite">tpv_lidarseg.py:7</span>→<span class="cite">train.py:73-76</span>→<span class="cite">builder/tpv_lidarseg_builder.py:1</span>；旧版 <code>tpvformer04/</code> 为 SemanticKITTI 口径所用，不引用，仓内自注见<span class="cite">tpvformer10/modules/encoder.py:150-151</span>）。派生量：TPV query 200×200＋16×200＋200×16＝40000＋3200＋3200＝46400 条（@128 维 5.94M，为稠密 voxel 640000 格的 7.25%）；格边长 102.4/200＝0.512 m、8/16＝0.5 m；输入 900×1600 无 resize<span class="cite">dataloader/dataset_wrapper.py:28-51</span>、pad 到 32 整除→928×1600<span class="cite">dataloader/dataset_wrapper.py:45</span><span class="cite">dataloader/transform_3d.py:19</span><span class="cite">dataloader/transform_3d.py:38</span>；FPN 四层 128ch @ /8、/16、/32、/64<span class="cite">tpv_lidarseg.py:125-132</span>；ICA 每查询每命中相机采样位置 hw 256、zh/wz 2048，CVHA 每查询 768。训练超参：AdamW lr=2e-4、backbone lr_mult=0.1、wd=0.01、cosine（warmup 500 iter）、grad clip 35、24 epochs、每 GPU batch=1（6 视图）<span class="cite">config/_base_/optimizer.py:1-12</span><span class="cite">train.py:114-121</span><span class="cite">config/_base_/schedule.py:2</span><span class="cite">config/_base_/dataset.py:15</span>（论文附录 B p.9 一致）。</p>
-        <p><strong>论文 ↔ 代码印证（一致项）：</strong>hit-view 剔除机制（§3.2 "removing invalid sets if none of the reference points falls onto the image" ↔ <span class="cite">tpvformer10/modules/image_cross_attention.py:113-137</span>）；Eq.9 的 1/|V_hit| 归一（↔ <span class="cite">tpvformer10/modules/image_cross_attention.py:157-160</span>）；邻平面锚点 Eq.11（↔ <span class="cite">tpvformer10/modules/encoder.py:64-75</span>）；Eq.6 反投影公式（论文 ego 居中式 ↔ 代码 linspace 格心反归一，取 i+0.5 时两式恒等<span class="cite">tpvformer10/modules/encoder.py:139-144</span><span class="cite">tpvformer10/modules/encoder.py:176-181</span>）；N_ref 平面间可变 [4,32,32]（§3.2 ↔ <span class="cite">tpv_lidarseg.py:27</span>）；TPV 平面即 query（§3.2 ↔ <span class="cite">tpvformer10/tpv_head.py:53-55</span>）；200×200×16、dim 128、1600×900、ResNet101-DCN（FCOS3D）、CE(voxel)＋lovasz(points)<span class="cite">tpv_lidarseg.py:8-9</span><span class="cite">train.py:191-202</span>、AdamW 2e-4/24ep（Table 4 p.8、附录 B p.9、§4.2 p.7 ↔ <span class="cite">tpv_lidarseg.py:13,20-22,114-124</span><span class="cite">config/_base_/optimizer.py:1-9</span><span class="cite">config/_base_/schedule.py:2</span>）；层数 3 HCAB＋2 HAB 与 Table 5 最优组合一致（<span class="cite">tpv_lidarseg.py:152-158</span>，论文 Table 5 p.8）。</p>
-        <p><strong>差异与勘正（要点）：</strong></p>
-        <ul>
-          <li><strong>三平面聚合权重（关键纠偏）：</strong>arXiv v2 论文 Eq.5/§3.3 明写 "bilinear interpolation and summation"（求和），全文无 α；代码同为直接求和、无任何学习权重<span class="cite">tpvformer10/tpv_aggregator.py:83-84</span>（旧版 <code>tpvformer04</code> 逐字节相同）。"可学习的 α 加权混合"不属于本 commit 与 v2 论文——可学习的平面间混合在 CVHA 门控（见下条），① 图 B 的聚合块因此画为固定几何。</li>
-          <li><strong>CVHA 平面门控：</strong>Eq.12 仅写 CVHA(t)=DA(t,R,T)，未提平面级权重；代码 <code>attention_weights</code> 每平面多输出 1 个 logit，在 3 平面间 softmax 成层级门控并与点权重相乘，初始偏置 10 使训练初期"本平面主导"<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:45-47</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:107-110</span> <span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span>——代码侧补充机制，① 图在 CVHA 标注 3-way plane gate。</li>
-          <li><strong>本平面参考点：</strong>论文 §3.2 称在本平面邻域"随机采几个点"（random points）；代码本平面 16 锚＝自身格心重复 16 次<span class="cite">tpvformer10/modules/encoder.py:57-63</span>，邻域扩散交给可学习偏移（bias 初始化为放射状网格<span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:59-65</span>）；邻平面锚＝沿对方轴 16 个均匀格心（与 Eq.11 一致）——以代码为准，① 图按代码画。</li>
-          <li><strong>位置编码注入点：</strong>论文 §3.2 说 3D 位置编码加在第一个 encoder 层之前；代码 <code>tpv_pos</code> 在每一层 CVHA 内部重新相加（ICA 不加 pos）<span class="cite">tpvformer10/modules/tpvformer_layer.py:185-192</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:148-149</span>——代码更激进（逐层注入），① 图 B 将 pos 标注在每层 CVHA 入口。</li>
-          <li><strong>论文未提的代码侧细节：</strong><code>cams_embeds</code>(6,128)/<code>level_embeds</code>(4,128) 注入多尺度特征（BEVFormer 同名遗产<span class="cite">tpvformer10/tpv_head.py:49-52,103-104</span>）；zh/wz 查询复制 8 子查询各管 4 锚、结果求和还原（<code>points_multiplier=[1,8,8]</code><span class="cite">tpvformer10/modules/image_cross_attention.py:242-244</span><span class="cite">tpvformer10/modules/image_cross_attention.py:300-314</span>）；每锚点每头每层 2 个学习偏移（num_points=[8,64,64] / num_z_anchors=[4,32,32]<span class="cite">tpv_lidarseg.py:27-28</span>）。</li>
-          <li><strong>机制图编号勘正：</strong>论文 Fig.2 是任务总览（p.2），Fig.3 为 voxel/BEV/TPV 表示对比（p.3），Fig.4 才是架构图（p.5）——本节 ① 图按 Fig.4（流水线）＋Fig.3（表示概念）重绘，Fig.2 仅作任务背景。</li>
-          <li><strong>参数量：</strong>论文未给 nuScenes 口径参数量（SSC 口径 6.0M，§4.5 p.8，论文值、异口径不比较）。</li>
-        </ul>
-        <p><strong>版本锚定：</strong>本节代码均指 commit <code>459bc060</code>（2024-09-07 "Update readme.md"，完整 hash 与克隆口径见页脚来源表）。</p>
-      </div>
     </section>
 
     <!-- ======================= 四、VoxFormer ======================= -->
@@ -1685,7 +1638,7 @@
           <tr>
             <td>位置编码 <code>row_embed</code>＋<code>col_embed</code>（mmdet <code>LearnedPositionalEncoding</code>，外部库类）</td>
             <td>各 <code>Embedding(512,64)</code>，输出拼 128 维/位置（512×512 表）</td>
-            <td>3D 侧（<strong>仅 DSA 注入</strong>，见 ④ 差异①）</td>
+            <td>3D 侧（<strong>仅 DSA 注入</strong>）</td>
             <td><span class="cite">voxformer-S.py:128-132</span> <span class="cite">dense_heads/voxformer_head.py:55</span> <span class="cite">modules/encoder.py:349-361</span></td>
           </tr>
           <tr>
@@ -1756,7 +1709,7 @@
           </tr>
           <tr>
             <td>每层 FFN＋LN（DCA 3 层＋DSA 2 层共 5 组，每组 2×LN）</td>
-            <td>FFN <code>Linear(128→256)</code>＋<code>Linear(256→128)</code>，每组 65,920（生效隐藏维 256，见 ④ 差异⑤）</td>
+            <td>FFN <code>Linear(128→256)</code>＋<code>Linear(256→128)</code>，每组 65,920（生效隐藏维 256）</td>
             <td>桥／3D 侧（按层所属）</td>
             <td><span class="cite">voxformer-S.py:85-95</span> <span class="cite">voxformer-S.py:117-127</span> <span class="cite">modules/custom_base_transformer_layer.py:81-92</span> <span class="cite">modules/custom_base_transformer_layer.py:144-156</span></td>
           </tr>
@@ -1789,31 +1742,9 @@
         <li><strong>深度：显式、离线、无分箱。</strong>深度由外部立体模型 MSNet3D 一次性给出（可学习但外部冻结<span class="cite">preprocess/image2depth.sh:6-8</span>），连续值→离散占据，不存在 LSS 式 per-pixel 深度分布、也没有 TPVFormer 式沿射线多深度假设枚举（每查询 4/32/32 锚点）；在线注意力里每个 voxel 只有 1 个参考点（格心投影<span class="cite">dense_heads/voxformer_head.py:208-214</span>），深度不确定性被前置到 QPN 掩码里消化。代价即论文 Limitation：远距离深度不可靠→远距性能受限（§4.2.4 p.8）。</li>
         <li><strong>几何与学习的分工：几何定"骨架"，学习定"内容与稀疏性"。</strong>固定几何——0.2/0.4 m 双层网格、格心锚点、lidar2img、hit 判定<span class="cite">modules/encoder.py:105-144</span>、命中相机均值、×2 三线性上采样<span class="cite">utils/header.py:27</span>；学习——query 嵌入表内容（262144×128）、<strong>N_p 的大小与分布</strong>（QPN，逐帧数据相关<span class="cite">detectors/lmscnet.py:304-305</span>）、采样偏移与权重（DCA 3 层＋DSA 2 层）、mask token、两侧主干。四家中 VoxFormer 独有：<strong>稀疏化本身是可学习的</strong>（LSS 稠密 splat、BEVFormer/TPVFormer 全网格 query）。</li>
         <li><strong>query 有无及形态：有，全网格表＋逐帧稀疏激活。</strong>N_q=262,144 条 3D 网格形可学习参数（论文 §3.3 "3D-grid-shaped learnable parameters"<span class="cite">dense_heads/voxformer_head.py:53</span>），每帧仅 N_p（QPN 输出，数据相关）参与 DCA——论文 Table 4（p.8）：100% dense 消融 IoU 34.6 vs occupancy 44.0、显存 18.5 G vs 14.6 G，稀疏既省显存又涨点；stage-2 用 mask token 把其余 voxel 补齐后经 DSA 稠密化（MAE 式 sparse-to-dense，论文 Fig.2 "Mask Token"＋"Updated Queries"<span class="cite">dense_heads/voxformer_head.py:110-113</span>）。对比：BEVFormer 40000 条 BEV 网格全激活、TPVFormer 46400 条三平面全激活、LSS 无 query。</li>
-        <li><strong>体间交互（BEVFormer 没有的）。</strong>DSA 是 voxel↔voxel 的 deformable 自注意力（3D 侧自注意力，论文 Eq.5；vanilla 实现在 512×512 展平索引面上采样，见 ④ 差异②<span class="cite">modules/encoder.py:189-195</span>）；BEVFormer 的 self-attn 在 BEV 平面＋时序，TPVFormer 的在平面间（CVHA）。VoxFormer 无时序 self-attn——T 变体的时序＝把历史帧当"更多相机"进 DCA（<code>_temporal_=[-12,-9,-6,-3]</code>、num_cams=5<span class="cite">voxformer-T.py:18-19</span>）。</li>
+        <li><strong>体间交互（BEVFormer 没有的）。</strong>DSA 是 voxel↔voxel 的 deformable 自注意力（3D 侧自注意力，论文 Eq.5；vanilla 实现在 512×512 展平索引面上采样<span class="cite">modules/encoder.py:189-195</span>）；BEVFormer 的 self-attn 在 BEV 平面＋时序，TPVFormer 的在平面间（CVHA）。VoxFormer 无时序 self-attn——T 变体的时序＝把历史帧当"更多相机"进 DCA（<code>_temporal_=[-12,-9,-6,-3]</code>、num_cams=5<span class="cite">voxformer-T.py:18-19</span>）。</li>
       </ul>
 
-      <h3>④ 代码校对</h3>
-      <div class="code-check">
-        <p><strong>配置入口：</strong><code>projects/configs/voxformer/voxformer-S.py</code>（VoxFormer-S＝单帧单相机基准，论文 Table 1 与 Table 6/7 消融均以 S 为基准行，投影机制与 T 完全相同；同目录 <code>voxformer-T.py</code> 唯一差异 <code>_num_cams_=5</code>、<code>_temporal_=[-12,-9,-6,-3]</code><span class="cite">voxformer-T.py:18-19</span>（README:48 headline IoU 44.15/mIoU 13.35）；<code>voxformer-S/T_deform3D.py</code> 为 stage-2 真 3D 采样变体<span class="cite">voxformer-S_deform3D.py:97</span>；<code>qpn.py</code> 为 stage-1 QPN 训练配置——SemanticKITTI 口径、非 nuScenes，见下差异③）。核心量：<code>point_cloud_range=[0,-25.6,-2.0,51.2,25.6,4.4]</code><span class="cite">voxformer-S.py:20</span>、<code>voxel_size=[0.2,0.2,0.2]</code><span class="cite">voxformer-S.py:21</span>、<code>_dim_=128</code><span class="cite">voxformer-S.py:12</span>、<code>_num_levels_=1</code><span class="cite">voxformer-S.py:15</span>、<code>_num_cams_=1</code><span class="cite">voxformer-S.py:18</span>、<code>_num_layers_cross_=3</code>／<code>_num_points_cross_=8</code><span class="cite">voxformer-S.py:8-9</span>、<code>_num_layers_self_=2</code>／<code>_num_points_self_=8</code><span class="cite">voxformer-S.py:10-11</span>、<code>bev_h=128, bev_w=128, bev_z=16</code><span class="cite">voxformer-S.py:51-53</span>、位置编码表 512×512<span class="cite">voxformer-S.py:128-132</span>、<code>_nsweep_=10</code>／<code>_depthmodel_='msnet3d'</code>／<code>_query_tag_</code><span class="cite">voxformer-S.py:25-27</span>。派生量：输出体 256×256×32@0.2 m＝2,097,152 格；query 体 128×128×16@0.4 m＝N_q 262,144（输出体 1/8<span class="cite">dense_heads/voxformer_head.py:201</span>）；cam2 裁剪 1220×370<span class="cite">datasets/semantic_kitti_dataset_stage2.py:64-65</span>→特征 /16→24×77＝1848 token；每 query 每命中相机 8 头×1 层×8 点＝64 采样位。训练超参（脚注级）：stage-1 AdamW lr=2e-4、24 ep<span class="cite">projects/configs/voxformer/qpn.py:100-107</span><span class="cite">projects/configs/voxformer/qpn.py:117</span>；stage-2 AdamW lr=2e-4、wd 0.01、cosine（warmup 500 iter）、grad clip 35、每 GPU batch=1<span class="cite">voxformer-S.py:187-202</span>；两阶段分别训练。</p>
-        <p><strong>论文 ↔ 代码印证（一致项）：</strong>MobileStereoNet 深度（§4.1 ↔ <span class="cite">preprocess/image2depth.sh:7</span>）；LMSCNet 改造 Φ_occ 输入 256×256×32→输出 128×128×16（§4.1 ↔ <span class="cite">projects/configs/voxformer/qpn.py:43-44</span><span class="cite">detectors/lmscnet.py:267-268</span>）；cam2 裁 1220×370（§4.1 ↔ <span class="cite">datasets/semantic_kitti_dataset_stage2.py:64-65</span>）；ResNet50 C3＋FPN /16（§4.1 ↔ <span class="cite">voxformer-S.py:33-48</span>）；d=128（§4.1 ↔ <span class="cite">voxformer-S.py:12</span>）；DCA 3 层＋DSA 2 层（§3.5 ↔ <span class="cite">voxformer-S.py:8-11</span>）；每参考点 8 采样点（§4.1 ↔ <span class="cite">voxformer-S.py:9</span><span class="cite">voxformer-S.py:11</span>）；Linear 128→20（§3.5 ↔ <span class="cite">utils/header.py:24</span>）；lr 2e-4（§4.1 ↔ <span class="cite">voxformer-S.py:188</span>）——逐一对应一致。</p>
-        <p><strong>差异与勘正（要点）：</strong></p>
-        <ul>
-          <li><strong>差异①·PE 注入点（高价值差异，审稿验证）：</strong>论文 §3.3 称可学习位置编码"will be added to voxel queries for attention stages"（两个注意力都加）；代码 cross-attn 分支实际不注入——<code>bev_pos</code> 被计算并传递（<span class="cite">dense_heads/voxformer_head.py:85</span><span class="cite">dense_heads/voxformer_head.py:104</span>）但在 cross 分支把 query_pos（None）传给 DCA（bev_pos 被 forward 签名截获后弃用<span class="cite">modules/encoder.py:371-386</span>），只有 DSA 的 self 分支注入 <code>query_pos=bev_pos</code><span class="cite">modules/encoder.py:349-361</span>——以代码为准，① 图 pos 仅标于 DSA 入口、cross 入口不画。</li>
-          <li><strong>差异②·DSA 采样空间（高价值差异，审稿验证）：</strong>论文 Eq.5 的 DSA 在三维 p=(x,y,z) 上采样；vanilla S/T 代码把体网格按展平索引摆到 <strong>512×512 二维参考平面</strong>做 2D deformable（"3D 位置"仅隐含在嵌入表/pos 表的索引里<span class="cite">modules/encoder.py:189-195</span><span class="cite">dense_heads/voxformer_head.py:119-120</span>）；真 3D 版在 <code>*_deform3D.py</code> 变体<span class="cite">modules/deformable_self_attention_3D_custom.py:182-183</span><span class="cite">modules/deformable_self_attention_3D_custom.py:233-238</span>，README:51 S-3D 44.42/12.86＞S 44.02/12.35——主口径记 vanilla 的 2D 实现，① 图按 vanilla 画并注明。</li>
-          <li><strong>差异③·任务口径与 manifest 勘正：</strong>本 commit 无任何 nuScenes 支持（README:56-58 未勾选、论文 0 提及）；<code>qpn.py:19-23</code> 的 nuScenes class_names 为死配置（该 dataset 自带 ["empty","occupied"] 两类<span class="cite">datasets/semantic_kitti_dataset_stage1.py:45</span>）；仓内"nuScenes"字样仅为 <code>encoder.py:43</code> 的未使用默认参数——本节按 SemanticKITTI 口径（见节首口径例外）。</li>
-          <li><strong>差异④·stage-1 在线/离线：</strong>论文 §3.4/Fig.2 把深度→占用→proposal 画为 pipeline 组成；代码中深度、反投影、光线投射、QPN 全部离线（<code>preprocess/</code> 三脚本＋<code>qpn.py</code> 单独训练推理），在线 stage-2 直接读 bit-pack 的 <code>.query</code> 文件<span class="cite">voxformer-S.py:27</span><span class="cite">datasets/semantic_kitti_dataset_stage2.py:332</span>——① 图 A 区整体加"离线预处理"虚线框。</li>
-          <li><strong>差异⑤·FFN 隐藏维：</strong>config <code>ffn_cfgs</code> 写 <code>feedforward_channels=1024</code><span class="cite">voxformer-S.py:88</span>但被 deprecated 顶层参数 <code>_ffn_dim_=256</code> 覆盖（回填逻辑<span class="cite">modules/custom_base_transformer_layer.py:81-92</span>）→生效 128→256→128，1024 为死配置。</li>
-          <li><strong>差异⑥·训练轮数：</strong>论文 §4.1 写 "train stage-1 and stage-2 separately with 24 epochs"；stage-1 24 ep ✓（<span class="cite">projects/configs/voxformer/qpn.py:117</span>），stage-2 实为 <strong>20 ep</strong>（<span class="cite">voxformer-S.py:199</span>，README:48-51 Model Zoo 同）——以代码 20 为准。</li>
-          <li><strong>差异⑦·pillar 采样点：</strong>config <code>num_points_in_pillar=8</code>（<span class="cite">voxformer-S.py:68</span>，BEVFormer 遗产）为死配置——参考点实际来自 head 的格心（每 voxel 每相机 1 个<span class="cite">dense_heads/voxformer_head.py:208-214</span>），<code>get_reference_points</code> 的 '3d' 分支无调用点。</li>
-          <li><strong>差异⑧·QPN 推理脚本缺陷：</strong><code>lmscnet.py</code> 的 forward_test 中 <code>save_query_path</code> 赋值被注释、下一行直接使用会 NameError<span class="cite">detectors/lmscnet.py:312-317</span>——复现 <code>.query</code> 文件需手工恢复注释（复现提示，不影响机制事实）。</li>
-          <li><strong>差异⑨·损失组成：</strong>论文 Eq.6＝加权 CE＋scene-class affinity（引 MonoScene）；代码另有 geo-scal loss 并开<span class="cite">voxformer-S.py:24</span>（实现<span class="cite">projects/mmdet3d_plugin/voxformer/utils/ssc_loss.py:15</span>）——代码侧补充。</li>
-          <li><strong>差异⑩·query 比例：</strong>论文 Table 4 的 10–100% 为固定比例消融设计、未给实际 N_p；N_p 逐帧由 QPN argmax 决定<span class="cite">detectors/lmscnet.py:304-305</span>，无固定比例——不引用任何"固定比例"值。</li>
-          <li><strong>差异⑪·level_embeds 尺寸：</strong>论文未提；(4,128) 表但 num_levels=1 仅 [0] 行使用<span class="cite">modules/transformer.py:40</span>——已入 ② 清单。</li>
-          <li><strong>参数量：</strong>论文 Table 6（p.8）记 VoxFormer-S（1/16 层）57.90 M；代码侧逐项自算 ≈58.18 M（含 ≈23.5 M 无 fc 头 ResNet50＋33.55 M bev_embed，numpy 复核），差 ≈0.3 M 记为一致（标差）。</li>
-          <li><strong>机制图编号：</strong>论文 Fig.2（p.4）即两阶段架构图，本节 ① 图按其上排（Stage-1）＋下排（Stage-2）重绘。</li>
-        </ul>
-        <p><strong>版本锚定：</strong>本节代码均指 commit <code>63da9241</code>（"update readme"，2026-10-26 浅克隆，完整 hash 见页脚来源表）。</p>
-      </div>
     </section>
 
     <!-- ======================= 五、汇总 ======================= -->
