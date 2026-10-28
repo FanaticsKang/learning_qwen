@@ -1383,7 +1383,7 @@ var F3D = {
   })();
 
   function drawScene(api) {
-    var ctx = api.ctx, CW = api.W, CH = api.H, project = api.project;
+    var ctx = api.ctx, CH = api.H, project = api.project;
     on = api.depthOn();
     if (toggleEl) { // 两态文案切换（非点亮式）：随重绘同步并去掉点亮底色
       toggleEl.textContent = on ? 'LSS 拍扁' : 'UVTR 码放';
@@ -1559,6 +1559,305 @@ var F3D = {
     if (!inst) { return; }
     inst.expose(function () { return { mode: on ? 'flatten' : 'stack' }; });
     window.__uvtr3dState = function () { return inst.state(); };
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountNow);
+  } else {
+    mountNow();
+  }
+})();
+
+// Qwen-Drive B 面板（qd3d）：推拉合流演示——熄灭＝固定几何层（UVTR 体素槽位 [16,200,200]
+// 抽样点阵淡灰＋六相机环视线框（双口径 6/8 相机·示意）＋地面 BEV 网格淡线）；点亮＝①体素抽样
+// 亮橙（UVTR 推流）→②地面 BEV query 格显橙（体素列经 uvtr_query_proj 压平成 40000×256 加到
+// bev_embedding——压平加成语义，两态切换无时间轴动画）→③聚焦格 pillar（4 z 锚）到命中相机的
+// 蓝虚线拉取线（SCA·格心投影·固定）＋命中相机点亮（bev3d 模式）；拖地面 query 格联动 qx/qz
+// （世界坐标），画布空白处拖＝旋转视角（cfg 形式挂到公共库）。
+(function () {
+  var EXT = 15;                                  // BEV/体素抽样窗口半宽（m，[16,200,200] 的中心局部抽样，示意）
+  var CELL = 0.512;                              // XY 格边长（200×200@0.512 m）
+  var ZMIN = -5.0, ZLAY = 16, ZD = 0.65;         // 体素 Z：−5.0~5.4 m、16 层@0.65 m（modeling_perception.py:67-73）
+  var ANCHORS = [-4.5, -1.5, 1.5, 4.5];          // 4 个固定 z 锚（bev_encoder.py:188）
+  var CAM_ANGLES = [0, 60, 120, 180, 240, 300];  // 六相机环视（双口径 6/8 相机取 6 画，示意）
+  var CAM_R = 2.0, CAM_H = 1.55, PLANE_D = 1.0;  // 相机环半径/光心高/线框像平面距离（示意）
+  var TH_H = Math.tan(40 * Math.PI / 180);       // 半视场水平正切（示意）
+  var TH_V = Math.tan(26 * Math.PI / 180);       // 半视场垂直正切（示意）
+  var LAT_XY = 2.5, GRID_PITCH = 5;              // 体素点阵/地面网格线抽样间距（示意）
+  var COL_R = 0.9;                               // 聚焦格体素列的图示半宽（m，示意）
+  var qx = 7.5, qz = -4.5;                       // 聚焦 query 格的 BEV 平面坐标（世界 x/y，可拖拽）
+  var on = false;                                // 最近一帧的两态（供测试钩子读取）
+
+  function camGeom(k) {
+    var t = CAM_ANGLES[k] * Math.PI / 180;
+    return {
+      o: [Math.cos(t) * CAM_R, Math.sin(t) * CAM_R, CAM_H],
+      f: [Math.cos(t), Math.sin(t), 0],
+      r: [-Math.sin(t), Math.cos(t), 0],
+      u: [0, 0, 1]
+    };
+  }
+  // 3D 点 → 相机 k 的归一化像平面坐标（lidar2img 示意）；出视野或镜后返回 null
+  function toCam(g, p) {
+    var dx = p[0] - g.o[0], dy = p[1] - g.o[1], dz = p[2] - g.o[2];
+    var zc = dx * g.f[0] + dy * g.f[1] + dz * g.f[2];
+    if (zc < 0.1) { return null; }
+    var nx = (dx * g.r[0] + dy * g.r[1] + dz * g.r[2]) / zc;
+    var ny = (dx * g.u[0] + dy * g.u[1] + dz * g.u[2]) / zc;
+    if (Math.abs(nx) > TH_H || Math.abs(ny) > TH_V) { return null; }
+    return [nx, ny];
+  }
+  function planePoint(g, n) { // 归一化像平面坐标 → 像平面上的 3D 点
+    return [
+      g.o[0] + g.f[0] * PLANE_D + g.r[0] * n[0] * PLANE_D + g.u[0] * n[1] * PLANE_D,
+      g.o[1] + g.f[1] * PLANE_D + g.r[1] * n[0] * PLANE_D + g.u[1] * n[1] * PLANE_D,
+      g.o[2] + g.f[2] * PLANE_D + g.r[2] * n[0] * PLANE_D + g.u[2] * n[1] * PLANE_D
+    ];
+  }
+  function planeCorner(g, sx, sy) { return planePoint(g, [sx * TH_H, sy * TH_V]); }
+
+  function drawScene(api) {
+    var ctx = api.ctx, W = api.W, H = api.H, project = api.project;
+    on = api.depthOn();
+    var ZMAX2 = ZMIN + ZLAY * ZD;
+
+    // 地面（半透明：负 z 锚与下层体素在地面以下仍可见）；点亮＝BEV query 格显橙（压平加成语义）
+    var gf = [project([-EXT, -EXT, 0]), project([EXT, -EXT, 0]), project([EXT, EXT, 0]), project([-EXT, EXT, 0])];
+    if (gf[0] && gf[1] && gf[2] && gf[3]) {
+      ctx.beginPath();
+      ctx.moveTo(gf[0].x, gf[0].y); ctx.lineTo(gf[1].x, gf[1].y); ctx.lineTo(gf[2].x, gf[2].y); ctx.lineTo(gf[3].x, gf[3].y);
+      ctx.closePath();
+      ctx.fillStyle = on ? 'rgba(213,94,0,0.10)' : 'rgba(238,245,252,0.5)';
+      ctx.fill();
+    }
+
+    // 体素抽样点阵（[16,200,200] 的中心局部抽样、每 2 层取 1）：熄灭淡灰、点亮亮橙（UVTR 推流体素）。
+    // 同色点阵不参与深度排序（先画即背景层，叠序误差不可见），控制每帧图元数。
+    ctx.fillStyle = on ? 'rgba(213,94,0,0.42)' : 'rgba(150,160,172,0.42)';
+    var sz = on ? 2.6 : 2.4;
+    for (var lx = -EXT + LAT_XY / 2; lx < EXT; lx += LAT_XY) {
+      for (var lz = -EXT + LAT_XY / 2; lz < EXT; lz += LAT_XY) {
+        for (var li = 0; li < ZLAY; li += 2) {
+          var a = project([lx, lz, ZMIN + (li + 0.5) * ZD]);
+          if (a) { ctx.fillRect(a.x - sz / 2, a.y - sz / 2, sz, sz); }
+        }
+      }
+    }
+
+    var prims = [];
+    function seg(p1, p2, s) {
+      var a2 = project(p1), q2 = project(p2);
+      if (!a2 || !q2) { return; }
+      prims.push({ z: (a2.z + q2.z) / 2, t: 'l', a: a2, q: q2, s: s });
+    }
+    function dot(p, r0, fill, stroke) {
+      var a2 = project(p);
+      if (!a2) { return; }
+      prims.push({ z: a2.z, t: 'p', a: a2, r: r0, f: fill, st: stroke || null });
+    }
+
+    // 地面 BEV 网格（200×200@0.512 m 的抽样线）：熄灭淡蓝、点亮随 query 格转橙
+    seg([-EXT, -EXT, 0], [EXT, -EXT, 0], 'gE'); seg([EXT, -EXT, 0], [EXT, EXT, 0], 'gE');
+    seg([EXT, EXT, 0], [-EXT, EXT, 0], 'gE'); seg([-EXT, EXT, 0], [-EXT, -EXT, 0], 'gE');
+    for (var g1 = -EXT + GRID_PITCH; g1 < EXT; g1 += GRID_PITCH) {
+      seg([g1, -EXT, 0], [g1, EXT, 0], 'g');
+      seg([-EXT, g1, 0], [EXT, g1, 0], 'g');
+    }
+
+    // 体素窗边界（z 顶/底面＋四角立柱：16 层@0.65 m 的立体感；点亮后转淡）
+    var cb = [[-EXT, -EXT], [EXT, -EXT], [EXT, EXT], [-EXT, EXT]];
+    for (var bi = 0; bi < 4; bi++) {
+      seg([cb[bi][0], cb[bi][1], ZMIN], [cb[(bi + 1) % 4][0], cb[(bi + 1) % 4][1], ZMIN], 'vbox');
+      seg([cb[bi][0], cb[bi][1], ZMAX2], [cb[(bi + 1) % 4][0], cb[(bi + 1) % 4][1], ZMAX2], 'vbox');
+      seg([cb[bi][0], cb[bi][1], ZMIN], [cb[bi][0], cb[bi][1], ZMAX2], 'vbox');
+    }
+
+    // 自车占位（灰线框）
+    seg([-2.25, -1.1, 0], [2.25, -1.1, 0], 'ego'); seg([2.25, -1.1, 0], [2.25, 1.1, 0], 'ego');
+    seg([2.25, 1.1, 0], [-2.25, 1.1, 0], 'ego'); seg([-2.25, 1.1, 0], [-2.25, -1.1, 0], 'ego');
+
+    // 六相机环视：点亮态命中（任一 z 锚入视野）点亮、其余灰影；命中相机画格心到像平面的拉取线
+    for (var ck = 0; ck < CAM_ANGLES.length; ck++) {
+      var g = camGeom(ck);
+      var cs = [planeCorner(g, -1, -1), planeCorner(g, 1, -1), planeCorner(g, 1, 1), planeCorner(g, -1, 1)];
+      var hs = 'camG';
+      var refIdx = [];
+      if (on) {
+        for (var aj = 0; aj < ANCHORS.length; aj++) {
+          var n = toCam(g, [qx, qz, ANCHORS[aj]]);
+          if (n) { refIdx.push({ ai: aj, n: n }); }
+        }
+        if (refIdx.length > 0) { hs = 'camH'; }
+      }
+      for (var ci = 0; ci < 4; ci++) {
+        seg(cs[ci], cs[(ci + 1) % 4], hs);
+        seg(g.o, cs[ci], hs);
+      }
+      dot(g.o, 1.5, hs === 'camH' ? 'rgba(0,114,178,0.85)' : 'rgba(150,160,172,0.5)');
+      if (refIdx.length === 0) { continue; }
+      for (var rk = 0; rk < refIdx.length; rk++) {
+        var pt = planePoint(g, refIdx[rk].n);
+        seg([qx, qz, ANCHORS[refIdx[rk].ai]], pt, 'pull');
+        seg(pt, g.o, 'pullf');
+        dot(pt, 2.6, 'rgba(0,114,178,0.95)', '#ffffff');
+      }
+    }
+
+    if (on) {
+      // 聚焦格 pillar 与 4 个固定 z 锚（蓝虚线族＝拉流侧固定几何）
+      seg([qx, qz, ANCHORS[0]], [qx, qz, ANCHORS[3]], 'pillar');
+      for (var ai2 = 0; ai2 < ANCHORS.length; ai2++) { dot([qx, qz, ANCHORS[ai2]], 2.8, 'rgba(0,114,178,0.9)', '#ffffff'); }
+      // 聚焦格的体素列（16 层全高，橙＝推流侧：这一列压平加成进脚下 BEV query 格）
+      var cc2 = [[qx - COL_R, qz - COL_R], [qx + COL_R, qz - COL_R], [qx + COL_R, qz + COL_R], [qx - COL_R, qz + COL_R]];
+      for (var vi = 0; vi < 4; vi++) {
+        seg([cc2[vi][0], cc2[vi][1], ZMIN], [cc2[vi][0], cc2[vi][1], ZMAX2], 'vcol');
+        seg([cc2[vi][0], cc2[vi][1], ZMIN], [cc2[(vi + 1) % 4][0], cc2[(vi + 1) % 4][1], ZMIN], 'vcol');
+        seg([cc2[vi][0], cc2[vi][1], ZMAX2], [cc2[(vi + 1) % 4][0], cc2[(vi + 1) % 4][1], ZMAX2], 'vcol');
+      }
+    }
+
+    // 深度排序绘制（线与点统一按视距）
+    prims.sort(function (m, n2) { return n2.z - m.z; });
+    for (var pk = 0; pk < prims.length; pk++) {
+      var pr = prims[pk];
+      if (pr.t === 'l') {
+        ctx.beginPath(); ctx.moveTo(pr.a.x, pr.a.y); ctx.lineTo(pr.q.x, pr.q.y);
+        if (pr.s === 'gE') {
+          ctx.strokeStyle = on ? 'rgba(213,94,0,0.5)' : 'rgba(0,114,178,0.4)'; ctx.lineWidth = 1.1; ctx.setLineDash([4, 5]);
+        } else if (pr.s === 'g') {
+          ctx.strokeStyle = on ? 'rgba(213,94,0,0.2)' : 'rgba(0,114,178,0.14)'; ctx.lineWidth = 0.8; ctx.setLineDash([]);
+        } else if (pr.s === 'vbox') {
+          ctx.strokeStyle = on ? 'rgba(120,130,142,0.16)' : 'rgba(120,130,142,0.3)'; ctx.lineWidth = 0.9; ctx.setLineDash([4, 5]);
+        } else if (pr.s === 'ego') {
+          ctx.strokeStyle = 'rgba(120,130,142,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([]);
+        } else if (pr.s === 'camH') {
+          ctx.strokeStyle = 'rgba(0,114,178,0.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+        } else if (pr.s === 'camG') {
+          ctx.strokeStyle = 'rgba(150,160,172,0.45)'; ctx.lineWidth = 1.1; ctx.setLineDash([3, 4]);
+        } else if (pr.s === 'pull') {
+          ctx.strokeStyle = 'rgba(0,114,178,0.75)'; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]);
+        } else if (pr.s === 'pullf') {
+          ctx.strokeStyle = 'rgba(0,114,178,0.3)'; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+        } else if (pr.s === 'vcol') {
+          ctx.strokeStyle = 'rgba(213,94,0,0.75)'; ctx.lineWidth = 1.3; ctx.setLineDash([]);
+        } else {
+          ctx.strokeStyle = 'rgba(0,114,178,0.85)'; ctx.lineWidth = 1.6; ctx.setLineDash([7, 5]); // pillar
+        }
+        ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.beginPath(); ctx.arc(pr.a.x, pr.a.y, pr.r, 0, Math.PI * 2);
+        ctx.fillStyle = pr.f; ctx.fill();
+        if (pr.st) { ctx.strokeStyle = pr.st; ctx.lineWidth = 1; ctx.stroke(); }
+      }
+    }
+
+    // 聚焦 query 格（真实 0.512 m 格＋放大标记）：熄灭灰点（可拖拽锚）、点亮显橙
+    if (on) {
+      var qc = [
+        project([qx - CELL / 2, qz - CELL / 2, 0]), project([qx + CELL / 2, qz - CELL / 2, 0]),
+        project([qx + CELL / 2, qz + CELL / 2, 0]), project([qx - CELL / 2, qz + CELL / 2, 0])
+      ];
+      if (qc[0] && qc[1] && qc[2] && qc[3]) {
+        ctx.beginPath();
+        ctx.moveTo(qc[0].x, qc[0].y); ctx.lineTo(qc[1].x, qc[1].y); ctx.lineTo(qc[2].x, qc[2].y); ctx.lineTo(qc[3].x, qc[3].y);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(213,94,0,0.25)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(213,94,0,0.9)'; ctx.lineWidth = 1.4; ctx.stroke();
+      }
+    }
+    var qm = project([qx, qz, 0]);
+    if (qm) {
+      ctx.beginPath(); ctx.arc(qm.x, qm.y, on ? 3.5 : 3.2, 0, Math.PI * 2);
+      ctx.fillStyle = on ? 'rgba(213,94,0,0.9)' : 'rgba(90,101,112,0.9)'; ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    // 标注（世界锚定）＋图例（屏幕锚定）
+    function label(p, text, dx, dy, color, size, anchor) {
+      var a2 = project(p); if (!a2) { return; }
+      ctx.font = (size || 11) + 'px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = color || '#5a6570'; ctx.textAlign = anchor || 'left';
+      ctx.fillText(text, a2.x + (dx || 0), a2.y + (dy || 0));
+      ctx.textAlign = 'left';
+    }
+    ctx.font = '11.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    ctx.fillText(on
+      ? '点亮：体素亮橙（推流）→压平 (40000,256) 加成 bev_embedding（地面格显橙）→SCA 蓝虚线拉取'
+      : '熄灭：固定几何——体素槽位 [16,200,200]（抽样示意）＋相机环视（6/8 双口径·示意）＋地面 BEV 网格', 14, 22);
+    label([-EXT, -EXT, ZMAX2], '体素 [16,200,200]·XY 0.512 m·Z 16 层@0.65 m（中心局部抽样·示意）', 8, -6, '#5a6570', 10.5);
+    label([-EXT, EXT, ZMAX2], 'z=5.4 m', 8, -2, 'rgba(90,101,112,0.8)', 10);
+    label([-EXT, EXT, ZMIN], 'z=-5.0 m', 8, 12, 'rgba(90,101,112,0.8)', 10);
+    label(planeCorner(camGeom(2), 0, 1), '相机环视（双口径 6/8 相机·示意）', 0, -8, '#5a6570', 10, 'middle');
+    label([2.6, 0, 0], '自车', 8, 4, '#5a6570', 10.5);
+    if (on) {
+      label([qx, qz, ANCHORS[3]], 'pillar × 4 个固定 z 锚', 12, -8, '#37424d', 11);
+      for (var az = 0; az < ANCHORS.length; az++) { label([qx, qz, ANCHORS[az]], 'z=' + ANCHORS[az] + ' m', 10, 3.5, '#0072B2', 10); }
+      label([qx - COL_R, qz - COL_R, ZMIN], '体素列 16 层压平→加成此 BEV 格', -10, 4, '#D55E00', 10.5, 'right');
+      label([6, -EXT, 0], '地面 BEV query 格 200×200＝40000（抽样示意）', 10, 16, '#D55E00', 10.5);
+      for (var lk = 0; lk < CAM_ANGLES.length; lk++) {
+        var lg = camGeom(lk);
+        var hit = false;
+        for (var hj = 0; hj < ANCHORS.length; hj++) { if (toCam(lg, [qx, qz, ANCHORS[hj]])) { hit = true; break; } }
+        if (hit) { label(planeCorner(lg, 0, 1), '命中相机', 0, -8, '#0072B2', 10, 'middle'); }
+      }
+    }
+    label([qx, qz, 0], on ? 'BEV query 格（压平加成·可拖拽）' : 'query 格（可拖拽）', 12, 14, on ? '#D55E00' : '#5a6570', 11);
+    ctx.font = '10.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    if (on) {
+      ctx.fillText('● 橙＝体素点阵（推流）＋BEV query 格（压平加成）＋体素列　● 蓝虚线＝SCA 拉取线（格心投影·固定·示意）', 14, H - 30);
+      ctx.fillText('拖地面 query 格：pillar、拉取线、命中相机随动；命中相机＝任一 z 锚入视野', 14, H - 14);
+    } else {
+      ctx.fillText('● 灰＝UVTR 体素槽位 [16,200,200]（中心局部抽样示意）　● 淡蓝线＝地面 BEV 200×200 格（抽样）　● 相机环视＝6/8 双口径（示意）', 14, H - 30);
+      ctx.fillText('点亮按钮：看体素推流→压平加成→SCA 拉取的合流；拖地面格移动聚焦 query', 14, H - 14);
+    }
+  }
+
+  function hitTest(x, y, api) {
+    var a = api.project([qx, qz, 0]);
+    if (!a) { return null; }
+    var dx = x - a.x, dy = y - a.y;
+    return (dx * dx + dy * dy <= 30 * 30) ? 'query' : null;
+  }
+  function onCustomDrag(mode, x, y, api) { // 屏幕 → BEV 平面（z=0）：按 F3D 投影公式逆推
+    if (mode !== 'query') { return; }
+    var F = api.H * 1.32, CX2 = api.W * 0.54, CY2 = api.H * 0.48;
+    var cp = Math.cos(api.cam.pitch), sp = Math.sin(api.cam.pitch);
+    var cyw = Math.cos(api.cam.yaw), syw = Math.sin(api.cam.yaw);
+    var eye = [0 - api.cam.radius * cp * cyw, 0 - api.cam.radius * cp * syw, 0 + api.cam.radius * sp];
+    var w = [cp * cyw, cp * syw, -sp], u = [syw, -cyw, 0];
+    var v = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    var xc = (x - CX2) / F, yc = (CY2 - y) / F;
+    var d = [u[0] * xc + v[0] * yc + w[0], u[1] * xc + v[1] * yc + w[1], u[2] * xc + v[2] * yc + w[2]];
+    if (Math.abs(d[2]) < 1e-6) { return; }
+    var t = -eye[2] / d[2];
+    if (t <= 0) { return; }
+    qx = Math.max(-EXT + 1, Math.min(EXT - 1, eye[0] + t * d[0]));
+    qz = Math.max(-EXT + 1, Math.min(EXT - 1, eye[1] + t * d[1]));
+  }
+
+  var STATE_OFF = '当前：熄灭——固定几何层：体素槽位 [16,200,200]（XY 0.512 m·Z 16 层@0.65 m，中心局部抽样示意）淡灰、相机环视线框（双口径 6/8 相机·示意）、地面 BEV 网格淡线；拖地面格可移动聚焦 query';
+  var STATE_ON = '已点亮：UVTR 推流体素点阵亮橙→体素列经 uvtr_query_proj（4096→256）压平成 40000×256 加到 bev_embedding（地面 query 格显橙）→聚焦格 pillar（4 z 锚）到命中相机的 SCA 拉取线（蓝虚线·格心投影·固定）＋命中相机点亮；拖地面 query 格全联动';
+  function mountNow() { // 本面板 DOM 位于 script 块之后，需等 DOM 就绪再挂载
+    var inst = F3D.mount({
+      canvasId: 'qd3d-canvas',
+      toggleId: 'qd3d-toggle',
+      zoomId: 'qd3d-zoom',
+      stateId: 'qd3d-state',
+      center: [0, 0, 0],
+      yawInit: 2.6,
+      pitchInit: 0.48,
+      radiusInit: 36,
+      radiusMin: 18,
+      radiusMax: 80,
+      drawScene: drawScene,
+      hitTest: hitTest,
+      onCustomDrag: onCustomDrag,
+      stateText: function (d) { return d ? STATE_ON : STATE_OFF; }
+    });
+    if (!inst) { return; }
+    inst.expose(function () { return { depthOn: on, qx: qx, qz: qz }; });
+    window.__qd3dState = function () { return inst.state(); };
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', mountNow);
@@ -3410,6 +3709,17 @@ var F3D = {
             <text x="500" y="604" text-anchor="middle" font-size="10.5" fill="#4a5560">构图要旨：检测层＝BEVFormer 式拉（bev_embedding 主导、SCA 从 LLM 特征拉取）；实现层＝UVTR 式推（显式深度×特征散射入体素）——体素不直接出框，压平后加成 BEV query、整支喂占用头</text>
           </g>
         </svg>
+
+        <div id="qd3d" class="f3d-panel">
+          <p class="f3d-title">B · 3D 合流：体素推流→压平加成→SCA 拉取（可拖拽/缩放）</p>
+          <div class="f3d-controls">
+            <button id="qd3d-toggle" class="f3d-toggle" type="button" aria-pressed="false">点亮推拉合流</button>
+            <label class="f3d-zoom"><span>缩放</span><input type="range" id="qd3d-zoom" class="f3d-zoom-input" min="18" max="80" value="36" step="1" aria-label="场景缩放"></label>
+            <span class="f3d-state" id="qd3d-state">当前：熄灭——固定几何层：体素槽位 [16,200,200]（XY 0.512 m·Z 16 层@0.65 m，中心局部抽样示意）淡灰、相机环视线框（双口径 6/8 相机·示意）、地面 BEV 网格淡线；拖地面格可移动聚焦 query</span>
+          </div>
+          <canvas id="qd3d-canvas" class="f3d-canvas" role="img" aria-label="3D 合流演示：UVTR 体素 [16,200,200]（XY 0.512 m、Z 16 层@0.65 m，中心局部抽样示意）点阵淡灰、六相机环视线框（双口径 6/8 相机·示意）与地面 BEV 网格（200×200＝40000 格，抽样示意）淡线；点亮后体素点阵亮橙（UVTR 推流），地面 BEV query 格显橙（体素列经 uvtr_query_proj 压平成 40000×256 加到 bev_embedding——推拉在此合流），聚焦 query 格的 pillar 带 4 个固定 z 锚（-4.5、-1.5、1.5、4.5 m），到命中相机的蓝虚线拉取线（SCA·格心投影·固定）并点亮命中相机；在地面拖动 query 格，pillar、拉取线与命中相机随动；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
+          <p class="f3d-note">小结：这一合流就是 Qwen-Drive 的推拉并联——UVTR 支路推流：ViT 特征×118 档无监督深度（按发布仓内证据）经 voxel_pool_depth kernel 查表散射入 [16,200,200] 体素（XY 0.512 m、Z 16 层@0.65 m、X/Y ±51.2 m、Z −5.0~5.4 m）<span class="cite">view_transform.py:241-248</span><span class="cite">modeling_perception.py:67-73</span>，点亮后体素点阵亮橙；体素列经 uvtr_query_proj（Conv2d 4096→256）压平成 (40000,256) <strong>加到</strong> bev_embedding（地面 query 格显橙）<span class="cite">heads.py:244-245</span><span class="cite">modeling_perception.py:82,117-122</span>——体素不直接出框，未压平体素另喂占用支路（200×200×16·10 类）<span class="cite">perception_transformer.py:191-193</span>；检测主桥仍是 BEVFormer 式拉流：聚焦格 pillar 取 4 个固定 z 锚 {-4.5,-1.5,1.5,4.5} m<span class="cite">bev_encoder.py:188</span>，格心到命中相机的蓝虚线即 SCA 拉取线（6 层 encoder、8 头×4 层×8 点）<span class="cite">attention.py:220</span><span class="cite">bev_encoder.py:303-316</span>，命中相机点亮（任一 z 锚入视野）。相机环视取 6 画（双口径 6/8 相机：nuScenes 6、nuPlan 8）、输入固定 896×512<span class="cite">docs/perception.md:110-112</span><span class="cite">dataset.py:85</span>；环视布置与格心投影线均为示意。在地面拖动 query 格：pillar、拉取线与命中相机实时随动；拖拽画布空白处旋转视角，「缩放」滑杆拉近拉远。</p>
+        </div>
 
         <svg viewBox="0 0 1000 900" role="img" aria-label="Qwen-Drive 感知头端到端流水线：环视输入 896×512 经 VLM 双流抽头——LLM 主流 adaptor 出四尺度特征供拉流、ViT 流 vit_neck 与 depth_net 出 118 档深度（无监督，按发布仓内证据）；投影桥零参数（视锥格点 56×32×118、inv(lidar2img) 反投影回 ego 系、voxel_pool_depth 查表散射 kernel）；sweep 求和加 3×Conv3d 成体素后两路消费——压平 40000×256 加成 bev_embedding、未压平体素进占用支路；BEVFormer 式六层 encoder 与 900 query decoder 出检测、占用、地图三输出">
           <!-- ===== C · 端到端流水线 ===== -->
