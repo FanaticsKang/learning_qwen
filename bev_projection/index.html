@@ -3302,7 +3302,7 @@ var F3D = {
 
       <h3>① 机制总览</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 620" role="img" aria-label="Qwen-Drive 感知头双流（重绘自论文 Fig.3）：LLM 图像 token 经 adaptor SimpleFPN 出四尺度特征供 BEVFormer 式拉流（bev_embedding 40000 query、六层 SCA、四 z 锚）；ViT patch 经 vit_neck 与 depth_net 出 118 档无监督深度分布，视锥反投影后查表散射入体素，压平 40000×256 加成进 BEV query，未压平体素喂占用支路；三输出＝检测、占用、地图">
+        <svg viewBox="0 0 1000 620" role="img" aria-label="Qwen-Drive 感知头双流（重绘自论文 Fig.3）：LLM 图像 token 经 adaptor SimpleFPN 出四尺度特征供 BEVFormer 式拉流（bev_embedding 40000 query、六层 SCA、四 z 锚）；ViT patch 经 vit_neck 与 depth_net 出 118 档深度分布（无监督，按发布仓内证据），视锥反投影后查表散射入体素，压平 40000×256 加成进 BEV query，未压平体素喂占用支路；三输出＝检测、占用、地图">
           <!-- ===== A · 感知头双流（重绘自论文 Fig.3）===== -->
           <g font-size="13" fill="#2b3440">
             <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 感知头双流（重绘自论文 Fig.3）：LLM 流被拉取、ViT 流推入体素——两路在 [40000,256] 加成点汇合</text>
@@ -3411,7 +3411,7 @@ var F3D = {
           </g>
         </svg>
 
-        <svg viewBox="0 0 1000 900" role="img" aria-label="Qwen-Drive 感知头端到端流水线：环视输入 896×512 经 VLM 双流抽头——LLM 主流 adaptor 出四尺度特征供拉流、ViT 流 vit_neck 与 depth_net 出 118 档无监督深度；投影桥零参数（视锥格点 56×32×118、inv(lidar2img) 反投影回 ego 系、voxel_pool_depth 查表散射 kernel）；sweep 求和加 3×Conv3d 成体素后两路消费——压平 40000×256 加成 bev_embedding、未压平体素进占用支路；BEVFormer 式六层 encoder 与 900 query decoder 出检测、占用、地图三输出">
+        <svg viewBox="0 0 1000 900" role="img" aria-label="Qwen-Drive 感知头端到端流水线：环视输入 896×512 经 VLM 双流抽头——LLM 主流 adaptor 出四尺度特征供拉流、ViT 流 vit_neck 与 depth_net 出 118 档深度（无监督，按发布仓内证据）；投影桥零参数（视锥格点 56×32×118、inv(lidar2img) 反投影回 ego 系、voxel_pool_depth 查表散射 kernel）；sweep 求和加 3×Conv3d 成体素后两路消费——压平 40000×256 加成 bev_embedding、未压平体素进占用支路；BEVFormer 式六层 encoder 与 900 query decoder 出检测、占用、地图三输出">
           <!-- ===== C · 端到端流水线 ===== -->
           <g font-size="13" fill="#2b3440">
             <text x="16" y="34" font-size="14" font-weight="600" fill="#37424d">C · 端到端流水线：ViT 流推入体素、LLM 流被拉取——桥只含固定几何（视锥·反投影·散射），学习在两端与消费</text>
@@ -3576,7 +3576,7 @@ var F3D = {
             <text x="500" y="880" text-anchor="middle" font-size="10" fill="#5a6570">注：④ 深度分布按发布仓内证据无监督（无损失代码与深度 GT 路径）；⑤⑥⑦ 参数自由；⊕＝⑨ 压平结果加到 bev_embedding。</text>
           </g>
         </svg>
-        <p>推拉合流：检测主桥是 BEVFormer 式拉流——bev_embedding (40000,256) 的 BEV query 经 6 层 SCA 从 LLM 四尺度特征拉取<span class="cite">heads.py:242-250</span><span class="cite">bev_encoder.py:91-103</span>；UVTR 支路是 LSS 式推流——vit_neck 特征×118 档无监督深度，视锥反投影后由 voxel_pool_depth kernel 查表散射入 [16,200,200] 体素<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>。体素压平成 (40000,256) 后以加性先验注入 BEV query<span class="cite">heads.py:244-245</span>，未压平体素整支喂占用支路<span class="cite">perception_transformer.py:191-193</span>——桥（视锥格点·反投影·散射 kernel）零参数；可学习量在 2D 侧（adaptor／vit_neck／depth_net）、3D 侧（3×Conv3d＋两路消费＋encoder／decoder／三个头）。双数据集口径：nuScenes 6 相机、OpenScene／nuPlan 8 相机，输入固定 896×512<span class="cite">docs/perception.md:110-112</span><span class="cite">dataset.py:85</span>。</p>
+        <p>推拉合流：检测主桥是 BEVFormer 式拉流——bev_embedding (40000,256) 的 BEV query 经 6 层 SCA 从 LLM 四尺度特征拉取<span class="cite">heads.py:242-250</span><span class="cite">bev_encoder.py:91-103</span>；UVTR 支路是 LSS 式推流——vit_neck 特征×118 档无监督深度（按发布仓内证据），视锥反投影后由 voxel_pool_depth kernel 查表散射入 [16,200,200] 体素<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>。体素压平成 (40000,256) 后以加性先验注入 BEV query<span class="cite">heads.py:244-245</span>，未压平体素整支喂占用支路<span class="cite">perception_transformer.py:191-193</span>——桥（视锥格点·反投影·散射 kernel）零参数；可学习量在 2D 侧（adaptor／vit_neck／depth_net）、3D 侧（3×Conv3d＋两路消费＋encoder／decoder／三个头）。双数据集口径：nuScenes 6 相机、OpenScene／nuPlan 8 相机，输入固定 896×512<span class="cite">docs/perception.md:110-112</span><span class="cite">dataset.py:85</span>。</p>
       </div>
 
       <h3>② 可学习参数清单（Qwen-Drive 侧新增／改动项）</h3>
