@@ -89,7 +89,7 @@
 - **推/拉方向：UVTR 支路＝推（2D 视锥×显式深度→scatter 落 3D 体素），检测主桥＝拉（BEVFormer 式）——"推入体素＋拉取 BEV"双桥并联**。体素支路与 LSS 同族同实现范式（2D 侧枚举视锥格、按 (b,x,y,z) rank 区间散射，BEVDet 式 CUDA scatter，`ops/voxel_pool/src/voxel_pool_cuda.cu:92-135`）；但体素不直接出框——压平 4096→256 后仅作 BEV query 的**加性先验**（`heads.py:244-245`）与占用支路的特征底座（`perception_transformer.py:191-193`），检测内容由 6 层 SCA 从 LLM 四尺度特征"拉取"（§2 步骤 10）。对比原版 UVTR：体素在那里是检测 query 的直接采样对象（uni3d_detr 参考点 grid_sample，notes/05：`models/utils/uni3d_detr.py:270-320`），在 Qwen-Drive 则降格为 BEV query 的注入项。
 - **深度：显式分布、无监督**。118 档 softmax（0.5 m/档、1.0–60 m），仓内无损失代码、无深度 GT（§1）；深度仅作 kernel 内乘性权重由下游梯度端到端回传——"显式分布、隐式（下游）监督"与原版 UVTR（64 档无监督，notes/05 §5）完全同构；BEVDepth 式 LiDAR 深度监督在两版中都不存在。
 - **几何与学习的分工**：桥零参数——固定几何决定"落点骨架"（视锥 arange 网格、inv(lidar2img)×lidar2ego 反投影、[16,200,200] 索引与掩码、rank 散射）；学习决定"特征与深度概率"（vit_neck＋重深度头）与"落格后如何混合、如何被消费"（3×Conv3d＋两路压缩＋BEV/占用/地图头）。即"学习给内容与概率、几何给格点与定址"——与原版 UVTR、LSS 同构。
-- **query 有无及形态：体素支路无 query；BEV 侧 (40000,256) 网格嵌入表被 UVTR 加成，另有 900 object query（桥外）**。体素格点是被动容器（与原版 UVTR 相同）；差异在消费端——原版"900 query 从体素体拉取"，Qwen-Drive"体素压平后加成 BEV query、检测拉流改在 LLM 特征上进行"。全篇对比中 Qwen-Drive＝四模型之外的第五种组合：LSS 式推流（实现层）＋BEVFormer 式拉流（检测层）并联，显式深度只服务推流支路。
+- **query 有无及形态：体素支路无 query；BEV 侧 (40000,256) 网格嵌入表被 UVTR 加成，另有 900 object query（桥外）**。体素格点是被动容器（与原版 UVTR 相同）；差异在消费端——原版"900 query 从体素体拉取"，Qwen-Drive"体素压平后加成 BEV query、检测拉流改在 LLM 特征上进行"。全篇对比中 Qwen-Drive＝五个机制条目之外的工程合流组合：LSS 式推流（实现层）＋BEVFormer 式拉流（检测层）并联，显式深度只服务推流支路。
 
 ## 6. 文档 vs 代码差异点
 
