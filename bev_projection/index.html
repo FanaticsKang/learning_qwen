@@ -1557,111 +1557,67 @@ var F3D = {
           <p class="f3d-note">小结：这一拉取就是 BEVFormer 的 <strong>SCA</strong>——3D 侧的可学习 BEV query（200×200＝40000 格的 <code>bev_embedding</code><span class="cite">dense_heads/bevformer_head.py:104-105</span>）把所在格抬成 pillar，取 4 个固定 z 锚<span class="cite">modules/encoder.py:62-63</span>（−4.5、−2.167、0.167、2.5 m），经 <code>lidar2img</code> 标定投影（示意）落到命中相机的特征图上，再在投影点邻域拉取特征。熄灭时只见固定几何：网格、pillar、z 锚、投影线（示意）与相机线框；点亮后橙色 query 格与围绕各参考点散布的采样簇显橙——采样簇＝可学习偏移（示意，每命中相机 256 采样位<span class="cite">modules/spatial_cross_attention.py:245-267</span>）。在 BEV 平面拖动 pillar 脚下的 query 格：pillar 与投影线随动，投影落入视野的相机点亮、其余保持灰影（<code>bev_mask</code> 掩码，命中＝任一 z 锚入视野，固定判定<span class="cite">modules/encoder.py:95-136</span>）。拖拽画布空白处旋转视角，"缩放"滑杆拉近拉远。</p>
         </div>
 
-        <svg viewBox="0 0 1000 372" role="img" aria-label="SCA 柱采样（重绘自论文 Fig.2(b)）：固定投影定锚，可学习偏移采样">
-          <g transform="translate(0,-376)">
-          <!-- ===== C · SCA 柱采样（重绘自论文 Fig.2(b)）===== -->
+        <svg id="sca-flow" viewBox="0 0 1000 400" role="img" aria-label="SCA 五步流程图：①造 query（40000 条）→②立 4 个 z 锚点、投影关联命中相机（V_hit）→③每个关联相机 256 个采样位取回特征→④a 相机内 Linear 预测分数 softmax 加权求和、④b 跨相机求和除以命中相机数→⑤output_proj 残差写回 query">
+          <!-- ===== C · SCA 五步流程 ===== -->
           <g font-size="13" fill="#2b3440">
-            <text x="16" y="398" font-size="14" font-weight="600" fill="#37424d">C · SCA 柱采样（重绘自论文 Fig.2(b)）：固定投影定锚，可学习偏移采样</text>
+            <text x="16" y="34" font-size="14" font-weight="600" fill="#37424d">C · SCA 五步流程：造 query → 投影关联 → 撒位采样 → 相机内加权求和＋相机间平均 → 写回</text>
 
-            <!-- BEV 网格与 pillar -->
-            <rect class="fixed" x="430" y="565" width="140" height="40" rx="2"></rect>
-            <line x1="458" y1="565" x2="458" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
-            <line x1="486" y1="565" x2="486" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
-            <line x1="514" y1="565" x2="514" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
-            <line x1="542" y1="565" x2="542" y2="605" stroke="#9DC3E6" stroke-width="1"></line>
-            <line x1="430" y1="585" x2="570" y2="585" stroke="#9DC3E6" stroke-width="1"></line>
-            <rect x="486" y="565" width="28" height="20" fill="#FBE3C8" stroke="#D55E00" stroke-width="1"></rect>
-            <text x="585" y="586" font-size="10.5">BEV 网格 200×200 @0.512 m（固定）</text>
-            <text x="585" y="602" font-size="10" fill="#5a6570">橙色格＝该格 BEV query（可学习 bev_embedding）</text>
+            <!-- ① 造 query（可学习） -->
+            <rect class="learnable" x="40" y="66" width="270" height="110" rx="4"></rect>
+            <text x="175" y="92" text-anchor="middle" font-size="11.5" font-weight="600">① 造 query（可学习）</text>
+            <text x="175" y="110" text-anchor="middle" font-size="10.5">BEV 平面划成 200×200 格</text>
+            <text x="175" y="127" text-anchor="middle" font-size="10.5">每格 1 条 256 维可学习向量</text>
+            <text x="175" y="144" text-anchor="middle" font-size="10.5">bev_embedding，共 4 万条</text>
+            <text x="175" y="161" text-anchor="middle" font-size="10.5">——3D 侧的提问者</text>
 
-            <line x1="500" y1="441" x2="500" y2="565" stroke="#0072B2" stroke-width="2"></line>
-            <text x="500" y="432" text-anchor="middle" font-size="11" fill="#37424d">每格 1 pillar × 4 z 锚点（固定）</text>
+            <line class="flow" x1="312" y1="121" x2="368" y2="121"></line>
 
-            <circle class="fixed" cx="500" cy="445" r="4.5"></circle>
-            <circle class="fixed" cx="500" cy="480" r="4.5"></circle>
-            <circle class="fixed" cx="500" cy="515" r="4.5"></circle>
-            <circle class="fixed" cx="500" cy="550" r="4.5"></circle>
-            <text x="510" y="434" font-size="10" fill="#0072B2">z=2.5 m</text>
-            <text x="510" y="469" font-size="10" fill="#0072B2">z=0.167 m</text>
-            <text x="510" y="504" font-size="10" fill="#0072B2">z=−2.167 m</text>
-            <text x="510" y="539" font-size="10" fill="#0072B2">z=−4.5 m</text>
+            <!-- ② 虚拟 4 点、投影关联（固定） -->
+            <rect class="fixed" x="370" y="66" width="300" height="110" rx="4"></rect>
+            <text x="520" y="92" text-anchor="middle" font-size="11.5" font-weight="600">② 虚拟 4 点、投影关联（固定）</text>
+            <text x="520" y="112" text-anchor="middle" font-size="10.5">该格沿高度立 4 个固定 z 锚点</text>
+            <text x="520" y="129" text-anchor="middle" font-size="10.5">（−4.5～2.5 m）→ lidar2img 投 6 相机</text>
+            <text x="520" y="146" text-anchor="middle" font-size="10.5">任一锚落入像面 → 相机关联（V_hit）</text>
 
-            <!-- 命中相机 j（左）与投影射线 -->
-            <rect x="80" y="420" width="180" height="155" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
-            <text x="170" y="441" text-anchor="middle" font-size="10.5" font-weight="600">命中相机 j ∈ V_hit（后向）</text>
-            <line class="fixed" x1="500" y1="445" x2="235" y2="450"></line>
-            <line class="fixed" x1="500" y1="480" x2="235" y2="475"></line>
-            <line class="fixed" x1="500" y1="515" x2="235" y2="500"></line>
-            <line class="fixed" x1="500" y1="550" x2="235" y2="525"></line>
-            <circle class="fixed" cx="235" cy="450" r="4"></circle>
-            <circle class="fixed" cx="235" cy="475" r="4"></circle>
-            <circle class="fixed" cx="235" cy="500" r="4"></circle>
-            <circle class="fixed" cx="235" cy="525" r="4"></circle>
-            <line x1="235" y1="500" x2="222" y2="491" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="235" y1="500" x2="249" y2="489" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="235" y1="500" x2="223" y2="511" stroke="#D55E00" stroke-width="1"></line>
-            <circle class="learnable" cx="222" cy="491" r="3"></circle>
-            <circle class="learnable" cx="249" cy="489" r="3"></circle>
-            <circle class="learnable" cx="223" cy="511" r="3"></circle>
-            <text x="170" y="552" text-anchor="middle" font-size="9" fill="#5a6570">多尺度特征 4 层（/8–/64）</text>
-            <text x="170" y="566" text-anchor="middle" font-size="9" fill="#5a6570">采样偏移同右图（橙）</text>
+            <line class="flow" x1="672" y1="121" x2="728" y2="121"></line>
 
-            <!-- 命中相机 i（右）与投影射线 -->
-            <rect x="760" y="420" width="180" height="155" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
-            <text x="850" y="441" text-anchor="middle" font-size="10.5" font-weight="600">命中相机 i ∈ V_hit（前向）</text>
-            <line class="fixed" x1="500" y1="445" x2="785" y2="450"></line>
-            <line class="fixed" x1="500" y1="480" x2="785" y2="475"></line>
-            <line class="fixed" x1="500" y1="515" x2="785" y2="500"></line>
-            <line class="fixed" x1="500" y1="550" x2="785" y2="525"></line>
-            <circle class="fixed" cx="785" cy="450" r="4"></circle>
-            <circle class="fixed" cx="785" cy="475" r="4"></circle>
-            <circle class="fixed" cx="785" cy="500" r="4"></circle>
-            <circle class="fixed" cx="785" cy="525" r="4"></circle>
-            <line x1="785" y1="475" x2="770" y2="464" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="785" y1="475" x2="803" y2="462" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="785" y1="475" x2="766" y2="477" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="785" y1="475" x2="804" y2="479" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="785" y1="475" x2="786" y2="459" stroke="#D55E00" stroke-width="1"></line>
-            <circle class="learnable" cx="770" cy="464" r="3"></circle>
-            <circle class="learnable" cx="803" cy="462" r="3"></circle>
-            <circle class="learnable" cx="766" cy="477" r="3"></circle>
-            <circle class="learnable" cx="804" cy="479" r="3"></circle>
-            <circle class="learnable" cx="786" cy="459" r="3"></circle>
-            <line x1="785" y1="525" x2="771" y2="516" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="785" y1="525" x2="800" y2="514" stroke="#D55E00" stroke-width="1"></line>
-            <line x1="785" y1="525" x2="769" y2="532" stroke="#D55E00" stroke-width="1"></line>
-            <circle class="learnable" cx="771" cy="516" r="3"></circle>
-            <circle class="learnable" cx="800" cy="514" r="3"></circle>
-            <circle class="learnable" cx="769" cy="532" r="3"></circle>
-            <text x="812" y="470" font-size="9" fill="#D55E00">Δ</text>
-            <text x="850" y="552" text-anchor="middle" font-size="9" fill="#0072B2">● 参考点＝lidar2img 投影（固定）</text>
-            <text x="850" y="566" text-anchor="middle" font-size="9" fill="#D55E00">● 采样点＝参考点＋Δ 偏移（可学习）</text>
+            <!-- ③ 撒位采样（中间量：投影点固定＋偏移可学习） -->
+            <rect x="730" y="66" width="250" height="110" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="855" y="92" text-anchor="middle" font-size="11.5" font-weight="600">③ 围绕投影点采样</text>
+            <text x="855" y="110" text-anchor="middle" font-size="10.5">4 个投影点各自周围散布采样位</text>
+            <text x="855" y="127" text-anchor="middle" font-size="10.5">每投影点 64 位 → 每相机共 256 位</text>
+            <text x="855" y="144" text-anchor="middle" font-size="10.5"><tspan>位＝</tspan><tspan fill="#0072B2">投影点（固定）</tspan><tspan fill="#D55E00">＋query 偏移（可学习）</tspan></text>
+            <text x="855" y="161" text-anchor="middle" font-size="10.5">每位取回 1 条特征向量</text>
 
-            <!-- 聚合 -->
-            <line class="flow" x1="120" y1="575" x2="120" y2="640"></line>
-            <path class="flow" d="M 120 640 L 300 640"></path>
-            <line class="flow" x1="900" y1="575" x2="900" y2="640"></line>
-            <path class="flow" d="M 900 640 L 700 640"></path>
-            <rect x="300" y="610" width="400" height="60" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
-            <text x="500" y="628" text-anchor="middle" font-size="10.5">SCA 聚合：加权求和（weights 可学习）</text>
-            <text x="500" y="644" text-anchor="middle" font-size="10.5">4 尺度双线性采样 → ÷|V_hit|（Eq.2，固定）</text>
-            <text x="500" y="660" text-anchor="middle" font-size="10.5">→ 回注该 BEV query（SCA 输出）</text>
+            <line class="flow" x1="855" y1="176" x2="855" y2="204"></line>
 
-            <!-- 6 相机 hit 掩码 -->
-            <rect class="fixed" x="44" y="688" width="24" height="16" rx="2"></rect>
-            <rect class="fixed" x="128" y="688" width="24" height="16" rx="2"></rect>
-            <rect x="16" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
-            <rect x="72" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
-            <rect x="100" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
-            <rect x="156" y="688" width="24" height="16" rx="2" fill="#eef0f2" stroke="#c4ccd4" stroke-width="1"></rect>
-            <text x="28" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
-            <text x="84" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
-            <text x="112" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
-            <text x="168" y="700" text-anchor="middle" font-size="9" fill="#8a94a0">×</text>
-            <text x="190" y="700" font-size="10" fill="#5a6570">6 相机环视：仅命中相机（蓝虚线框）参与 SCA，其余被 bev_mask 掩码——hit 判定：任一 z 锚点落入视锥（any-of-4，固定）</text>
+            <!-- ④a 相机内加权求和（可学习） -->
+            <rect class="learnable" x="730" y="206" width="250" height="120" rx="4"></rect>
+            <text x="855" y="232" text-anchor="middle" font-size="11.5" font-weight="600">④a 相机内加权求和（可学习）</text>
+            <text x="855" y="252" text-anchor="middle" font-size="10.5">query 过 Linear 吐出 256 个分数</text>
+            <text x="855" y="269" text-anchor="middle" font-size="10.5">（不与采样特征交互）</text>
+            <text x="855" y="286" text-anchor="middle" font-size="10.5">softmax 后一对一配给 256 个位</text>
+            <text x="855" y="303" text-anchor="middle" font-size="10.5">加权求和 → 该相机 1 条 256 维</text>
 
-            <text x="500" y="730" text-anchor="middle" font-size="11" fill="#4a5560">每 query 每命中相机采样位置 ＝ 8 head × 4 level × 8 point ＝ 256 个；聚合结果除以命中相机数 |V_hit|（论文 Eq.2）</text>
-          </g>
+            <line class="flow" x1="728" y1="266" x2="674" y2="266"></line>
+
+            <!-- ④b 相机间平均（固定） -->
+            <rect class="fixed" x="370" y="206" width="300" height="120" rx="4"></rect>
+            <text x="520" y="232" text-anchor="middle" font-size="11.5" font-weight="600">④b 相机间平均（固定）</text>
+            <text x="520" y="254" text-anchor="middle" font-size="10.5">各关联相机的结果相加</text>
+            <text x="520" y="274" text-anchor="middle" font-size="10.5">÷ 命中相机数 |V_hit|（论文 Eq.2）</text>
+
+            <line class="flow" x1="368" y1="266" x2="314" y2="266"></line>
+
+            <!-- ⑤ 写回（可学习） -->
+            <rect class="learnable" x="40" y="206" width="270" height="120" rx="4"></rect>
+            <text x="175" y="232" text-anchor="middle" font-size="11.5" font-weight="600">⑤ 写回（可学习）</text>
+            <text x="175" y="254" text-anchor="middle" font-size="10.5">过 output_proj 残差加回该 query</text>
+            <text x="175" y="274" text-anchor="middle" font-size="10.5">随后 FFN</text>
+            <text x="175" y="294" text-anchor="middle" font-size="10.5">整套 TSA→SCA→FFN 重复 6 层</text>
+
+            <text x="500" y="360" text-anchor="middle" font-size="10.5" fill="#4a5560">softmax 只在相机内部（每 head 对 level×point＝32 维）；跨相机只做求和 ÷|V_hit| 平均，不做 softmax 竞争</text>
+            <text x="500" y="378" text-anchor="middle" font-size="10.5" fill="#4a5560">256 是采样位的个数（每位按 head 取 32 维特征切片）；query 全程 40000 条——×4 乘在参考点与采样位上，不乘在 query 数上</text>
           </g>
         </svg>
         <p>拉取式桥：主动方是 3D 侧的可学习 BEV query 表 <code>bev_embedding</code>（<code>nn.Embedding(40000,256)</code><span class="cite">dense_heads/bevformer_head.py:104-105</span>）——每格 query 抬成 8 m pillar、取 4 个固定 z 锚点<span class="cite">modules/encoder.py:62-63</span><span class="cite">modules/encoder.py:189</span>，经 <code>lidar2img</code> 标定投影落到命中相机（仅命中相机参与，bev_mask 掩码）<span class="cite">modules/encoder.py:95-136</span>，再在投影点邻域以可学习偏移做 deformable 采样<span class="cite">modules/spatial_cross_attention.py:245-267</span>。"在哪采"的锚点全部来自固定标定几何，"采多远、权重多少"才是学习量；深度不预测、无深度头，仅由 4 个 z 锚点隐式离散。</p>
