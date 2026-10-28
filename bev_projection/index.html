@@ -3588,7 +3588,7 @@ var F3D = {
       <ul>
         <li><strong>推/拉方向：拉为主、推在门口。</strong>在线主体是拉（pull）——3D voxel query 以自身格心经固定 <code>lidar2img</code> 投到图像、在命中相机上 deformable 采样"拉"取特征（与 BEVFormer/TPVFormer 同族，均为 BEVFormer 式 MSDA 血统<span class="cite">modules/deformable_cross_attention.py:159-168</span>）；但进入在线模型之前有一次决定性的"推"（push）——像素深度经 Eq.1 反投影成伪点云、光线投射成占用、QPN 修正后形成 proposal 掩码，2D 深度决定<strong>哪些</strong> 3D voxel 有资格成为 query（论文 §3.2 "2D features correspond to visible and occupied voxels"）。即：深度不参与在线特征提取，只做<strong>深度门控稀疏化</strong>——五家中唯一由深度显式决定 query 集合的模型。</li>
         <li><strong>深度：显式、离线、无分箱。</strong>深度由外部立体模型 MSNet3D 一次性给出（可学习但外部冻结<span class="cite">preprocess/image2depth.sh:6-8</span>），连续值→离散占据，不存在 LSS 式 per-pixel 深度分布、也没有 TPVFormer 式沿射线多深度假设枚举（每查询 4/32/32 锚点）；在线注意力里每个 voxel 只有 1 个参考点（格心投影<span class="cite">dense_heads/voxformer_head.py:208-214</span>），深度不确定性被前置到 QPN 掩码里消化。代价即论文 Limitation：远距离深度不可靠→远距性能受限（§4.2.4 p.8）。</li>
-        <li><strong>几何与学习的分工：几何定"骨架"，学习定"内容与稀疏性"。</strong>固定几何——0.2/0.4 m 双层网格、格心锚点、lidar2img、hit 判定<span class="cite">modules/encoder.py:105-144</span>、命中相机均值、×2 三线性上采样<span class="cite">utils/header.py:27</span>；学习——query 嵌入表内容（262144×128）、<strong>N_p 的大小与分布</strong>（QPN，逐帧数据相关<span class="cite">detectors/lmscnet.py:304-305</span>）、采样偏移与权重（DCA 3 层＋DSA 2 层）、mask token、两侧主干。五家中 VoxFormer 独有：<strong>稀疏化本身是可学习的</strong>（LSS 稠密 splat、BEVFormer/TPVFormer 全网格 query）。</li>
+        <li><strong>几何与学习的分工：几何定"骨架"，学习定"内容与稀疏性"。</strong>固定几何——0.2/0.4 m 双层网格、格心锚点、lidar2img、hit 判定<span class="cite">modules/encoder.py:105-144</span>、命中相机均值、×2 三线性上采样<span class="cite">utils/header.py:27</span>；学习——query 嵌入表内容（262144×128）、<strong>N_p 的大小与分布</strong>（QPN，逐帧数据相关<span class="cite">detectors/lmscnet.py:304-305</span>）、采样偏移与权重（DCA 3 层＋DSA 2 层）、mask token、两侧主干。五家中 VoxFormer 独有：<strong>稀疏化本身是可学习的</strong>（LSS 稠密 splat、UVTR 稠密满格采样、BEVFormer/TPVFormer 全网格 query）。</li>
         <li><strong>query 有无及形态：有，全网格表＋逐帧稀疏激活。</strong>N_q=262,144 条 3D 网格形可学习参数（论文 §3.3 "3D-grid-shaped learnable parameters"<span class="cite">dense_heads/voxformer_head.py:53</span>），每帧仅 N_p（QPN 输出，数据相关）参与 DCA——论文 Table 4（p.8）：100% dense 消融 IoU 34.6 vs occupancy 44.0、显存 18.5 G vs 14.6 G，稀疏既省显存又涨点；stage-2 用 mask token 把其余 voxel 补齐后经 DSA 稠密化（MAE 式 sparse-to-dense，论文 Fig.2 "Mask Token"＋"Updated Queries"<span class="cite">dense_heads/voxformer_head.py:110-113</span>）。对比：BEVFormer 40000 条 BEV 网格全激活、TPVFormer 46400 条三平面全激活、LSS 无 query。</li>
         <li><strong>体间交互（BEVFormer 没有的）。</strong>DSA 是 voxel↔voxel 的 deformable 自注意力（3D 侧自注意力，论文 Eq.5；vanilla 实现在 512×512 展平索引面上采样<span class="cite">modules/encoder.py:189-195</span>）；BEVFormer 的 self-attn 在 BEV 平面＋时序，TPVFormer 的在平面间（CVHA）。VoxFormer 无时序 self-attn——T 变体的时序＝把历史帧当"更多相机"进 DCA（<code>_temporal_=[-12,-9,-6,-3]</code>、num_cams=5<span class="cite">voxformer-T.py:18-19</span>）。</li>
       </ul>
@@ -4016,11 +4016,11 @@ var F3D = {
 
     <!-- ======================= 七、汇总 ======================= -->
     <section id="sec-summary">
-      <h2>七、汇总对比<span class="tag">谱系：无 query → 稠密 query → 三平面压缩 query → 深度门控稀疏 query</span></h2>
+      <h2>七、汇总对比<span class="tag">谱系：无 query → 推·3D 体素码放 → 稠密 query → 三平面压缩 query → 深度门控稀疏 query → 推拉合流</span></h2>
 
-      <p>前五节逐家拆完了"哪些几何固定、哪些参数可学习"；本节把各家放到同一张表与同一张坐标图上。大表的每个单元格均可回溯到对应分册底稿的具体行（出处以 <span class="cite">…</span> 标注）；谱系图的坐标轴取本笔记的两条主轴——<strong>可学习参数所在侧</strong>（纵轴：2D 侧／桥两端／3D 侧 query 主导）与<strong>投影方向</strong>（横轴：推 push／拉 pull），四家在图上的落位即"query 从无到稠密到压缩到稀疏门控"的演化叙事。</p>
+      <p>前六节逐家拆完了"哪些几何固定、哪些参数可学习"；本节把各家放到同一张表与同一张坐标图上。大表的每个单元格均可回溯到对应分册底稿的具体行（出处以 <span class="cite">…</span> 标注）；谱系图的坐标轴取本笔记的两条主轴——<strong>可学习参数所在侧</strong>（纵轴：2D 侧／桥两端／3D 侧 query 主导）与<strong>投影方向</strong>（横轴：推 push／拉 pull），六家在图上的落位即"query 从无到稠密到压缩到稀疏门控、再到推拉合流"的演化叙事。</p>
 
-      <h3>① 四家对比大表（含口径脚注）</h3>
+      <h3>① 六家对比大表（含口径脚注）</h3>
       <style>
         /* 节内 scoped 变体：汇总对比大表（基于全局 .param-table，仅加首列维度列样式与紧凑字号） */
         #sec-summary .cmp-table { table-layout: fixed; }
@@ -4032,58 +4032,70 @@ var F3D = {
       </style>
       <table class="param-table cmp-table">
         <thead>
-          <tr><th>维度</th><th>LSS</th><th>BEVFormer</th><th>TPVFormer</th><th>VoxFormer†</th></tr>
+          <tr><th>维度</th><th>LSS</th><th>UVTR</th><th>BEVFormer</th><th>TPVFormer</th><th>VoxFormer†</th><th>Qwen-Drive†</th></tr>
         </thead>
         <tbody>
           <tr>
             <td>query 有无与形状</td>
             <td><strong>无 query</strong>——无可学习 3D query／BEV embedding／位置编码；3D 位置＝固定视锥网格点（每相机 41×8×22＝7216 个），BEV 格内容＝落入该 pillar 的点求和<span class="cite">src/models.py:153-164</span><span class="cite">src/models.py:236-240</span></td>
+            <td><strong>无桥上 query——体素格是被动容器</strong>——固定 linspace 体素格 128×128×5，无 bev_embedding 类嵌入表；桥外 900 object query（nn.Embedding(900,512)）以可学习参考点从体素体拉取<span class="cite">uvtr_camera_base.py:80</span><span class="cite">models/dense_heads/uvtr_head.py:117-119</span></td>
             <td><strong>有，网格形嵌入表</strong>——bev_embedding (40000,256)＝10.24M，逐格与 BEV 平面一一对应；另有 (900,512) object query（桥之外）<span class="cite">dense_heads/bevformer_head.py:104-105</span><span class="cite">dense_heads/bevformer_head.py:106-107</span></td>
             <td><strong>有，三张平面嵌入表</strong>——hw(40000,128)＋zh(3200,128)＋wz(3200,128)＝46400 条（5.94M），query 与平面同物异名<span class="cite">tpvformer10/tpv_head.py:53-55</span></td>
             <td><strong>有，全网格表＋逐帧稀疏激活</strong>——bev_embed (262144,128)＝33.55M＋mask token (1,128)；每帧仅 N_p 行激活（QPN proposal 决定，数据相关、无固定比例）<span class="cite">dense_heads/voxformer_head.py:53</span><span class="cite">dense_heads/voxformer_head.py:89-91</span></td>
+            <td><strong>体素支路无 query；BEV 侧网格嵌入表被 UVTR 加成</strong>——bev_embedding (40000,256) 上叠压平体素 [40000,256]（Conv2d 4096→256 后加成）；另有 900 object query（桥外）<span class="cite">heads.py:222</span><span class="cite">heads.py:244-245</span><span class="cite">modeling_perception.py:82</span></td>
           </tr>
           <tr>
             <td>可学习参数位置与形态</td>
             <td><strong>全在桥两端</strong>——2D 侧：EfficientNet-B0＋up1＋depthnet（α 41 维深度分布与 c 64 维上下文的唯一来源）；BEV 侧：resnet18 式 CNN；桥上（外积／反投影／池化）零参数<span class="cite">src/models.py:46</span><span class="cite">src/models.py:90-126</span></td>
+            <td><strong>全在桥两端（与 LSS 同构）</strong>——2D 侧 ResNet-50＋FPN＋depth_net（单个 1×1 Conv 256→64 跨尺度共享）；3D 侧 3×Conv3d(3,3,3)＋decoder／输出头；投影桥（格点·投影·加权求和）零参数<span class="cite">detectors/uvtr.py:53-55</span><span class="cite">models/utils/uni3d_viewtrans.py:70-81</span></td>
             <td><strong>3D 侧 query 主导＋桥上采样学习量</strong>——bev_embedding＋bev_pos／can_bus_mlp；桥上 SCA offsets／weights／value_proj／output_proj（每层 328,960、×6 层约 1.97M）＋cams/level embeds；2D 侧 ResNet-101-DCN＋FPN<span class="cite">modules/spatial_cross_attention.py:245-249</span></td>
             <td><strong>3D 侧三表＋桥上采样＋3D 侧自注意力学习量</strong>——三平面表＋逐层 pos；桥上 ICA offsets/weights/value_proj（×3 层，桥上）＋CVHA offsets／含 3-way 平面门控的 weights（×5 层，3D 侧自注意力）＋cams/level embeds；2D 侧 ResNet-101-DCN＋FPN<span class="cite">tpvformer10/modules/image_cross_attention.py:247-254</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span></td>
             <td><strong>3D 侧全表＋稀疏化本身可学习</strong>——bev_embed＋mask token；桥上 DCA offsets/weights/value_proj（3 层，桥上）＋DSA offsets/weights/value_proj（2 层，3D 侧自注意力）；2D 侧 ResNet50＋FPN；QPN 门控（离线训练后冻结）与外部冻结 MSNet3D 共同决定 N_p<span class="cite">modules/deformable_cross_attention.py:249-253</span><span class="cite">detectors/lmscnet.py:67-140</span></td>
+            <td><strong>两端学习＋拉桥有学习量</strong>——2D 侧 vit_neck＋重深度头（BasicBlock×3＋ASPP→118）；3D 侧 3×Conv3d＋uvtr_query_proj（Conv2d 4096→256）＋占用融合；拉桥 SCA offsets／weights ×6 层（BEVFormer 式）<span class="cite">view_transform.py:82-100</span><span class="cite">modeling_perception.py:82</span><span class="cite">attention.py:161-163</span></td>
           </tr>
           <tr>
             <td>投影方向（推·拉）</td>
             <td><strong>推（push）</strong>——每像素沿固定视锥射线"抬"到 3D（lift）再 scatter 落格（splat）；无 3D→2D 采样路径、无 cross-attention<span class="cite">src/models.py:57</span><span class="cite">src/models.py:200-242</span></td>
+            <td><strong>推（push）· 3D 落点（gather 实现）</strong>——合成语义与 LSS 同（显式深度分布×特征），实现反向：3D 体素格点投影到 2D 定址、grid_sample 取特征与深度概率、按概率加权求和入格；落点保高度（Z 5 层体素不塌缩）<span class="cite">models/utils/uni3d_viewtrans.py:199-226</span><span class="cite">models/utils/uni3d_viewtrans.py:279-359</span></td>
             <td><strong>拉（pull）</strong>——query 抬 pillar 取 4 固定 z 锚点、lidar2img 投到 2D、命中相机 deformable 拉取；投影方向 3D→2D 定锚，特征流 2D→3D 聚合<span class="cite">modules/encoder.py:46-71</span><span class="cite">modules/encoder.py:95-136</span></td>
             <td><strong>拉（pull）</strong>——同 BEVFormer 骨架；差异在锚点射线不在同一根 Z 轴上，而分散到三根正交轴（hw 沿 Z 4 锚、zh/wz 沿水平轴 32 锚）<span class="cite">tpvformer10/modules/encoder.py:36-47</span></td>
             <td><strong>拉为主、推在门口</strong>——在线主体为 DCA 拉取（BEVFormer 式 MSDA 血统）；进在线模型之前，深度→伪占用→QPN 掩码的一次"推"决定哪些 voxel 有 query<span class="cite">modules/deformable_cross_attention.py:140-176</span><span class="cite">projects/configs/voxformer/qpn.py:41-44</span></td>
+            <td><strong>推拉合流</strong>——UVTR 支路＝LSS／BEVDet 式视锥 scatter（rank 区间 CUDA kernel）落 3D 体素；检测主桥＝BEVFormer 式拉（4 z 锚 deformable 从 LLM 四尺度特征拉取）——推入体素＋拉取 BEV 双桥并联<span class="cite">view_transform.py:241-248</span><span class="cite">bev_encoder.py:303-316</span></td>
           </tr>
           <tr>
             <td>深度显式·隐式</td>
             <td><strong>显式分布、隐式监督</strong>——per-pixel α(41) softmax，格中心 4.0–44.0 m 固定；无深度标签，仅由 BEV 任务损失端到端回传<span class="cite">src/models.py:48-49</span><span class="cite">src/models.py:157</span></td>
+            <td><strong>显式分布、无监督</strong>——64 档 softmax（D=64@1 m、0–64 m），论文 p.4 明示无监督＋代码无深度损失；仅由检测损失端到端回传<span class="cite">uvtr_camera_base.py:62</span><span class="cite">models/dense_heads/uvtr_head.py:335-401</span></td>
             <td><strong>隐式、无深度分布</strong>——不预测 per-pixel 深度、无深度头；4 个固定 z 锚点 {−4.5, −2.167, 0.167, 2.5} m 离散枚举，attention 权重隐式加权<span class="cite">modules/encoder.py:62-63</span></td>
             <td><strong>隐式、无深度分布</strong>——无深度头；锚点射线离散枚举（hw 沿 Z 4 档、zh/wz 沿水平轴 32 档、间距 3.27 m），attention 权重隐式加权<span class="cite">tpvformer10/modules/encoder.py:36-47</span><span class="cite">tpvformer10/modules/encoder.py:139-144</span></td>
             <td><strong>显式、离线、无分箱</strong>——MSNet3D 立体深度（外部冻结）给连续值→离散占据；在线每 voxel 仅 1 个参考点（0.4 m 格心），深度不确定性前置到 QPN 掩码里消化<span class="cite">preprocess/image2depth.sh:6-8</span><span class="cite">dense_heads/voxformer_head.py:208-214</span></td>
+            <td><strong>显式分布、无监督（按发布仓内证据）</strong>——118 档 softmax（0.5 m/档、1.0–60 m）；inference-only 仓无损失代码与深度 GT（训练期不可考），深度仅作 kernel 内乘性权重回传<span class="cite">view_transform.py:79-100</span><span class="cite">docs/perception.md:14</span></td>
           </tr>
           <tr>
             <td>2D-3D 对应的建立方式</td>
             <td>逐像素×41 深度格外积 α_d·c，沿视锥 scatter 进 0.5 m BEV 格求和（bin 中心对齐量化＋越界过滤＋cumsum 求和）——"学习定特征与深度权重，几何定落点"<span class="cite">src/models.py:57</span><span class="cite">src/models.py:208</span><span class="cite">src/models.py:236-240</span></td>
+            <td>体素格点 128×128×5→lidar2img 投影→hit 掩码（像内且 0&lt;z&lt;64 m）→grid_sample 双线性取特征与深度概率→特征×概率对 6 相机×4 尺度求和入格——"学习给内容与概率、几何给格点与定址"<span class="cite">models/utils/uni3d_viewtrans.py:279-303</span><span class="cite">models/utils/uni3d_viewtrans.py:333-359</span></td>
             <td>BEV 格中心→lidar2img 投影→hit 判定（4 z 锚任一命中即该相机参与）→投影点＋可学习偏移采样（每 query 每命中相机 8head×4level×8point＝256 采样位）→÷|V_hit|<span class="cite">modules/encoder.py:95-136</span><span class="cite">modules/spatial_cross_attention.py:137-141</span><span class="cite">modules/spatial_cross_attention.py:169-172</span></td>
             <td>正交轴锚点射线→lidar2img→hit→偏移采样（每 query 每命中相机 hw 256、zh/wz 2048 采样位）→÷|V_hit|；三平面→体＝沿正交轴广播＋双线性＋<strong>等权求和</strong>（零参数重建，任意分辨率可查）<span class="cite">tpvformer10/modules/encoder.py:167-220</span><span class="cite">tpvformer10/tpv_aggregator.py:69-84</span></td>
             <td>voxel 格心→lidar2img→hit→偏移采样（每 query 每命中相机 64 采样位）→÷|V_t|；空格由 mask token 补齐（MAE 式）→DSA 稠密化→×2 三线性上采样（零参数）<span class="cite">modules/encoder.py:94-149</span><span class="cite">dense_heads/voxformer_head.py:110-113</span><span class="cite">modules/deformable_cross_attention.py:169-176</span></td>
+            <td>视锥格点 56×32×118→uv×d→inv(lidar2img)×lidar2ego（ego 系）→体素索引掩码→rank 区间散射 kernel 单遍融合（深度×特征在 kernel 内、跨相机区间和合并）<span class="cite">view_transform.py:200-239</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span></td>
           </tr>
           <tr>
             <td>3D 表征尺寸†</td>
             <td>BEV 网格 200×200×1 @0.5 m（X/Y ±50 m；zbound 单层 pillar）→张量 (B,64,200,200)<span class="cite">src/train.py:34-36</span><span class="cite">src/tools.py:174-179</span></td>
+            <td>体素格 128×128×5 @XY 0.8 m（实际间距≈0.806 m）、Z 采样 {-5,-3,-1,1,3} m 5 层→V_I (B,256,5,128,128)（X/Y ±51.2 m、Z −5～3 m）<span class="cite">uvtr_camera_base.py:12,15-19</span><span class="cite">models/utils/uni3d_viewtrans.py:199-202</span></td>
             <td>BEV 网格 200×200 @0.512 m（X/Y ±51.2 m、Z −5～3 m 的 8 m pillar）→bev_embed (B,40000,256)<span class="cite">bevformer_base.py:35-36</span><span class="cite">dense_heads/bevformer_head.py:61-62</span><span class="cite">modules/encoder.py:189</span></td>
             <td>三平面 200×200＋16×200＋200×16（hw 0.512 m／z 0.5 m 格）→体张量 (B,128,200,200,16)<span class="cite">tpv_lidarseg.py:20-22</span><span class="cite">tpvformer10/tpv_aggregator.py:42-44</span></td>
             <td>query 体 128×128×16 @0.4 m（N_q＝262,144，输出体 1/8 降采样）；输出体 256×256×32 @0.2 m<span class="cite">voxformer-S.py:21</span><span class="cite">voxformer-S.py:51-53</span><span class="cite">dense_heads/voxformer_head.py:201</span></td>
+            <td>UVTR 体素 [16,200,200]（Z×Y×X）@XY 0.512 m、Z 0.65 m（X/Y ±51.2 m、Z −5.0～5.4 m）→压平 [40000,256] 加成 BEV query 200×200<span class="cite">modeling_perception.py:67-73</span><span class="cite">heads.py:244-245</span></td>
           </tr>
         </tbody>
       </table>
-      <p class="cmp-foot"><strong>† 口径脚注（随表必读）：</strong>LSS、BEVFormer、TPVFormer 三列均为各家官方仓的 nuScenes 配置口径；VoxFormer 官方仓无 nuScenes 支持（README 数据集勾选框未实现<span class="cite">README.md:56-58</span>、论文全文 0 次提及），该列按其原生 SemanticKITTI 单目口径（voxformer-S.py）列写。"3D 表征尺寸"一行四列口径不同（nuScenes 环视 ±50／±51.2 m vs SemanticKITTI 车前 51.2 m 单目），不可直接横比；其余五行为结构性维度（query 形态、参数位置、推拉方向、深度显隐、对应建立方式），不受数据集口径影响。</p>
+      <p class="cmp-foot"><strong>† 口径脚注（随表必读）：</strong>LSS、UVTR、BEVFormer、TPVFormer 四列均为各家官方仓的 nuScenes 配置口径；VoxFormer 官方仓无 nuScenes 支持（README 数据集勾选框未实现<span class="cite">README.md:56-58</span>、论文全文 0 次提及），该列按其原生 SemanticKITTI 单目口径（voxformer-S.py）列写；Qwen-Drive 列为双数据集口径——训练 nuScenes 6 相机＋OpenScene／nuPlan 8 相机、固定 896×512<span class="cite">docs/perception.md:110-112</span>，其 cite 路径相对感知包 src/qwen_drive_perception/（表中简写文件名）。"3D 表征尺寸"一行各列口径不同（nuScenes 环视 ±50／±51.2 m vs SemanticKITTI 车前 51.2 m 单目），不可直接横比；其余五行为结构性维度（query 形态、参数位置、推拉方向、深度显隐、对应建立方式），不受数据集口径影响。</p>
 
       <h3>② 谱系总览图（可学习参数所在侧 × 投影方向）</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 742" role="img" aria-label="谱系总览图：纵轴为可学习参数所在侧（2D 侧、桥两端、3D 侧 query 主导），横轴为投影方向（推到拉）；LSS 位于推侧桥两端，BEVFormer、TPVFormer、VoxFormer 位于拉侧 3D 侧；橙色虚线箭头串起 query 从无到稠密 40000 到三平面压缩 46400 到深度门控稀疏 262144 的演化，VoxFormer 门口标注离线深度推力">
+        <svg viewBox="0 0 1000 742" role="img" aria-label="谱系总览图：纵轴为可学习参数所在侧（2D 侧、桥两端、3D 侧 query 主导），横轴为投影方向（推到拉）；LSS 与 UVTR 并列推侧桥两端（推家族两落点：LSS 视锥 scatter 拍扁 pillar、UVTR 体素格 gather 码放保高度），BEVFormer、TPVFormer、VoxFormer 位于拉侧 3D 侧，Qwen-Drive 在右下汇合两支（UVTR 推支＋BEVFormer 拉支）；橙色虚线箭头串起 query 从无到稠密 40000 到三平面压缩 46400 到深度门控稀疏 262144 的演化，VoxFormer 门口标注离线深度推力">
           <defs>
             <marker id="arrow-evol" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 1 L 9 5 L 0 9 z" fill="#D55E00"></path>
@@ -4103,7 +4115,7 @@ var F3D = {
             <text x="122" y="429" font-size="11" text-anchor="end">桥两端</text>
             <line x1="126" y1="610" x2="140" y2="610" stroke="#8a94a0" stroke-width="1"></line>
             <text x="122" y="614" font-size="11" text-anchor="end">2D 侧（图像特征端）</text>
-            <text x="170" y="614" font-size="9.5" fill="#8a94a0">（无纯 2D 侧模型——LSS 的学习量横跨两端）</text>
+            <text x="170" y="614" font-size="9.5" fill="#8a94a0">（无纯 2D 侧模型——LSS／UVTR 的学习量横跨两端）</text>
 
             <!-- 横轴：投影方向 -->
             <line class="flow" x1="180" y1="640" x2="64" y2="640"></line>
@@ -4126,10 +4138,24 @@ var F3D = {
             <text x="270" y="474" font-size="9" fill="#5a6570" text-anchor="middle">深度：显式 α(41)·隐式监督</text>
             <text x="270" y="492" font-size="9" fill="#5a6570" text-anchor="middle">BEV 200×200×1 @0.5 m（±50 m·nuScenes）</text>
 
-            <!-- ② BEVFormer：拉侧 · 3D 侧 · 稠密 query -->
+            <!-- ② UVTR：推侧 · 桥两端 · 3D 落点（与 LSS 并列的推分支） -->
+            <rect x="384" y="355" width="172" height="160" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="394" y="377" font-size="12.5" font-weight="600">UVTR · NeurIPS 2022</text>
+            <text x="546" y="377" font-size="12" fill="#D55E00" text-anchor="end">②</text>
+            <text x="394" y="397" font-size="10" fill="#37424d">推（push）· 体素码放保高度（gather）</text>
+            <rect class="learnable" x="394" y="405" width="152" height="20" rx="2"></rect>
+            <text x="470" y="419" font-size="8.5" text-anchor="middle">depth_net→64＋FPN｜2D（学的）</text>
+            <rect class="fixed" x="394" y="429" width="152" height="20" rx="2"></rect>
+            <text x="470" y="443" font-size="8.5" text-anchor="middle">格 128×128×5＋投影｜桥·零参数</text>
+            <rect class="learnable" x="394" y="453" width="152" height="20" rx="2"></rect>
+            <text x="470" y="467" font-size="8.5" text-anchor="middle">3×Conv3d＋900 query｜3D（学的）</text>
+            <text x="470" y="489" font-size="9" fill="#5a6570" text-anchor="middle">深度：显式 D=64@1 m·无监督</text>
+            <text x="470" y="507" font-size="9" fill="#5a6570" text-anchor="middle">体素 128×128×5 @0.8 m·nuScenes</text>
+
+            <!-- ③ BEVFormer：拉侧 · 3D 侧 · 稠密 query -->
             <rect x="372" y="150" width="196" height="180" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="382" y="172" font-size="12.5" font-weight="600">BEVFormer · ECCV 2022</text>
-            <text x="558" y="172" font-size="12" fill="#D55E00" text-anchor="end">②</text>
+            <text x="558" y="172" font-size="12" fill="#D55E00" text-anchor="end">③</text>
             <text x="382" y="192" font-size="10.5" fill="#37424d">拉（pull）· 稠密 query 全激活</text>
             <rect class="learnable" x="382" y="200" width="176" height="20" rx="2"></rect>
             <text x="470" y="214" font-size="9" text-anchor="middle">bev_embedding (40000,256)（学的）</text>
@@ -4141,10 +4167,10 @@ var F3D = {
             <text x="470" y="308" font-size="9" fill="#5a6570" text-anchor="middle">BEV 200×200 @0.512 m（nuScenes）</text>
             <text x="470" y="324" font-size="9" fill="#5a6570" text-anchor="middle">（X/Y ±51.2 m·pillar Z −5～3 m）</text>
 
-            <!-- ③ TPVFormer：拉侧 · 3D 侧 · 三平面压缩 query -->
+            <!-- ④ TPVFormer：拉侧 · 3D 侧 · 三平面压缩 query -->
             <rect x="590" y="150" width="196" height="180" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="600" y="172" font-size="12.5" font-weight="600">TPVFormer · CVPR 2023</text>
-            <text x="776" y="172" font-size="12" fill="#D55E00" text-anchor="end">③</text>
+            <text x="776" y="172" font-size="12" fill="#D55E00" text-anchor="end">④</text>
             <text x="600" y="192" font-size="10.5" fill="#37424d">拉（pull）· 三平面压缩 query</text>
             <rect class="learnable" x="600" y="200" width="176" height="20" rx="2"></rect>
             <text x="688" y="214" font-size="9" text-anchor="middle">三表 46400×128＝5.94M（学的）</text>
@@ -4156,10 +4182,10 @@ var F3D = {
             <text x="688" y="308" font-size="9" fill="#5a6570" text-anchor="middle">三平面 200×200＋16×200＋200×16</text>
             <text x="688" y="324" font-size="9" fill="#5a6570" text-anchor="middle">体 (200,200,16)·7.25%（nuScenes）</text>
 
-            <!-- ④ VoxFormer：拉侧 · 3D 侧 · 深度门控稀疏 query -->
+            <!-- ⑤ VoxFormer：拉侧 · 3D 侧 · 深度门控稀疏 query -->
             <rect x="808" y="150" width="182" height="180" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
             <text x="818" y="172" font-size="12" font-weight="600">VoxFormer · CVPR 2023†</text>
-            <text x="980" y="172" font-size="12" fill="#D55E00" text-anchor="end">④</text>
+            <text x="980" y="172" font-size="12" fill="#D55E00" text-anchor="end">⑤</text>
             <text x="818" y="192" font-size="10.5" fill="#37424d">拉为主 · 推在门口（深度门控）</text>
             <rect class="learnable" x="818" y="200" width="162" height="20" rx="2"></rect>
             <text x="899" y="214" font-size="9.5" text-anchor="middle">bev_embed (262144,128)（学的）</text>
@@ -4175,18 +4201,41 @@ var F3D = {
             <path class="flow" d="M 816 372 L 880 338"></path>
             <text x="984" y="392" font-size="9.5" fill="#0072B2" text-anchor="end">门口的推（离线）：深度→伪占用→QPN 掩码决定 N_p</text>
 
+            <!-- ⑥ Qwen-Drive：推拉合流（从 UVTR 推支与 BEVFormer 拉支两支汇入） -->
+            <rect x="648" y="406" width="246" height="146" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="658" y="428" font-size="12.5" font-weight="600">Qwen-Drive 1.0 · 感知头</text>
+            <text x="884" y="428" font-size="12" fill="#D55E00" text-anchor="end">⑥</text>
+            <text x="658" y="447" font-size="10" fill="#37424d">推拉合流：UVTR 推＋BEVFormer 拉</text>
+            <rect class="learnable" x="658" y="455" width="226" height="20" rx="2"></rect>
+            <text x="771" y="469" font-size="9" text-anchor="middle">118 档深度头＋3×Conv3d＋压平（推支·学的）</text>
+            <rect class="fixed" x="658" y="479" width="226" height="20" rx="2"></rect>
+            <text x="771" y="493" font-size="9" text-anchor="middle">视锥 56×32×118＋rank 散射｜桥·零参数</text>
+            <rect class="learnable" x="658" y="503" width="226" height="20" rx="2"></rect>
+            <text x="771" y="517" font-size="9" text-anchor="middle">SCA ×6 层＋bev 40000 加成（拉支·学的）</text>
+            <text x="771" y="541" font-size="9" fill="#5a6570" text-anchor="middle">体素 [16,200,200]·压平加成 40000｜896×512</text>
+
+            <!-- 推家族分化：LSS（拍扁）→ UVTR（3D 落点），同带并列 -->
+            <line x1="372" y1="435" x2="382" y2="435" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></line>
+
+            <!-- 推拉两支汇入 Qwen-Drive -->
+            <path d="M 566 332 L 566 430 L 642 430" fill="none" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></path>
+            <text x="604" y="422" font-size="8.5" fill="#D55E00" text-anchor="middle">拉支汇入</text>
+            <line x1="558" y1="460" x2="642" y2="460" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></line>
+            <text x="604" y="452" font-size="8.5" fill="#D55E00" text-anchor="middle">推支汇入</text>
+
             <!-- query 演化主线（橙虚线） -->
-            <path d="M 270 510 C 270 566, 470 576, 470 336" fill="none" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></path>
+            <path d="M 270 340 C 270 250, 312 240, 366 240" fill="none" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></path>
             <line x1="574" y1="344" x2="584" y2="344" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></line>
             <line x1="790" y1="344" x2="800" y2="344" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></line>
             <text x="545" y="575" font-size="10.5" fill="#D55E00" text-anchor="middle">query 演化主线（橙虚线）：无（LSS）→ 稠密 40000 全激活（BEVFormer）→ 三平面压缩 46400＝7.25%（TPVFormer）</text>
             <text x="545" y="595" font-size="10.5" fill="#D55E00" text-anchor="middle">→ 深度门控稀疏：全表 262,144·每帧仅 N_p 激活（VoxFormer，N_p 数据相关）</text>
+            <text x="700" y="615" font-size="10.5" fill="#D55E00" text-anchor="middle">主线之外：UVTR（②）桥上无 query——与 LSS 同为推家族两落点；Qwen-Drive（⑥）推拉合流收束两支</text>
 
             <text x="500" y="726" font-size="10" fill="#5a6570" text-anchor="middle">† VoxFormer 为 SemanticKITTI 单目口径（官方仓无 nuScenes 支持）；LSS／BEVFormer／TPVFormer 为 nuScenes 口径——"3D 表征尺寸"不可直接横比，详见大表脚注</text>
           </g>
         </svg>
-        <p>读图：横轴是特征过桥的方向——LSS 独占推侧（2D 侧产出 α·c 后 scatter 落格），其余三家共享"3D 定锚＋deformable 拉取"的 BEVFormer 式骨架（MSDA 血统<span class="cite">modules/deformable_cross_attention.py:159-168</span>）；纵轴是可学习参数的重心——LSS 横跨桥两端且桥上零参数，后三家把主动方移到 3D 侧 query 表、学习量转移到桥上的采样偏移与权重。橙虚线是 query 形态的演化主线：无 query → 稠密 40000<span class="cite">dense_heads/bevformer_head.py:104-105</span> → 三平面压缩 46400（同范围稠密 voxel 640000 格的 7.25%<span class="cite">tpvformer10/tpv_head.py:53-55</span>）→ 深度门控稀疏（全表 262,144、每帧仅 N_p 激活<span class="cite">dense_heads/voxformer_head.py:53</span><span class="cite">dense_heads/voxformer_head.py:89-91</span>）；VoxFormer 门口的蓝字"推"是四家中唯一由深度显式决定 query 集合的机制（离线 QPN 门控）。</p>
-        <p><strong>一句话综合：</strong>四家对"2D 特征如何进入 3D"的回答可压成一组对偶——LSS 让<strong>几何</strong>当搬运工（固定视锥＋scatter，学习只决定"搬什么、放多深"），后三家让<strong>学习</strong>当搬运工（query 主动拉取，几何只提供锚点与投影）；深度则从 LSS 的显式分布（α·41 维）、经 BEVFormer／TPVFormer 的锚点隐式枚举（4／4-32-32 档）、走到 VoxFormer 的离线显式门控——<strong>深度显隐与 query 稀密，正是这条谱系的两条演化主线</strong>。</p>
+        <p>读图：横轴是特征过桥的方向——LSS 与 UVTR 并列推侧（同一"显式深度分布×特征"语义的两种落点：LSS 在 2D 侧枚举视锥 scatter 拍扁 pillar<span class="cite">src/models.py:200-242</span>，UVTR 在 3D 侧放固定体素格、投影定址后 gather 码放保高度<span class="cite">models/utils/uni3d_viewtrans.py:279-359</span>）；BEVFormer／TPVFormer／VoxFormer 共享"3D 定锚＋deformable 拉取"的 BEVFormer 式骨架（MSDA 血统<span class="cite">modules/deformable_cross_attention.py:159-168</span>）；Qwen-Drive 在右下收束两支——UVTR 推流体素压平后作 BEV query 的体素先验加成，检测内容由 BEVFormer 式拉取完成。纵轴是可学习参数的重心——LSS／UVTR 横跨桥两端且桥上零参数，拉侧三家把主动方移到 3D 侧 query 表、学习量转移到桥上的采样偏移与权重。橙虚线是 query 形态的演化主线：无 query → 稠密 40000<span class="cite">dense_heads/bevformer_head.py:104-105</span> → 三平面压缩 46400（同范围稠密 voxel 640000 格的 7.25%<span class="cite">tpvformer10/tpv_head.py:53-55</span>）→ 深度门控稀疏（全表 262,144、每帧仅 N_p 激活<span class="cite">dense_heads/voxformer_head.py:53</span><span class="cite">dense_heads/voxformer_head.py:89-91</span>）——UVTR 不在主线上（桥上无 query，体素为被动容器），Qwen-Drive 也不在（复用 BEV 式 40000 query）；VoxFormer 门口的蓝字"推"是六家中唯一由深度显式决定 query 集合的机制（离线 QPN 门控）。</p>
+        <p><strong>一句话综合：</strong>六家对"2D 特征如何进入 3D"的回答可压成一组对偶——LSS／UVTR 让<strong>几何</strong>当搬运工（固定视锥／体素格＋显式深度加权，学习只决定"搬什么、放多深"，差别在落点：拍扁 pillar 对体素保高度），拉侧三家让<strong>学习</strong>当搬运工（query 主动拉取，几何只提供锚点与投影），Qwen-Drive 把两支并联（UVTR 推流体素作 BEV query 的体素先验加成，检测走 BEVFormer 式拉取）；深度则从 LSS／UVTR 的显式无监督分布（α·41 维／D=64@1 m）、经 BEVFormer／TPVFormer 的锚点隐式枚举（4／4-32-32 档）、走到 VoxFormer 的离线显式门控、再于 Qwen-Drive 回归显式（118 档，仅服务推支）——<strong>深度显隐与 query 稀密，正是这条谱系的两条演化主线</strong>。</p>
       </div>
     </section>
 
@@ -4227,9 +4276,23 @@ var F3D = {
           <td><code>63da92415447c2e97654bad977254c907f5ce703</code></td>
           <td>2026-10-26</td>
         </tr>
+        <tr>
+          <td>UVTR</td>
+          <td>arXiv:2206.00630</td>
+          <td>github.com/JIA-Lab-research/UVTR</td>
+          <td><code>8a24ec2f1f2fe9f6b65bed201dae112f83e4aaa7</code></td>
+          <td>2026-10-28</td>
+        </tr>
+        <tr>
+          <td>Qwen-Drive-1.0</td>
+          <td>docs/perception.md（无随仓论文）</td>
+          <td>github.com/QwenLM/Qwen-Drive-1.0</td>
+          <td><code>28091c1532e869bc7aee91fc0aef6b3e6fd0b2e0</code></td>
+          <td>2026-10-28</td>
+        </tr>
       </tbody>
     </table>
-    <p class="footer-note">四仓均为 2026-10-26 以 <code>--depth 1</code> 浅克隆的默认分支；文中具体数字若无特别说明，均取自上表 commit 下的 nuScenes 配置口径（VoxFormer 例外：原生 SemanticKITTI，见第五节），代码中找不到的标注"论文值，代码未见"。</p>
+    <p class="footer-note">上表六仓中，前四仓（LSS／BEVFormer／TPVFormer／VoxFormer）为 2026-10-26、UVTR 为 2026-10-28，均以 <code>--depth 1</code> 浅克隆的默认分支；Qwen-Drive-1.0 为 2026-10-28 完整克隆（inference-only 发布仓，位于项目根、不在 <code>bev_projection/code/</code>）。文中具体数字若无特别说明，均取自上表 commit 下的 nuScenes 配置口径（VoxFormer 例外：原生 SemanticKITTI，见第五节；Qwen-Drive 例外：nuScenes 6 相机／OpenScene·nuPlan 8 相机双口径、固定 896×512，见第六节），代码中找不到的标注"论文值，代码未见"。</p>
   </footer>
 
 </div>
