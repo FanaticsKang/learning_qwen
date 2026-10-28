@@ -1577,7 +1577,7 @@ var F3D = {
   var EXT = 15;                                  // BEV/体素抽样窗口半宽（m，[16,200,200] 的中心局部抽样，示意）
   var CELL = 0.512;                              // XY 格边长（200×200@0.512 m）
   var ZMIN = -5.0, ZLAY = 16, ZD = 0.65;         // 体素 Z：−5.0~5.4 m、16 层@0.65 m（modeling_perception.py:67-73）
-  var ANCHORS = [-4.5, -1.5, 1.5, 4.5];          // 4 个固定 z 锚（bev_encoder.py:188）
+  var ANCHORS = [-4.5, -1.37, 1.77, 4.9];         // 4 个固定 z 锚（linspace(0.5,9.9,4) 映射，bev_encoder.py:201,244-248）
   var CAM_ANGLES = [0, 60, 120, 180, 240, 300];  // 六相机环视（双口径 6/8 相机取 6 画，示意）
   var CAM_R = 2.0, CAM_H = 1.55, PLANE_D = 1.0;  // 相机环半径/光心高/线框像平面距离（示意）
   var TH_H = Math.tan(40 * Math.PI / 180);       // 半视场水平正切（示意）
@@ -1787,7 +1787,7 @@ var F3D = {
     label([-EXT, -EXT, ZMAX2], '体素 [16,200,200]·XY 0.512 m·Z 16 层@0.65 m（中心局部抽样·示意）', 8, -6, '#5a6570', 10.5);
     label([-EXT, EXT, ZMAX2], 'z=5.4 m', 8, -2, 'rgba(90,101,112,0.8)', 10);
     label([-EXT, EXT, ZMIN], 'z=-5.0 m', 8, 12, 'rgba(90,101,112,0.8)', 10);
-    label(planeCorner(camGeom(2), 0, 1), '相机环视（双口径 6/8 相机·示意）', 0, -8, '#5a6570', 10, 'middle');
+    label([0, 0, CAM_H + 2.65], '相机环视（双口径 6/8 相机·示意）', 0, -12, '#5a6570', 10, 'middle');
     label([2.6, 0, 0], '自车', 8, 4, '#5a6570', 10.5);
     if (on) {
       label([qx, qz, ANCHORS[3]], 'pillar × 4 个固定 z 锚', 12, -8, '#37424d', 11);
@@ -3635,7 +3635,7 @@ var F3D = {
             <text x="165" y="330" text-anchor="middle" font-size="10">bev_embedding (40000,256)</text>
             <text x="165" y="346" text-anchor="middle" font-size="10">＋6 层 TSA→SCA→FFN</text>
             <text x="165" y="362" text-anchor="middle" font-size="10">SCA 8×4×8·4 z 锚</text>
-            <text x="165" y="378" text-anchor="middle" font-size="10">{−4.5,−1.5,1.5,4.5} m</text>
+            <text x="165" y="378" text-anchor="middle" font-size="10">{−4.5,−1.37,1.77,4.9} m</text>
 
             <!-- 加成点 ⊕ -->
             <circle class="learnable" cx="326" cy="340" r="14" style="stroke-width:2.5"></circle>
@@ -3717,8 +3717,8 @@ var F3D = {
             <label class="f3d-zoom"><span>缩放</span><input type="range" id="qd3d-zoom" class="f3d-zoom-input" min="18" max="80" value="36" step="1" aria-label="场景缩放"></label>
             <span class="f3d-state" id="qd3d-state">当前：熄灭——固定几何层：体素槽位 [16,200,200]（XY 0.512 m·Z 16 层@0.65 m，中心局部抽样示意）淡灰、相机环视线框（双口径 6/8 相机·示意）、地面 BEV 网格淡线；拖地面格可移动聚焦 query</span>
           </div>
-          <canvas id="qd3d-canvas" class="f3d-canvas" role="img" aria-label="3D 合流演示：UVTR 体素 [16,200,200]（XY 0.512 m、Z 16 层@0.65 m，中心局部抽样示意）点阵淡灰、六相机环视线框（双口径 6/8 相机·示意）与地面 BEV 网格（200×200＝40000 格，抽样示意）淡线；点亮后体素点阵亮橙（UVTR 推流），地面 BEV query 格显橙（体素列经 uvtr_query_proj 压平成 40000×256 加到 bev_embedding——推拉在此合流），聚焦 query 格的 pillar 带 4 个固定 z 锚（-4.5、-1.5、1.5、4.5 m），到命中相机的蓝虚线拉取线（SCA·格心投影·固定）并点亮命中相机；在地面拖动 query 格，pillar、拉取线与命中相机随动；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
-          <p class="f3d-note">小结：这一合流就是 Qwen-Drive 的推拉并联——UVTR 支路推流：ViT 特征×118 档无监督深度（按发布仓内证据）经 voxel_pool_depth kernel 查表散射入 [16,200,200] 体素（XY 0.512 m、Z 16 层@0.65 m、X/Y ±51.2 m、Z −5.0~5.4 m）<span class="cite">view_transform.py:241-248</span><span class="cite">modeling_perception.py:67-73</span>，点亮后体素点阵亮橙；体素列经 uvtr_query_proj（Conv2d 4096→256）压平成 (40000,256) <strong>加到</strong> bev_embedding（地面 query 格显橙）<span class="cite">heads.py:244-245</span><span class="cite">modeling_perception.py:82,117-122</span>——体素不直接出框，未压平体素另喂占用支路（200×200×16·10 类）<span class="cite">perception_transformer.py:191-193</span>；检测主桥仍是 BEVFormer 式拉流：聚焦格 pillar 取 4 个固定 z 锚 {-4.5,-1.5,1.5,4.5} m<span class="cite">bev_encoder.py:188</span>，格心到命中相机的蓝虚线即 SCA 拉取线（6 层 encoder、8 头×4 层×8 点）<span class="cite">attention.py:220</span><span class="cite">bev_encoder.py:303-316</span>，命中相机点亮（任一 z 锚入视野）。相机环视取 6 画（双口径 6/8 相机：nuScenes 6、nuPlan 8）、输入固定 896×512<span class="cite">docs/perception.md:110-112</span><span class="cite">dataset.py:85</span>；环视布置与格心投影线均为示意。在地面拖动 query 格：pillar、拉取线与命中相机实时随动；拖拽画布空白处旋转视角，「缩放」滑杆拉近拉远。</p>
+          <canvas id="qd3d-canvas" class="f3d-canvas" role="img" aria-label="3D 合流演示：UVTR 体素 [16,200,200]（XY 0.512 m、Z 16 层@0.65 m，中心局部抽样示意）点阵淡灰、六相机环视线框（双口径 6/8 相机·示意）与地面 BEV 网格（200×200＝40000 格，抽样示意）淡线；点亮后体素点阵亮橙（UVTR 推流），地面 BEV query 格显橙（体素列经 uvtr_query_proj 压平成 40000×256 加到 bev_embedding——推拉在此合流），聚焦 query 格的 pillar 带 4 个固定 z 锚（-4.5、-1.37、1.77、4.9 m），到命中相机的蓝虚线拉取线（SCA·格心投影·固定）并点亮命中相机；在地面拖动 query 格，pillar、拉取线与命中相机随动；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
+          <p class="f3d-note">小结：这一合流就是 Qwen-Drive 的推拉并联——UVTR 支路推流：ViT 特征×118 档无监督深度（按发布仓内证据）经 voxel_pool_depth kernel 查表散射入 [16,200,200] 体素（XY 0.512 m、Z 16 层@0.65 m、X/Y ±51.2 m、Z −5.0~5.4 m）<span class="cite">view_transform.py:241-248</span><span class="cite">modeling_perception.py:67-73</span>，点亮后体素点阵亮橙；体素列经 uvtr_query_proj（Conv2d 4096→256）压平成 (40000,256) <strong>加到</strong> bev_embedding（地面 query 格显橙）<span class="cite">heads.py:244-245</span><span class="cite">modeling_perception.py:82,117-122</span>——体素不直接出框，未压平体素另喂占用支路（200×200×16·10 类）<span class="cite">perception_transformer.py:191-193</span>；检测主桥仍是 BEVFormer 式拉流：聚焦格 pillar 取 4 个固定 z 锚 {-4.5,-1.37,1.77,4.9} m<span class="cite">bev_encoder.py:201,244-248</span>，格心到命中相机的蓝虚线即 SCA 拉取线（6 层 encoder、8 头×4 层×8 点）<span class="cite">attention.py:220</span><span class="cite">bev_encoder.py:303-316</span>，命中相机点亮（任一 z 锚入视野）。相机环视取 6 画（双口径 6/8 相机：nuScenes 6、nuPlan 8）、输入固定 896×512<span class="cite">docs/perception.md:110-112</span><span class="cite">dataset.py:85</span>；环视布置与格心投影线均为示意。在地面拖动 query 格：pillar、拉取线与命中相机实时随动；拖拽画布空白处旋转视角，「缩放」滑杆拉近拉远。</p>
         </div>
 
         <svg viewBox="0 0 1000 900" role="img" aria-label="Qwen-Drive 感知头端到端流水线：环视输入 896×512 经 VLM 双流抽头——LLM 主流 adaptor 出四尺度特征供拉流、ViT 流 vit_neck 与 depth_net 出 118 档深度（无监督，按发布仓内证据）；投影桥零参数（视锥格点 56×32×118、inv(lidar2img) 反投影回 ego 系、voxel_pool_depth 查表散射 kernel）；sweep 求和加 3×Conv3d 成体素后两路消费——压平 40000×256 加成 bev_embedding、未压平体素进占用支路；BEVFormer 式六层 encoder 与 900 query decoder 出检测、占用、地图三输出">
@@ -3848,7 +3848,7 @@ var F3D = {
             <text x="271" y="649" text-anchor="middle" font-size="9.5">bev_queries＝bev_embedding＋UVTR 加成</text>
             <text x="271" y="666" text-anchor="middle" font-size="9.5">＋bev_pos·6 层 TSA→SCA→FFN</text>
             <text x="271" y="683" text-anchor="middle" font-size="9.5">SCA 8×4×8·4 z 锚</text>
-            <text x="271" y="700" text-anchor="middle" font-size="9">{−4.5,−1.5,1.5,4.5} m（可学习·3D）</text>
+            <text x="271" y="700" text-anchor="middle" font-size="9">{−4.5,−1.37,1.77,4.9} m（可学习·3D）</text>
 
             <line class="flow" x1="396" y1="662" x2="424" y2="662"></line>
 
@@ -3957,7 +3957,7 @@ var F3D = {
           </tr>
         </tbody>
       </table>
-      <p>本表只列 Qwen-Drive 感知头相对 BEVFormer 骨架的<strong>新增／改动项</strong>——SCA/TSA 系列（<code>sampling_offsets</code>／<code>attention_weights</code>／<code>value_proj</code>／<code>output_proj</code>、encoder/decoder 每层 FFN＋LN、<code>reference_points</code>、<code>level_embeds</code> 等）结构同族，不再逐行列出，逐项见第三节 BEVFormer 清单；但数字一律以 Qwen-Drive-1.0 为准：6 层 encoder＋6 层 decoder、SCA 8 头×4 层×8 点<span class="cite">attention.py:220</span><span class="cite">configuration_perception.py:111-112</span>，z 锚 {-4.5,−1.5,1.5,4.5} m——Z 范围 −5.0～5.4 m 与第三节 BEVFormer 的 8 m pillar 不同，引用以本节为准<span class="cite">bev_encoder.py:188</span><span class="cite">configuration_perception.py:88</span>。要点：<strong>投影桥（视锥格点·反投影·散射 kernel）零参数</strong>；2D 侧把深度头从原版 UVTR 的"单 1×1 Conv 跨尺度共享"加重为 BasicBlock×3＋ASPP；3D 侧新增原版没有的两路"体素→消费"压缩参数（<code>uvtr_query_proj</code>／<code>uvtr_occ_proj</code>＋<code>uvtr_occ_fuse</code>）——原版体素是被 decoder 直接采样的被动容器，无此类压缩<span class="cite">modeling_perception.py:82</span><span class="cite">perception_transformer.py:85-96</span>。Qwen-Drive-1.0 为 inference-only 发布仓（无训练代码与损失<span class="cite">docs/perception.md:14</span>），本表与下文"无监督"均按发布仓内证据书写（训练期是否曾有辅助深度损失不可考）。</p>
+      <p>本表只列 Qwen-Drive 感知头相对 BEVFormer 骨架的<strong>新增／改动项</strong>——SCA/TSA 系列（<code>sampling_offsets</code>／<code>attention_weights</code>／<code>value_proj</code>／<code>output_proj</code>、encoder/decoder 每层 FFN＋LN、<code>reference_points</code>、<code>level_embeds</code> 等）结构同族，不再逐行列出，逐项见第三节 BEVFormer 清单；但数字一律以 Qwen-Drive-1.0 为准：6 层 encoder＋6 层 decoder、SCA 8 头×4 层×8 点<span class="cite">attention.py:220</span><span class="cite">configuration_perception.py:111-112</span>，z 锚 {−4.5,−1.37,1.77,4.9} m——Z 范围 −5.0～5.4 m 与第三节 BEVFormer 的 8 m pillar 不同（linspace(0.5,9.9,4) 映射、非对称），引用以本节为准<span class="cite">bev_encoder.py:201,244-248</span><span class="cite">configuration_perception.py:88</span>。要点：<strong>投影桥（视锥格点·反投影·散射 kernel）零参数</strong>；2D 侧把深度头从原版 UVTR 的"单 1×1 Conv 跨尺度共享"加重为 BasicBlock×3＋ASPP；3D 侧新增原版没有的两路"体素→消费"压缩参数（<code>uvtr_query_proj</code>／<code>uvtr_occ_proj</code>＋<code>uvtr_occ_fuse</code>）——原版体素是被 decoder 直接采样的被动容器，无此类压缩<span class="cite">modeling_perception.py:82</span><span class="cite">perception_transformer.py:85-96</span>。Qwen-Drive-1.0 为 inference-only 发布仓（无训练代码与损失<span class="cite">docs/perception.md:14</span>），本表与下文"无监督"均按发布仓内证据书写（训练期是否曾有辅助深度损失不可考）。</p>
 
       <h3>③ 2D-3D 关系</h3>
       <p>Qwen-Drive 的感知头对"2D 特征如何进入 3D"的回答可归纳为四点：</p>

@@ -73,7 +73,7 @@
 | 反投影链 | 齐次→uv×d→inv(lidar2img)→×lidar2ego（回 ego 系）→(p−pc_range)/voxel_size `.int()`→[0,16)×[0,200)×[0,200) 范围掩码 | `view_transform.py:210-238` |
 | fp32 防护 | frustum 为普通 attribute、不随 `to(bfloat16)` cast、反投影 fp32；SCA point_sampling 全程 fp32 并临时禁 TF32 | `view_transform.py:138-143`；`bev_encoder.py:232-235,262-263` |
 | SCA 投影 | ego 系：`lidar2img @ inv(lidar2ego)`；z>eps=1e-5 且 0<u,v<1 掩码（uv 已除以 img_shape）；nan_to_num 防错 | `bev_encoder.py:258-263,264-279` |
-| z 锚（SCA pillar） | 4 个：linspace(0.5,9.5,4)/10.4 → 度量 **{-4.5, −1.5, 1.5, 4.5} m**（Z=pc_range[5]−pc_range[2]=10.4） | `bev_encoder.py:198-220,303-307,188` |
+| z 锚（SCA pillar） | 4 个：linspace(0.5,9.9,4)（0.5~Z−0.5，Z=pc_range[5]−pc_range[2]=10.4）经 point_sampling ×10.4−5.0 映射 → 度量 **{−4.5, −1.3667, 1.7667, 4.9} m**（非对称：中点 +0.2 m） | `bev_encoder.py:198-220,244-248,303-307` |
 | BEV 网格 | 200×200、格边长 102.4/200=**0.512 m**（real_w/real_h，grid_length） | `heads.py:199-200,258` |
 | 散射 rank | b·X·Y·Z＋x·Y·Z＋y·Z＋z（N_cam 槽=1、相机号不进 rank → 跨相机在区间和内合并） | `ops/__init__.py:151-158`；出参 (B,N_cam,X,Y,Z,C) `ops/voxel_pool/src/voxel_pool.cpp:88` |
 | 输入分辨率 | 固定 **896×512**（bicubic resize）；ViT patch 格 56×32、LLM token 格 28×16 | `dataset.py:85,137-140`；`configuration_perception.py:120`；`modeling_perception.py:271,277` |
@@ -109,7 +109,7 @@
 
 ### 6.2 与 02/05 分册的引用边界
 
-BEV 拉流侧（SCA/TSA/decoder/z 锚投影）的逐格展开引用 02 分册口径但**数字一律以本仓为准**（z 范围不同：Qwen-Drive Z −5.0~5.4、z 锚 {-4.5,−1.5,1.5,4.5} m，非 02 的 8 m/4 锚）；原版 UVTR 侧一律转引 notes/05。HTML 各节只引用本底稿与 notes/05，不重查代码。
+BEV 拉流侧（SCA/TSA/decoder/z 锚投影）的逐格展开引用 02 分册口径但**数字一律以本仓为准**（z 范围不同：Qwen-Drive Z −5.0~5.4、z 锚 {−4.5,−1.37,1.77,4.9} m，非 02 的 8 m/4 锚）；原版 UVTR 侧一律转引 notes/05。HTML 各节只引用本底稿与 notes/05，不重查代码。
 
 ## 7. 原版 UVTR vs Qwen-Drive 五轴对比素材
 
@@ -129,7 +129,7 @@ BEV 拉流侧（SCA/TSA/decoder/z 锚投影）的逐格展开引用 02 分册口
 - 视锥：**56×32×118**、**16 px 格**、**896×512**；
 - 体素：**[16,200,200]**（Z×Y×X）、XY 格 **0.512 m**、Z 格 **0.65 m**、范围 X/Y **±51.2 m**、Z **−5.0~5.4 m**；
 - 特征与采样：**256 通道**、ViT **1024→256**、LLM **2560→256**、主流 **4 尺度**（112×64/56×32/28×16/14×8，推算）、**6 或 8 相机**（双口径，标明数据集）；
-- 消费：**4096→256（1×1 Conv）**、bev **200×200=40000**、**900 query**、**6 层 encoder**、z 锚 **{-4.5,−1.5,1.5,4.5} m**、SCA **8 头×4 层×8 点**、**3×Conv3d 3³**、占用 **200×200×16、10 类**（nuScenes ±40 m / nuPlan ±50 m 两态可标）；
+- 消费：**4096→256（1×1 Conv）**、bev **200×200=40000**、**900 query**、**6 层 encoder**、z 锚 **{−4.5,−1.37,1.77,4.9} m**（精确 −1.3667/1.7667，linspace(0.5,9.9,4) 映射、非对称）、SCA **8 头×4 层×8 点**、**3×Conv3d 3³**、占用 **200×200×16、10 类**（nuScenes ±40 m / nuPlan ±50 m 两态可标）；
 - 输入：**896×512**；
 - 两态语义约束：「Qwen-Drive 码放」＝118 档深度加权的视锥点查表散射落 [16,200,200] 体素、压平后**加成** BEV query 并喂占用支路（不是 query 从体素采样）；散射态的体素网格用 Qwen-Drive 自己的 [16,200,200]@0.512 m，不得引入原版 UVTR 的网格数字；
 - 禁入数字：**64、128×128×5、{-5,-3,-1,1,3}、0.8 m、1 m 步长、0–64 m、928×1600、900×1600**（原版 UVTR/BEVFormer 节口径）、**41、105**（LSS 节）——面板任何文案不得出现（两模型同屏对比时按对比节自身白名单另行约定）。
