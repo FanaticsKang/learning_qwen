@@ -1679,12 +1679,12 @@ var F3D = {
             <text x="608" y="413" text-anchor="middle" font-size="10">Focal＋L1 逐层监督</text>
             <text x="608" y="430" text-anchor="middle" font-size="10">（深度不在损失中）</text>
 
-            <!-- 三色带 -->
-            <rect class="learnable" x="320" y="452" width="544" height="6" rx="1"></rect>
+            <!-- 三色带：2D 侧一条（行一框下、桥框上，y=158），桥与 3D 侧一条（y=452，互不重叠） -->
+            <rect class="learnable" x="320" y="158" width="544" height="6" rx="1"></rect>
+            <text x="592" y="176" text-anchor="middle" font-size="10.5">2D 侧可学习（②–④）</text>
             <rect class="fixed" x="144" y="452" width="590" height="6" rx="1"></rect>
             <rect class="learnable" x="738" y="452" width="214" height="6" rx="1"></rect>
             <text x="439" y="474" text-anchor="middle" font-size="10.5">固定几何桥 · 零参数（①⑤⑥⑦⑧）</text>
-            <text x="640" y="474" text-anchor="middle" font-size="10.5">2D 侧可学习（②–④）</text>
             <text x="845" y="474" text-anchor="middle" font-size="10.5">3D 侧可学习（⑨ 落格后·⑩ 桥外）</text>
 
             <text x="500" y="504" text-anchor="middle" font-size="11" fill="#4a5560">形状流：(B,6,3,928,1600) → (B·6,256,116×200 等 4 尺度) → (B,256,81920,6,1,4) 采样 → (B,256,5,128,128) → (B,900,256)</text>
