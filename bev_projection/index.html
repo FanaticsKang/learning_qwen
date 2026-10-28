@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>六条 2D→3D 投影路线：可学习参数与固定几何的分工 · LSS / UVTR / BEVFormer / TPVFormer / VoxFormer / Qwen-Drive 实现</title>
+<title>五条 2D→3D 投影机制＋一条工程实现：可学习参数与固定几何的分工 · LSS / UVTR / BEVFormer / TPVFormer / VoxFormer / Qwen-Drive 实现</title>
 <style>
   :root {
     --c-learn-fill: #FBE3C8;   /* 可学习：浅橙填充 */
@@ -179,11 +179,11 @@
 <div class="page">
 
   <header>
-    <h1>六条 2D→3D 投影路线：可学习参数与固定几何的分工
+    <h1>五条 2D→3D 投影机制＋一条工程实现：可学习参数与固定几何的分工
       <span class="subtitle">LSS · UVTR · BEVFormer · TPVFormer · VoxFormer · Qwen-Drive 实现</span>
     </h1>
 
-    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、UVTR、BEVFormer、TPVFormer、VoxFormer 五条机制路线，加上 Qwen-Drive 对 UVTR 一脉的工程实现，共六条目给出了六种截然不同的答案（Qwen-Drive 实现一节将以 Qwen-Drive-1.0 为口径另行展开）。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、参数在 2D 侧、投影桥上还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（UVTR 一节同此口径，取 JIA-Lab-research/UVTR 仓；VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第五节），仓库地址与 commit hash 见页脚。</p>
+    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、UVTR、BEVFormer、TPVFormer、VoxFormer 五个机制条目给出五种机制答案，第六节 Qwen-Drive 则是对 UVTR 一脉的工程实现条目（以 Qwen-Drive-1.0 为口径展开）：五个机制条目＋一条工程实现，共六节——第六节不是第六种机制，而是 UVTR 式推流与 BEVFormer 式拉流在工程上的合流落地。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、参数在 2D 侧、投影桥上还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（UVTR 一节同此口径，取 JIA-Lab-research/UVTR 仓；VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第五节；第六节 Qwen-Drive 取其发布仓冻结配置——nuScenes 6 相机／OpenScene 与 nuPlan 8 相机双口径），仓库地址与 commit hash 见页脚。</p>
 
     <div class="legend" id="legend">
       <strong class="legend-title">统一图例</strong>
@@ -209,6 +209,7 @@
         <li><a href="#sec-bevformer">BEVFormer：稠密 BEV query 的空间交叉注意力（3D 侧拉取）</a></li>
         <li><a href="#sec-tpvformer">TPVFormer：三平面（TPV）压缩 query</a></li>
         <li><a href="#sec-voxformer">VoxFormer：深度门控的稀疏 voxel query</a></li>
+        <li><a href="#sec-qwendrive">Qwen-Drive 的 UVTR：推拉合流的工程落地（UVTR 推＋BEVFormer 拉）</a></li>
         <li><a href="#sec-summary">汇总对比：可学习参数的位置与形态 × 投影方向</a></li>
       </ol>
     </nav>
@@ -3295,9 +3296,417 @@ var F3D = {
 
     </section>
 
-    <!-- ======================= 六、汇总 ======================= -->
+    <!-- ======================= 六、Qwen-Drive 的 UVTR ======================= -->
+    <section id="sec-qwendrive">
+      <h2>六、Qwen-Drive 的 UVTR：推拉合流的工程落地<span class="tag">谱系定位：UVTR 推＋BEVFormer 拉，体素先验加成</span></h2>
+
+      <h3>① 机制总览</h3>
+      <div class="panel">
+        <svg viewBox="0 0 1000 620" role="img" aria-label="Qwen-Drive 感知头双流（重绘自论文 Fig.3）：LLM 图像 token 经 adaptor SimpleFPN 出四尺度特征供 BEVFormer 式拉流（bev_embedding 40000 query、六层 SCA、四 z 锚）；ViT patch 经 vit_neck 与 depth_net 出 118 档无监督深度分布，视锥反投影后查表散射入体素，压平 40000×256 加成进 BEV query，未压平体素喂占用支路；三输出＝检测、占用、地图">
+          <!-- ===== A · 感知头双流（重绘自论文 Fig.3）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 感知头双流（重绘自论文 Fig.3）：LLM 流被拉取、ViT 流推入体素——两路在 [40000,256] 加成点汇合</text>
+
+            <!-- 顶部：同一 VLM 前向的双流抽头 -->
+            <rect x="330" y="42" width="340" height="48" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="500" y="61" text-anchor="middle" font-size="11">同一 VLM 前向 · 双流抽头（merger 前向钩子）</text>
+            <text x="500" y="79" text-anchor="middle" font-size="9.5">6／8 相机 × 896×512（bicubic resize）</text>
+
+            <path class="flow" d="M 390 90 C 340 116, 220 106, 168 130"></path>
+            <path class="flow" d="M 610 90 C 660 116, 780 106, 832 130"></path>
+
+            <!-- 左列：拉流（LLM 主流） -->
+            <rect class="learnable" x="40" y="134" width="250" height="54" rx="4"></rect>
+            <text x="165" y="153" text-anchor="middle" font-size="11">LLM 图像 token（拉流·主流）</text>
+            <text x="165" y="171" text-anchor="middle" font-size="9.5">(N,28,16,2560)·末层 image-token</text>
+
+            <line class="flow" x1="165" y1="188" x2="165" y2="204"></line>
+
+            <rect class="learnable" x="40" y="208" width="250" height="68" rx="4"></rect>
+            <text x="165" y="226" text-anchor="middle" font-size="10.5">adaptor：SimpleFPN(2560→256)</text>
+            <text x="165" y="242" text-anchor="middle" font-size="10">4 尺度 256ch（推算）</text>
+            <text x="165" y="258" text-anchor="middle" font-size="9.5">@112×64/56×32/28×16/14×8</text>
+            <text x="165" y="272" text-anchor="middle" font-size="9.5">（供 SCA 拉取·2D 侧可学习）</text>
+
+            <line class="flow" x1="165" y1="276" x2="165" y2="292"></line>
+            <text x="175" y="288" font-size="9" fill="#5a6570">SCA 拉取 4 尺度特征</text>
+
+            <rect class="learnable" x="40" y="296" width="250" height="88" rx="4"></rect>
+            <text x="165" y="314" text-anchor="middle" font-size="10.5">拉流 encoder（BEVFormer 式）</text>
+            <text x="165" y="330" text-anchor="middle" font-size="10">bev_embedding (40000,256)</text>
+            <text x="165" y="346" text-anchor="middle" font-size="10">＋6 层 TSA→SCA→FFN</text>
+            <text x="165" y="362" text-anchor="middle" font-size="10">SCA 8×4×8·4 z 锚</text>
+            <text x="165" y="378" text-anchor="middle" font-size="10">{−4.5,−1.5,1.5,4.5} m</text>
+
+            <!-- 加成点 ⊕ -->
+            <circle class="learnable" cx="326" cy="340" r="14" style="stroke-width:2.5"></circle>
+            <text x="326" y="345" text-anchor="middle" font-size="13" font-weight="bold">＋</text>
+            <line class="flow" x1="311" y1="340" x2="294" y2="340"></line>
+            <text x="326" y="316" text-anchor="middle" font-size="9.5" fill="#5a6570">UVTR 加成</text>
+
+            <!-- 右列：推流（ViT 支路） -->
+            <rect class="learnable" x="710" y="134" width="250" height="54" rx="4"></rect>
+            <text x="835" y="153" text-anchor="middle" font-size="11">ViT pre-merge patch（推流·支路）</text>
+            <text x="835" y="171" text-anchor="middle" font-size="9.5">(N,56,32,1024)·merger 输入</text>
+
+            <line class="flow" x1="835" y1="188" x2="835" y2="204"></line>
+
+            <rect class="learnable" x="710" y="208" width="250" height="54" rx="4"></rect>
+            <text x="835" y="227" text-anchor="middle" font-size="10.5">vit_neck：SimpleFPN(1024→256)</text>
+            <text x="835" y="245" text-anchor="middle" font-size="10">单尺度 256ch@56×32</text>
+
+            <line class="flow" x1="835" y1="262" x2="835" y2="278"></line>
+
+            <rect class="learnable" x="710" y="282" width="250" height="68" rx="4"></rect>
+            <text x="835" y="300" text-anchor="middle" font-size="10.5">depth_net：BasicBlock×3＋ASPP</text>
+            <text x="835" y="316" text-anchor="middle" font-size="10">＋Conv1×1(256→118)→softmax</text>
+            <text x="835" y="332" text-anchor="middle" font-size="10">118 档@0.5 m（1.0–60 m）</text>
+            <text x="835" y="348" text-anchor="middle" font-size="9.5">无监督（按发布仓内证据）</text>
+
+            <line class="flow" x1="835" y1="350" x2="835" y2="366"></line>
+
+            <rect class="fixed" x="710" y="370" width="250" height="58" rx="4"></rect>
+            <text x="835" y="388" text-anchor="middle" font-size="10">视锥 56×32×118＋反投影（固定）</text>
+            <text x="835" y="405" text-anchor="middle" font-size="9.5">inv(lidar2img)→lidar2ego 回 ego 系</text>
+            <text x="835" y="420" text-anchor="middle" font-size="9.5">＋[16,200,200) 范围掩码</text>
+
+            <line class="flow" x1="835" y1="428" x2="835" y2="444"></line>
+
+            <rect class="fixed" x="710" y="448" width="250" height="54" rx="4" style="stroke-width:2.5"></rect>
+            <text x="835" y="467" text-anchor="middle" font-size="10.5">voxel_pool_depth 查表散射</text>
+            <text x="835" y="486" text-anchor="middle" font-size="9.5">kernel·零参数：特征×深度·rank 区间和</text>
+
+            <!-- 中列：压平 → ⊕；体素 → 两路消费 -->
+            <rect class="learnable" x="430" y="368" width="250" height="60" rx="4"></rect>
+            <text x="555" y="386" text-anchor="middle" font-size="10.5">uvtr_query_proj：1×1 Conv</text>
+            <text x="555" y="403" text-anchor="middle" font-size="10">(256×16→256)→压平 (40000,256)</text>
+            <text x="555" y="419" text-anchor="middle" font-size="9">（batch>1 取 mean·3D 侧）</text>
+
+            <rect class="learnable" x="430" y="448" width="250" height="54" rx="4"></rect>
+            <text x="555" y="467" text-anchor="middle" font-size="10.5">sweep 求和＋3×Conv3d(3³)</text>
+            <text x="555" y="486" text-anchor="middle" font-size="10">→ UVTR 体素 [B,256,16,200,200]</text>
+
+            <line class="flow" x1="710" y1="478" x2="684" y2="478"></line>
+            <line class="flow" x1="555" y1="448" x2="555" y2="430"></line>
+            <path class="flow" d="M 430 398 C 390 398, 348 380, 330 356"></path>
+
+            <!-- 三输出 -->
+            <rect x="40" y="528" width="280" height="52" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="180" y="547" text-anchor="middle" font-size="10.5">3D 检测（数据）</text>
+            <text x="180" y="565" text-anchor="middle" font-size="9.5">900 query decoder→top-300·7 类</text>
+
+            <rect x="360" y="528" width="280" height="52" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="500" y="547" text-anchor="middle" font-size="10.5">地图（数据）</text>
+            <text x="500" y="565" text-anchor="middle" font-size="9.5">裁 60×30 m@0.15 m·6 类（BEV 体）</text>
+
+            <rect x="680" y="528" width="280" height="52" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="820" y="547" text-anchor="middle" font-size="10.5">占用（数据）</text>
+            <text x="820" y="565" text-anchor="middle" font-size="9.5">200×200×16·10 类（未压平体素支路）</text>
+
+            <line class="flow" x1="165" y1="384" x2="165" y2="526"></line>
+            <path class="flow" d="M 258 384 C 292 460, 342 500, 405 526"></path>
+            <path class="flow" d="M 655 502 C 700 518, 732 522, 756 526"></path>
+
+            <text x="500" y="604" text-anchor="middle" font-size="10.5" fill="#4a5560">构图要旨：检测层＝BEVFormer 式拉（bev_embedding 主导、SCA 从 LLM 特征拉取）；实现层＝UVTR 式推（显式深度×特征散射入体素）——体素不直接出框，压平后加成 BEV query、整支喂占用头</text>
+          </g>
+        </svg>
+
+        <svg viewBox="0 0 1000 900" role="img" aria-label="Qwen-Drive 感知头端到端流水线：环视输入 896×512 经 VLM 双流抽头——LLM 主流 adaptor 出四尺度特征供拉流、ViT 流 vit_neck 与 depth_net 出 118 档无监督深度；投影桥零参数（视锥格点 56×32×118、inv(lidar2img) 反投影回 ego 系、voxel_pool_depth 查表散射 kernel）；sweep 求和加 3×Conv3d 成体素后两路消费——压平 40000×256 加成 bev_embedding、未压平体素进占用支路；BEVFormer 式六层 encoder 与 900 query decoder 出检测、占用、地图三输出">
+          <!-- ===== C · 端到端流水线 ===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="34" font-size="14" font-weight="600" fill="#37424d">C · 端到端流水线：ViT 流推入体素、LLM 流被拉取——桥只含固定几何（视锥·反投影·散射），学习在两端与消费</text>
+
+            <!-- 行一：输入 → 标定 → VLM 双流抽头 → LLM 主流 -->
+            <rect x="16" y="74" width="110" height="64" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="71" y="94" text-anchor="middle" font-size="10.5">环视输入（数据）</text>
+            <text x="71" y="111" text-anchor="middle" font-size="9.5">6／8 相机</text>
+            <text x="71" y="127" text-anchor="middle" font-size="9.5">896×512（bicubic）</text>
+
+            <line class="flow" x1="126" y1="106" x2="142" y2="106"></line>
+
+            <rect class="fixed" x="146" y="64" width="160" height="84" rx="4"></rect>
+            <text x="226" y="84" text-anchor="middle" font-size="10.5">① 标定准备（固定）</text>
+            <text x="226" y="101" text-anchor="middle" font-size="9.5">lidar2img（折入 resize）</text>
+            <text x="226" y="118" text-anchor="middle" font-size="9.5">＋lidar2ego 下传</text>
+            <text x="226" y="136" text-anchor="middle" font-size="9">（ego 系锚定）</text>
+
+            <line class="flow" x1="306" y1="106" x2="326" y2="106"></line>
+
+            <rect x="330" y="64" width="180" height="84" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="420" y="84" text-anchor="middle" font-size="10.5">② VLM 前向·双流抽头</text>
+            <text x="420" y="101" text-anchor="middle" font-size="9.5">（merger 前向钩子）</text>
+            <text x="420" y="118" text-anchor="middle" font-size="9.5">LLM 28×16×2560</text>
+            <text x="420" y="136" text-anchor="middle" font-size="9.5">ViT 56×32×1024（数据）</text>
+
+            <line class="flow" x1="510" y1="90" x2="526" y2="90"></line>
+
+            <rect class="learnable" x="530" y="64" width="210" height="84" rx="4"></rect>
+            <text x="635" y="84" text-anchor="middle" font-size="10.5">③ LLM 主流：adaptor</text>
+            <text x="635" y="101" text-anchor="middle" font-size="9.5">SimpleFPN(2560→256)</text>
+            <text x="635" y="118" text-anchor="middle" font-size="9.5">4 尺度 256ch（推算）</text>
+            <text x="635" y="136" text-anchor="middle" font-size="9">（2D 侧·供 SCA 拉取）</text>
+
+            <rect class="learnable" x="530" y="154" width="210" height="6" rx="1"></rect>
+            <text x="635" y="174" text-anchor="middle" font-size="10">2D 侧可学习（③④）</text>
+
+            <!-- 行二：ViT 流（推流特征与深度） -->
+            <path class="flow" d="M 420 148 C 420 196, 468 210, 526 224"></path>
+
+            <rect class="learnable" x="530" y="180" width="210" height="84" rx="4"></rect>
+            <text x="635" y="200" text-anchor="middle" font-size="10.5">④ ViT 流：vit_neck＋depth_net</text>
+            <text x="635" y="217" text-anchor="middle" font-size="9.5">SimpleFPN(1024→256)@56×32</text>
+            <text x="635" y="234" text-anchor="middle" font-size="9.5">BasicBlock×3＋ASPP→118 档</text>
+            <text x="635" y="252" text-anchor="middle" font-size="9">softmax·无监督（2D 侧）</text>
+
+            <!-- 投影桥（零参数） -->
+            <rect x="146" y="296" width="560" height="156" rx="6" fill="none" stroke="#8a94a0" stroke-width="1.5" stroke-dasharray="8 5"></rect>
+            <text x="158" y="316" font-size="11" font-weight="600" fill="#37424d">投影桥（零参数）——⑤ 视锥格点·⑥ 反投影·⑦ 散射 kernel</text>
+
+            <line class="flow" x1="226" y1="148" x2="226" y2="326"></line>
+
+            <rect class="fixed" x="158" y="328" width="230" height="114" rx="4"></rect>
+            <text x="273" y="347" text-anchor="middle" font-size="10.5">⑤ 视锥格点（固定·fp32）</text>
+            <text x="273" y="364" text-anchor="middle" font-size="9.5">arange 56×32×118@0.5 m</text>
+            <text x="273" y="380" text-anchor="middle" font-size="9.5">深度档中心 1.0–59.5 m</text>
+            <text x="273" y="397" text-anchor="middle" font-size="9.5">⑥ 反投影 inv(lidar2img)</text>
+            <text x="273" y="414" text-anchor="middle" font-size="9.5">×lidar2ego 回 ego 系</text>
+            <text x="273" y="431" text-anchor="middle" font-size="9.5">＋[16,200,200) 范围掩码</text>
+
+            <line class="flow" x1="388" y1="385" x2="402" y2="385"></line>
+
+            <rect class="fixed" x="406" y="328" width="222" height="114" rx="4" style="stroke-width:2.5"></rect>
+            <text x="517" y="347" text-anchor="middle" font-size="10.5">⑦ voxel_pool_depth</text>
+            <text x="517" y="364" text-anchor="middle" font-size="9.5">视锥侧查表散射（kernel）</text>
+            <text x="517" y="381" text-anchor="middle" font-size="9.5">特征(h,w)×深度(d,h,w)</text>
+            <text x="517" y="398" text-anchor="middle" font-size="9.5">rank 区间和·跨相机合并</text>
+            <text x="517" y="415" text-anchor="middle" font-size="9.5">写散后 permute</text>
+            <text x="517" y="431" text-anchor="middle" font-size="9">（桥·零参数）</text>
+
+            <path class="flow" d="M 610 264 C 588 300, 548 312, 522 326"></path>
+            <line class="flow" x1="628" y1="385" x2="726" y2="385"></line>
+
+            <!-- 体素成形（3D 侧） -->
+            <rect class="learnable" x="730" y="296" width="230" height="156" rx="4"></rect>
+            <text x="845" y="318" text-anchor="middle" font-size="10.5">⑧ sweep 求和＋3×Conv3d</text>
+            <text x="845" y="336" text-anchor="middle" font-size="9.5">（求和参数自由）</text>
+            <text x="845" y="354" text-anchor="middle" font-size="10">→ UVTR 体素（数据）</text>
+            <text x="845" y="372" text-anchor="middle" font-size="10">[B,256,16,200,200]</text>
+            <text x="845" y="390" text-anchor="middle" font-size="9.5">Z×Y×X·Z 16 层@0.65 m</text>
+            <text x="845" y="408" text-anchor="middle" font-size="9.5">XY 200×200@0.512 m</text>
+            <text x="845" y="428" text-anchor="middle" font-size="9">（Conv3d 可学习·3D 侧）</text>
+
+            <!-- 行四：两路消费＋bev_embedding -->
+            <path class="flow" d="M 795 452 C 778 478, 750 488, 722 483"></path>
+            <path class="flow" d="M 748 452 L 748 468 L 492 468 L 492 482"></path>
+
+            <rect class="learnable" x="146" y="484" width="180" height="96" rx="4"></rect>
+            <text x="236" y="504" text-anchor="middle" font-size="10.5">⑪ bev_embedding</text>
+            <text x="236" y="521" text-anchor="middle" font-size="10">(40000,256)</text>
+            <text x="236" y="538" text-anchor="middle" font-size="9.5">BEV query 表</text>
+            <text x="236" y="555" text-anchor="middle" font-size="9.5">（＋UVTR 加成 ⊕）</text>
+            <text x="236" y="570" text-anchor="middle" font-size="9">（可学习·3D 侧）</text>
+
+            <rect class="learnable" x="382" y="484" width="220" height="96" rx="4"></rect>
+            <text x="492" y="504" text-anchor="middle" font-size="10.5">⑨ 消费 A：uvtr_query_proj</text>
+            <text x="492" y="521" text-anchor="middle" font-size="10">Conv2d 1×1（4096→256）</text>
+            <text x="492" y="538" text-anchor="middle" font-size="10">→ 压平 (40000,256)</text>
+            <text x="492" y="555" text-anchor="middle" font-size="9.5">（batch>1 取 mean）</text>
+            <text x="492" y="570" text-anchor="middle" font-size="9">（可学习·3D 侧）</text>
+
+            <rect class="learnable" x="618" y="484" width="180" height="96" rx="4"></rect>
+            <text x="708" y="504" text-anchor="middle" font-size="10.5">⑩ 消费 B：占用支路</text>
+            <text x="708" y="521" text-anchor="middle" font-size="9.5">未压平 uvtr_occ_space</text>
+            <text x="708" y="538" text-anchor="middle" font-size="9.5">occ_proj/fuse 残差融合</text>
+            <text x="708" y="555" text-anchor="middle" font-size="9.5">进 BEV 体</text>
+            <text x="708" y="570" text-anchor="middle" font-size="9">（可学习·3D 侧）</text>
+
+            <circle class="learnable" cx="354" cy="532" r="13" style="stroke-width:2.5"></circle>
+            <text x="354" y="537" text-anchor="middle" font-size="12" font-weight="bold">＋</text>
+            <text x="354" y="510" text-anchor="middle" font-size="9" fill="#5a6570">加成</text>
+            <line class="flow" x1="382" y1="532" x2="369" y2="532"></line>
+            <line class="flow" x1="340" y1="532" x2="329" y2="532"></line>
+
+            <!-- LLM 特征长程拉取路径 -->
+            <path class="flow" d="M 740 106 L 975 106 L 975 600 L 390 600 L 390 610"></path>
+            <text x="966" y="282" text-anchor="end" font-size="9.5" fill="#5a6570">LLM 4 尺度特征（SCA 拉取源）</text>
+
+            <!-- 行五：拉流 encoder＋decoder -->
+            <line class="flow" x1="236" y1="580" x2="236" y2="610"></line>
+
+            <rect class="learnable" x="146" y="612" width="250" height="100" rx="4"></rect>
+            <text x="271" y="632" text-anchor="middle" font-size="10.5">⑫ 拉流 encoder（BEVFormer 式）</text>
+            <text x="271" y="649" text-anchor="middle" font-size="9.5">bev_queries＝bev_embedding＋UVTR 加成</text>
+            <text x="271" y="666" text-anchor="middle" font-size="9.5">＋bev_pos·6 层 TSA→SCA→FFN</text>
+            <text x="271" y="683" text-anchor="middle" font-size="9.5">SCA 8×4×8·4 z 锚</text>
+            <text x="271" y="700" text-anchor="middle" font-size="9">{−4.5,−1.5,1.5,4.5} m（可学习·3D）</text>
+
+            <line class="flow" x1="396" y1="662" x2="424" y2="662"></line>
+
+            <rect class="learnable" x="428" y="612" width="220" height="100" rx="4"></rect>
+            <text x="538" y="632" text-anchor="middle" font-size="10.5">⑬ 900 query×6 层 decoder</text>
+            <text x="538" y="649" text-anchor="middle" font-size="9.5">self-attn＋deformable＋FFN</text>
+            <text x="538" y="666" text-anchor="middle" font-size="9.5">＋cls/reg ×6 套</text>
+            <text x="538" y="683" text-anchor="middle" font-size="9.5">（可学习·3D 侧·桥外）</text>
+            <text x="538" y="700" text-anchor="middle" font-size="9">query_embedding (900,512)</text>
+
+            <!-- 行六：三输出 -->
+            <line class="flow" x1="236" y1="712" x2="236" y2="722"></line>
+            <line class="flow" x1="519" y1="712" x2="519" y2="722"></line>
+            <path class="flow" d="M 700 580 C 720 650, 755 700, 774 722"></path>
+
+            <rect x="146" y="724" width="230" height="66" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="261" y="743" text-anchor="middle" font-size="10.5">地图（数据）</text>
+            <text x="261" y="761" text-anchor="middle" font-size="9.5">裁 60×30 m@0.15 m·6 类</text>
+
+            <rect x="404" y="724" width="230" height="66" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="519" y="743" text-anchor="middle" font-size="10.5">3D 检测（数据）</text>
+            <text x="519" y="761" text-anchor="middle" font-size="9.5">NMSFreeCoder top-300·7 类</text>
+
+            <rect x="662" y="724" width="230" height="66" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="777" y="743" text-anchor="middle" font-size="10.5">占用（数据）</text>
+            <text x="777" y="761" text-anchor="middle" font-size="9.5">200×200×16·10 类</text>
+
+            <!-- 三色带 -->
+            <rect class="fixed" x="146" y="806" width="560" height="6" rx="1"></rect>
+            <rect class="learnable" x="726" y="806" width="234" height="6" rx="1"></rect>
+            <text x="426" y="828" text-anchor="middle" font-size="10.5">固定几何桥 · 零参数（⑤⑥⑦）</text>
+            <text x="843" y="828" text-anchor="middle" font-size="10.5">3D 侧可学习（⑧ 起）</text>
+
+            <text x="500" y="858" text-anchor="middle" font-size="10" fill="#4a5560">形状流：(6/8,3,512,896)→LLM (28,16,2560)→4 尺度 256ch／ViT (56,32,1024)→256ch＋(118,32,56)→散射→[B,256,16,200,200]→(40000,256)→(B,40000,256)→(B,900,256)</text>
+            <text x="500" y="880" text-anchor="middle" font-size="10" fill="#5a6570">注：④ 深度分布按发布仓内证据无监督（无损失代码与深度 GT 路径）；⑤⑥⑦ 参数自由；⊕＝⑨ 压平结果加到 bev_embedding。</text>
+          </g>
+        </svg>
+        <p>推拉合流：检测主桥是 BEVFormer 式拉流——bev_embedding (40000,256) 的 BEV query 经 6 层 SCA 从 LLM 四尺度特征拉取<span class="cite">heads.py:242-250</span><span class="cite">bev_encoder.py:91-103</span>；UVTR 支路是 LSS 式推流——vit_neck 特征×118 档无监督深度，视锥反投影后由 voxel_pool_depth kernel 查表散射入 [16,200,200] 体素<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>。体素压平成 (40000,256) 后以加性先验注入 BEV query<span class="cite">heads.py:244-245</span>，未压平体素整支喂占用支路<span class="cite">perception_transformer.py:191-193</span>——桥（视锥格点·反投影·散射 kernel）零参数；可学习量在 2D 侧（adaptor／vit_neck／depth_net）、3D 侧（3×Conv3d＋两路消费＋encoder／decoder／三个头）。双数据集口径：nuScenes 6 相机、OpenScene／nuPlan 8 相机，输入固定 896×512<span class="cite">docs/perception.md:110-112</span><span class="cite">dataset.py:85</span>。</p>
+      </div>
+
+      <h3>② 可学习参数清单（Qwen-Drive 侧新增／改动项）</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>参数名</th><th>张量形状（Qwen-Drive-1.0 口径）</th><th>挂载侧</th><th>代码出处</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>vit_neck</code>（SimpleFPN，(1.0,) 单 stage——UVTR 推流的特征源）</td>
+            <td>1×1 Conv(1024→256)＋LN2d＋3×3 Conv(256,256)＋LN2d→256ch@56×32</td>
+            <td>2D 侧</td>
+            <td><span class="cite">modeling_perception.py:66</span> <span class="cite">fpn.py:67-68,73-78</span></td>
+          </tr>
+          <tr>
+            <td><code>depth_net</code>（重深度头——118 档深度分布唯一来源、本节机制名片）</td>
+            <td>reduce Conv3×3(256→256)＋GN(32)＋ReLU→BasicBlock(256)×3→ASPP(mid 96)→Conv1×1(256→118)，softmax 于通道维</td>
+            <td>2D 侧（无监督）</td>
+            <td><span class="cite">modeling_perception.py:83-85</span> <span class="cite">view_transform.py:82-100</span></td>
+          </tr>
+          <tr>
+            <td><code>adaptor</code>（SimpleFPN，主流 4 尺度）</td>
+            <td>4.0 档 ConvT×2(2560→1280→640)；2.0 档 ConvT(2560→1280)；1.0 档直通；0.5 档 MaxPool；各接 1×1＋LN2d＋3×3＋LN2d 出 256（四尺度 112×64/56×32/28×16/14×8，推算）</td>
+            <td>2D 侧（供 SCA 拉取）</td>
+            <td><span class="cite">modeling_perception.py:61-63</span> <span class="cite">fpn.py:56-78</span></td>
+          </tr>
+          <tr>
+            <td><code>view_trans.conv_layer</code> ×3</td>
+            <td>各＝Conv3d(256,256,(3,3,3),pad1)＋BN3d(256)＋ReLU</td>
+            <td>3D 侧（落格后）</td>
+            <td><span class="cite">view_transform.py:126-134</span></td>
+          </tr>
+          <tr>
+            <td><code>uvtr_query_proj</code>（体素→BEV query 的唯一压缩点）</td>
+            <td>Conv2d(256×16=4096→256, 1×1)；batch>1 时 BEV token 先取 mean</td>
+            <td>3D 侧（消费 A：压平加成）</td>
+            <td><span class="cite">modeling_perception.py:82,117-122</span> <span class="cite">heads.py:244-245</span></td>
+          </tr>
+          <tr>
+            <td><code>uvtr_occ_proj</code>＋<code>uvtr_occ_fuse</code></td>
+            <td>Conv3d(256→16,1×1)；ConvModule Conv3d(32→16,1×1)＋BN3d＋ReLU（残差融合进 BEV 体）</td>
+            <td>3D 侧（消费 B：占用支路）</td>
+            <td><span class="cite">perception_transformer.py:85-96</span> <span class="cite">perception_transformer.py:191-193,256-260</span></td>
+          </tr>
+          <tr>
+            <td><code>bev_embedding</code>（BEV query 表——被 UVTR 加成）</td>
+            <td><code>nn.Embedding(200×200,256)</code>＝(40000,256)，10.24M</td>
+            <td>3D 侧（拉流主动方）</td>
+            <td><span class="cite">heads.py:222</span></td>
+          </tr>
+          <tr>
+            <td><code>query_embedding</code></td>
+            <td><code>nn.Embedding(900, 512)</code>（拆 query＋query_pos）</td>
+            <td>3D 侧（decoder，桥外）</td>
+            <td><span class="cite">heads.py:223</span></td>
+          </tr>
+          <tr>
+            <td><code>positional_encoding</code>（LearnedPositionalEncoding）</td>
+            <td>row/col 各 Embedding(200,128) 拼 256（仅 TSA 注入；单帧时 TSA 退化为普通 BEV 自注意力）</td>
+            <td>3D 侧</td>
+            <td><span class="cite">heads.py:202-204,250</span> <span class="cite">layers.py:189</span></td>
+          </tr>
+          <tr>
+            <td>cls/reg 分支 ×6 套</td>
+            <td>cls：2×(Linear256＋LN＋ReLU)＋Linear(256→7)；reg：2×(Linear256＋ReLU)＋Linear(256→10)（code_size=10）</td>
+            <td>3D 侧（桥外下游）</td>
+            <td><span class="cite">heads.py:206-220</span> <span class="cite">configuration_perception.py:27-35</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>本表只列 Qwen-Drive 感知头相对 BEVFormer 骨架的<strong>新增／改动项</strong>——SCA/TSA 系列（<code>sampling_offsets</code>／<code>attention_weights</code>／<code>value_proj</code>／<code>output_proj</code>、encoder/decoder 每层 FFN＋LN、<code>reference_points</code>、<code>level_embeds</code> 等）结构同族，不再逐行列出，逐项见第三节 BEVFormer 清单；但数字一律以 Qwen-Drive-1.0 为准：6 层 encoder＋6 层 decoder、SCA 8 头×4 层×8 点<span class="cite">attention.py:220</span><span class="cite">configuration_perception.py:111-112</span>，z 锚 {-4.5,−1.5,1.5,4.5} m——Z 范围 −5.0～5.4 m 与第三节 BEVFormer 的 8 m pillar 不同，引用以本节为准<span class="cite">bev_encoder.py:188</span><span class="cite">configuration_perception.py:88</span>。要点：<strong>投影桥（视锥格点·反投影·散射 kernel）零参数</strong>；2D 侧把深度头从原版 UVTR 的"单 1×1 Conv 跨尺度共享"加重为 BasicBlock×3＋ASPP；3D 侧新增原版没有的两路"体素→消费"压缩参数（<code>uvtr_query_proj</code>／<code>uvtr_occ_proj</code>＋<code>uvtr_occ_fuse</code>）——原版体素是被 decoder 直接采样的被动容器，无此类压缩<span class="cite">modeling_perception.py:82</span><span class="cite">perception_transformer.py:85-96</span>。Qwen-Drive-1.0 为 inference-only 发布仓（无训练代码与损失<span class="cite">docs/perception.md:14</span>），本表与下文"无监督"均按发布仓内证据书写（训练期是否曾有辅助深度损失不可考）。</p>
+
+      <h3>③ 2D-3D 关系</h3>
+      <p>Qwen-Drive 的感知头对"2D 特征如何进入 3D"的回答可归纳为四点：</p>
+      <ul>
+        <li><strong>推/拉方向：推拉合流——UVTR 支路推、检测主桥拉，双桥并联。</strong>体素支路与 LSS 同族同实现范式：2D 侧枚举视锥格点（56×32×118）、显式深度分布作乘性权重、按 (b,x,y,z) rank 区间经 CUDA kernel 散射落格<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>；检测主桥则是 BEVFormer 式拉流——BEV query 经 6 层 SCA 从 LLM 四尺度特征拉取<span class="cite">bev_encoder.py:91-103</span>。两桥只在一点汇合：体素压平成 (40000,256) 后<strong>加成</strong>进 bev_embedding<span class="cite">heads.py:244-245</span>，未压平体素另喂占用支路<span class="cite">perception_transformer.py:191-193</span>。与原版 UVTR 的关键差异在消费端——原版体素是 900 query 的直接采样对象（参考点 grid_sample<span class="cite">models/utils/uni3d_detr.py:270-320</span>），Qwen-Drive 的体素降格为 BEV query 的注入项，检测不再从体素拉取。</li>
+        <li><strong>深度：显式分布、无监督（按发布仓内证据）。</strong>vit_neck 特征经重深度头出 118 档 softmax（0.5 m/档、1.0–60 m）<span class="cite">view_transform.py:79-100</span>；仓内无损失代码、无深度 GT<span class="cite">docs/perception.md:14</span><span class="cite">dataset.py:66-80</span>，深度仅作 kernel 内乘性权重、由下游任务梯度端到端回传——与原版 UVTR（64 档无监督<span class="cite">uvtr_camera_base.py:62</span>）同构，BEVDepth 式 LiDAR 深度监督在 Qwen-Drive-1.0 中不存在。</li>
+        <li><strong>几何与学习的分工：桥零参数——"学习给内容与概率、几何给格点与定址"。</strong>固定几何决定"落点骨架"（视锥 arange 网格 56×32×118<span class="cite">view_transform.py:146-156</span>、inv(lidar2img)×lidar2ego 反投影回 ego 系<span class="cite">view_transform.py:200-239</span>、[16,200,200) 索引与范围掩码、rank 散射）；学习决定"特征与深度概率"（vit_neck＋重深度头）与"落格后如何混合、如何被消费"（3×Conv3d＋两路压缩＋BEV／占用／地图头）。与 LSS、原版 UVTR 同构，与 BEVFormer（桥上有 offsets/weights 学习量）相对——本节因拉流支路存在，"桥上有学习量"只对检测支路成立，推流支路的桥仍然零参数。</li>
+        <li><strong>query 有无及形态：体素支路无 query；BEV 侧 (40000,256) 网格嵌入表被 UVTR 加成，另有 900 object query（桥外）。</strong>体素格点是被动容器（与原版 UVTR 相同），差异全在消费端。全篇对比中 Qwen-Drive＝四家之外的第五种组合：<strong>LSS 式推流（实现层）＋BEVFormer 式拉流（检测层）并联</strong>，显式深度只服务推流支路。</li>
+      </ul>
+
+      <h3>④ 原版 UVTR vs Qwen-Drive 五轴对比</h3>
+      <style>
+        /* 节内 scoped 变体：五轴对比表（基于全局 .param-table，首列维度列样式与紧凑字号） */
+        #sec-qwendrive .cmp-table { table-layout: fixed; }
+        #sec-qwendrive .cmp-table .cite { white-space: normal; overflow-wrap: anywhere; }
+        #sec-qwendrive .cmp-table td { font-size: 0.9em; }
+        #sec-qwendrive .cmp-table th:first-child, #sec-qwendrive .cmp-table td:first-child { width: 92px; font-weight: 600; background: #f3f6f9; }
+        #sec-qwendrive .cmp-table thead th:not(:first-child) { text-align: center; }
+        #sec-qwendrive .cmp-foot { font-size: 0.88em; color: #5a6570; margin: -8px 0 18px; }
+      </style>
+      <table class="param-table cmp-table">
+        <thead>
+          <tr><th>轴</th><th>原版 UVTR（JIA-Lab-research/UVTR）</th><th>Qwen-Drive-1.0（感知头）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>特征源（2D 侧）</td>
+            <td>ResNet-50＋FPN <strong>4 尺度</strong> 256ch（/8–/64），深度由<strong>单个 1×1 Conv(256→64) 跨尺度共享</strong>产生、每尺度一份<span class="cite">detectors/uvtr.py:53-55,204-209</span><span class="cite">uvtr_camera_base.py:40-58</span></td>
+            <td>UVTR 流＝VLM ViT pre-merge patch 1024→vit_neck <strong>单尺度</strong> 256ch@56×32<span class="cite">modeling_perception.py:66,152</span><span class="cite">fpn.py:44-46</span>，深度由重深度头 BasicBlock×3＋ASPP(96)＋1×1 出 118 档<span class="cite">view_transform.py:82-100</span><span class="cite">modeling_perception.py:83-85</span>；另有原版没有的 LLM 主流 2560→4 尺度供 SCA 拉取<span class="cite">modeling_perception.py:61-63</span></td>
+          </tr>
+          <tr>
+            <td>深度监督</td>
+            <td><strong>无</strong>：论文 p.4 "D_I is predicted without supervision"＋代码无深度 loss（形参穿透未用<span class="cite">models/dense_heads/uvtr_head.py:407-408</span>）、管线不产深度 GT<span class="cite">uvtr_camera_base.py:197-211</span></td>
+            <td><strong>无（按发布仓内证据）</strong>：inference-only 无损失代码<span class="cite">docs/perception.md:14</span>、无深度 GT<span class="cite">dataset.py:66-80</span>；softmax 直入 kernel<span class="cite">modeling_perception.py:158-161</span>。训练期不可考——两侧同为"显式分布、下游梯度回传"</td>
+          </tr>
+          <tr>
+            <td>离散化</td>
+            <td>深度 <strong>D=64 档@1 m、0–64 m</strong><span class="cite">uvtr_camera_base.py:62</span><span class="cite">models/utils/uni3d_viewtrans.py:316-323</span>；体素 <strong>128×128×5</strong>（XY 名义 0.8 m、实际约 0.806 m；Z linspace 含端点 {-5,-3,-1,1,3} m、间距 2 m）<span class="cite">uvtr_camera_base.py:12,15-19</span><span class="cite">models/utils/uni3d_viewtrans.py:199-202</span></td>
+            <td>深度 <strong>118 档@0.5 m、1.0–60 m</strong><span class="cite">configuration_perception.py:98-99</span><span class="cite">view_transform.py:123</span>；体素 <strong>[16,200,200]</strong>（XY 0.512 m、Z 0.65 m、范围 ±51.2 m／Z −5.0～5.4 m）<span class="cite">modeling_perception.py:67-73</span><span class="cite">configuration_perception.py:88-89,107</span>——更细深度×更粗 Z、更大 XY 覆盖</td>
+          </tr>
+          <tr>
+            <td>消费方式与实现</td>
+            <td><strong>体素内检测</strong>：900 query UniCrossAtten 参考点 grid_sample 从体素体拉取（num_points=1 sigmoid 门控<span class="cite">models/utils/uni3d_detr.py:270-320</span><span class="cite">uvtr_camera_base.py:80,103</span>）；视图变换＝<strong>gather</strong>（3D 体素格点投影→F.grid_sample 取特征与深度概率、按概率加权求和<span class="cite">models/utils/uni3d_viewtrans.py:279-359,215-226</span>）</td>
+            <td><strong>压平加成 query＋占用支路</strong>：体素 [B,256,16,200,200]→Conv2d(4096→256,1×1) 压平 [40000,256] 加到 bev_embedding<span class="cite">heads.py:244-245</span><span class="cite">modeling_perception.py:82,117-122</span>＋未压平体素进占用融合<span class="cite">perception_transformer.py:85-96,191-193,256-260</span>；检测头＝BEVFormer 式（6 层 SCA 8头×4层×8点、4 z 锚，从 LLM 特征拉取<span class="cite">attention.py:220</span><span class="cite">bev_encoder.py:188,303-316</span>）；视图变换＝<strong>scatter</strong>（视锥侧查表：kernel 读特征 (h,w)×深度 (d,h,w)、rank 区间和写散入体素<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>）</td>
+          </tr>
+          <tr>
+            <td>工程细节</td>
+            <td>fp16 桥内半精度<span class="cite">models/utils/uni3d_viewtrans.py:291-294</span><span class="cite">uvtr_camera_base.py:77</span>；4 尺度并行；mmdet3d v0.17.3 依赖<span class="cite">README.md:20</span>；lidar 系＋uni_rot_aug 逆增广<span class="cite">models/utils/uni3d_viewtrans.py:275-276</span>；输入 900×1600 pad 928×1600<span class="cite">uvtr_camera_base.py:208</span></td>
+            <td>视锥保 <strong>fp32</strong>（普通 attribute 防 bf16 cast<span class="cite">view_transform.py:138-143</span>）＋SCA 投影 fp32 禁 TF32<span class="cite">bev_encoder.py:232-235</span>＋自研 bf16 deformable kernel<span class="cite">attention.py:26-28,54-58</span>；<strong>单尺度 assert</strong><span class="cite">view_transform.py:244</span>；无 mmcv/mmdet 依赖<span class="cite">docs/perception.md:14</span>；<strong>ego 系锚定</strong><span class="cite">bev_encoder.py:192,258-263</span><span class="cite">view_transform.py:217-218</span>、仓内无增广；batch>1 BEV token 取 mean<span class="cite">modeling_perception.py:120-121</span>；输入固定 896×512<span class="cite">dataset.py:85</span>；双数据集 6/8 相机<span class="cite">docs/perception.md:110-112</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="cmp-foot">口径：原版 UVTR 侧数字转引自第二节底稿（path:line 相对 <code>bev_projection/code/UVTR/</code>，仓库 JIA-Lab-research/UVTR）；Qwen-Drive-1.0 侧 path:line 相对其仓根（感知包 <code>src/qwen_drive_perception/</code>，表中简写文件名）。"深度监督"一行两侧的"无"含义一致：显式分布、无深度标签、仅由下游梯度回传；Qwen-Drive 侧限定语"按发布仓内证据"＝仓为 inference-only 发布、无损失代码与深度 GT 路径，训练期是否曾有辅助深度损失在仓内不可考。</p>
+
+    </section>
+
+    <!-- ======================= 七、汇总 ======================= -->
     <section id="sec-summary">
-      <h2>六、汇总对比<span class="tag">谱系：无 query → 稠密 query → 三平面压缩 query → 深度门控稀疏 query</span></h2>
+      <h2>七、汇总对比<span class="tag">谱系：无 query → 稠密 query → 三平面压缩 query → 深度门控稀疏 query</span></h2>
 
       <p>前五节逐家拆完了"哪些几何固定、哪些参数可学习"；本节把各家放到同一张表与同一张坐标图上。大表的每个单元格均可回溯到对应分册底稿的具体行（出处以 <span class="cite">…</span> 标注）；谱系图的坐标轴取本笔记的两条主轴——<strong>可学习参数所在侧</strong>（纵轴：2D 侧／桥两端／3D 侧 query 主导）与<strong>投影方向</strong>（横轴：推 push／拉 pull），四家在图上的落位即"query 从无到稠密到压缩到稀疏门控"的演化叙事。</p>
 

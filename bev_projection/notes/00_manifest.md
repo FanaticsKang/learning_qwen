@@ -1,6 +1,6 @@
 # 00 · 素材 manifest（BEV 投影对比笔记）
 
-各仓均为 `--depth 1` 浅克隆（默认分支）；前四仓克隆日期 2026-10-26，UVTR 为 2026-10-28。`code/` 与 `papers/` 不入 git（未跟踪），本 manifest 的 commit hash 为后续底稿与 HTML 页脚的唯一引用来源。
+前五仓（lift-splat-shoot、BEVFormer、TPVFormer、VoxFormer、UVTR）均为 `--depth 1` 浅克隆（默认分支）；克隆日期前四仓 2026-10-26、UVTR 2026-10-28；Qwen-Drive-1.0 为完整克隆（2026-10-28，11 commits，见行内注）。`code/` 与 `papers/` 不入 git（未跟踪），本 manifest 的 commit hash 为后续底稿与 HTML 页脚的唯一引用来源。
 
 | 仓库 | URL | commit hash | 克隆日期 | nuScenes 配置定位线索 |
 |---|---|---|---|---|
