@@ -3847,8 +3847,8 @@ var F3D = {
             <text x="271" y="632" text-anchor="middle" font-size="10.5">⑫ 拉流 encoder（BEVFormer 式）</text>
             <text x="271" y="649" text-anchor="middle" font-size="9.5">bev_queries＝bev_embedding＋UVTR 加成</text>
             <text x="271" y="666" text-anchor="middle" font-size="9.5">＋bev_pos·6 层 TSA→SCA→FFN</text>
-            <text x="271" y="683" text-anchor="middle" font-size="9.5">SCA 8×4×8·4 z 锚</text>
-            <text x="271" y="700" text-anchor="middle" font-size="9">{−4.5,−1.37,1.77,4.9} m（可学习·3D）</text>
+            <text x="271" y="683" text-anchor="middle" font-size="9.5">SCA 8×4×8·4 z 锚 {−4.5,−1.37,1.77,4.9} m（固定）</text>
+            <text x="271" y="700" text-anchor="middle" font-size="9.5">z 锚投影回图像·邻域采样·残差写回</text>
 
             <line class="flow" x1="396" y1="662" x2="424" y2="662"></line>
 
@@ -3962,8 +3962,8 @@ var F3D = {
       <h3>③ 2D-3D 关系</h3>
       <p>Qwen-Drive 的感知头对"2D 特征如何进入 3D"的回答可归纳为四点：</p>
       <ul>
-        <li><strong>推/拉方向：推拉合流——UVTR 支路推、检测主桥拉，双桥并联。</strong>体素支路与 LSS 同族同实现范式：2D 侧枚举视锥格点（56×32×118）、显式深度分布作乘性权重、按 (b,x,y,z) rank 区间经 CUDA kernel 散射落格<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>；检测主桥则是 BEVFormer 式拉流——BEV query 经 6 层 SCA 从 LLM 四尺度特征拉取<span class="cite">bev_encoder.py:91-103</span>。两桥只在一点汇合：体素压平成 (40000,256) 后<strong>加成</strong>进 bev_embedding<span class="cite">heads.py:244-245</span>，未压平体素另喂占用支路<span class="cite">perception_transformer.py:191-193</span>。与原版 UVTR 的关键差异在消费端——原版体素是 900 query 的直接采样对象（参考点 grid_sample<span class="cite">models/utils/uni3d_detr.py:270-320</span>），Qwen-Drive 的体素降格为 BEV query 的注入项，检测不再从体素拉取。</li>
-        <li><strong>深度：显式分布、无监督（按发布仓内证据）。</strong>vit_neck 特征经重深度头出 118 档 softmax（0.5 m/档、1.0–60 m）<span class="cite">view_transform.py:79-100</span>；仓内无损失代码、无深度 GT<span class="cite">docs/perception.md:14</span><span class="cite">dataset.py:66-80</span>，深度仅作 kernel 内乘性权重、由下游任务梯度端到端回传——与原版 UVTR（64 档无监督<span class="cite">uvtr_camera_base.py:62</span>）同构，BEVDepth 式 LiDAR 深度监督在 Qwen-Drive-1.0 中不存在。</li>
+        <li><strong>推/拉方向：推拉合流——UVTR 支路推、检测主桥拉，双桥并联。</strong>体素支路与 LSS 同族同实现范式：2D 侧枚举视锥格点（56×32×118）、显式深度分布作乘性权重、按 (b,x,y,z) rank 区间经 CUDA kernel 散射落格<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>；检测主桥则是 BEVFormer 式拉流——每格 query 抬 4 个固定 z 锚（{−4.5,−1.37,1.77,4.9} m）经 lidar2img 标定投影<strong>回图像</strong>（3D→2D 定锚，固定），在投影点邻域以可学习偏移/权重采样（8×4×8）、除以命中相机数后<strong>残差写回</strong>该 query，×6 层<span class="cite">bev_encoder.py:91-103</span><span class="cite">attention.py:220</span>。两桥只在一点汇合：体素压平成 (40000,256) 后<strong>加成</strong>进 bev_embedding<span class="cite">heads.py:244-245</span>，未压平体素另喂占用支路<span class="cite">perception_transformer.py:191-193</span>。与原版 UVTR 的关键差异在消费端——原版体素是 900 query 的直接采样对象（参考点 grid_sample<span class="cite">models/utils/uni3d_detr.py:270-320</span>），Qwen-Drive 的体素降格为 BEV query 的注入项，检测不再从体素拉取。</li>
+        <li><strong>深度：显式分布、无监督（按发布仓内证据）。</strong>vit_neck 特征经重深度头出 118 档 softmax（0.5 m/档、1.0–60 m）<span class="cite">view_transform.py:79-100</span>；仓内无损失代码、无深度 GT<span class="cite">docs/perception.md:14</span><span class="cite">dataset.py:66-80</span>，深度仅作 kernel 内乘性权重、由下游任务梯度端到端回传——与原版 UVTR（64 档无监督<span class="cite">uvtr_camera_base.py:62</span>）同构，BEVDepth 式 LiDAR 深度监督在 Qwen-Drive-1.0 中不存在。<strong>两流核心对照：推流核心＝图像像素的深度分布（无监督）；拉流核心＝标定投影＋学习采样，无深度</strong>——合流点上体素先验定"哪里大概有什么"，拉流定"采什么、怎么加权"。</li>
         <li><strong>几何与学习的分工：桥零参数——"学习给内容与概率、几何给格点与定址"。</strong>固定几何决定"落点骨架"（视锥 arange 网格 56×32×118<span class="cite">view_transform.py:146-156</span>、inv(lidar2img)×lidar2ego 反投影回 ego 系<span class="cite">view_transform.py:200-239</span>、[16,200,200) 索引与范围掩码、rank 散射）；学习决定"特征与深度概率"（vit_neck＋重深度头）与"落格后如何混合、如何被消费"（3×Conv3d＋两路压缩＋BEV／占用／地图头）。与 LSS、原版 UVTR 同构，与 BEVFormer（桥上有 offsets/weights 学习量）相对——本节因拉流支路存在，"桥上有学习量"只对检测支路成立，推流支路的桥仍然零参数。</li>
         <li><strong>query 有无及形态：体素支路无 query；BEV 侧 (40000,256) 网格嵌入表被 UVTR 加成，另有 900 object query（桥外）。</strong>体素格点是被动容器（与原版 UVTR 相同），差异全在消费端。全篇对比中 Qwen-Drive＝五个机制条目之外的工程合流组合：<strong>LSS 式推流（实现层）＋BEVFormer 式拉流（检测层）并联</strong>，显式深度只服务推流支路。</li>
       </ul>
