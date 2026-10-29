@@ -183,7 +183,7 @@
       <span class="subtitle">LSS · UVTR · BEVFormer · TPVFormer · VoxFormer · Qwen-Drive 实现</span>
     </h1>
 
-    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、UVTR、BEVFormer、TPVFormer、VoxFormer 五个机制条目给出五种机制答案，第六节 Qwen-Drive 则是对 UVTR 一脉的工程实现条目（以 Qwen-Drive-1.0 为口径展开）：五个机制条目＋一条工程实现，共六节——第六节不是第六种机制，而是 UVTR 式推流与 BEVFormer 式拉流在工程上的合流落地。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、参数在 2D 侧、投影桥上还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（UVTR 一节同此口径，取 JIA-Lab-research/UVTR 仓；VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第五节；第六节 Qwen-Drive 取其发布仓冻结配置——nuScenes 6 相机／OpenScene 与 nuPlan 8 相机双口径），仓库地址与 commit hash 见页脚。</p>
+    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、UVTR、BEVFormer、TPVFormer、VoxFormer 五个机制条目给出五种机制答案，第六节 Qwen-Drive 则是对 UVTR 一脉的工程实现条目（以 Qwen-Drive-1.0 为口径展开）：五个机制条目＋一条工程实现＋第七节汇总对比＋第八节"深度从哪来"专题收束，共八节——第六节不是第六种机制，而是 UVTR 式推流与 BEVFormer 式拉流在工程上的合流落地。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、参数在 2D 侧、投影桥上还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（UVTR 一节同此口径，取 JIA-Lab-research/UVTR 仓；VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第五节；第六节 Qwen-Drive 取其发布仓冻结配置——nuScenes 6 相机／OpenScene 与 nuPlan 8 相机双口径），仓库地址与 commit hash 见页脚。</p>
 
     <div class="legend" id="legend">
       <strong class="legend-title">统一图例</strong>
@@ -211,6 +211,7 @@
         <li><a href="#sec-voxformer">VoxFormer：深度门控的稀疏 voxel query</a></li>
         <li><a href="#sec-qwendrive">Qwen-Drive 的 UVTR：推拉合流的工程落地（UVTR 推＋BEVFormer 拉）</a></li>
         <li><a href="#sec-summary">汇总对比：可学习参数的位置与形态 × 投影方向</a></li>
+        <li><a href="#sec-depth">深度从哪来：六家的深度谱系（专题收束）</a></li>
       </ol>
     </nav>
   </header>
@@ -4237,6 +4238,207 @@ var F3D = {
         <p>读图：横轴是特征过桥的方向——LSS 与 UVTR 并列推侧（同一"显式深度分布×特征"语义的两种落点：LSS 在 2D 侧枚举视锥 scatter 拍扁 pillar<span class="cite">src/models.py:200-242</span>，UVTR 在 3D 侧放固定体素格、投影定址后 gather 码放保高度<span class="cite">models/utils/uni3d_viewtrans.py:279-359</span>）；BEVFormer／TPVFormer／VoxFormer 共享"3D 定锚＋deformable 拉取"的 BEVFormer 式骨架（MSDA 血统<span class="cite">modules/deformable_cross_attention.py:159-168</span>）；Qwen-Drive 在右下收束两支——UVTR 推流体素压平后作 BEV query 的体素先验加成，检测内容由 BEVFormer 式拉取完成。纵轴是可学习参数的重心——LSS／UVTR 横跨桥两端且桥上零参数，拉侧三家把主动方移到 3D 侧 query 表、学习量转移到桥上的采样偏移与权重。橙虚线是 query 形态的演化主线：无 query → 稠密 40000<span class="cite">dense_heads/bevformer_head.py:104-105</span> → 三平面压缩 46400（同范围稠密 voxel 640000 格的 7.25%<span class="cite">tpvformer10/tpv_head.py:53-55</span>）→ 深度门控稀疏（全表 262,144、每帧仅 N_p 激活<span class="cite">dense_heads/voxformer_head.py:53</span><span class="cite">dense_heads/voxformer_head.py:89-91</span>）——UVTR 不在主线上（桥上无 query，体素为被动容器），Qwen-Drive 也不在（复用 BEV 式 40000 query）；VoxFormer 门口的蓝字"推"是六家中唯一由深度显式决定 query 集合的机制（离线 QPN 门控）。</p>
         <p><strong>一句话综合：</strong>六家对"2D 特征如何进入 3D"的回答可压成一组对偶——LSS／UVTR 让<strong>几何</strong>当搬运工（固定视锥／体素格＋显式深度加权，学习只决定"搬什么、放多深"，差别在落点：拍扁 pillar 对体素保高度），拉侧三家让<strong>学习</strong>当搬运工（query 主动拉取，几何只提供锚点与投影），Qwen-Drive 把两支并联（UVTR 推流体素作 BEV query 的体素先验加成，检测走 BEVFormer 式拉取）；深度则从 LSS／UVTR 的显式无监督分布（α·41 维／D=64@1 m）、经 BEVFormer／TPVFormer 的锚点隐式枚举（4／4-32-32 档）、走到 VoxFormer 的离线显式门控、再于 Qwen-Drive 回归显式（118 档，仅服务推支）——<strong>深度显隐与 query 稀密，正是这条谱系的两条演化主线</strong>。</p>
       </div>
+    </section>
+
+    <section id="sec-depth">
+      <h2>八、深度从哪来：六家的深度谱系<span class="tag">专题收束：深度不确定性安放的三种位置</span></h2>
+      <p>六节机制走完，回到最关心的一条轴：深度从哪来。<strong>BEVFormer 一族并没有"绕开"深度——先假设固定 3D 点（z 锚），再学这些点投影邻域里的采样分布，本质上是深度估计的另一种参数化</strong>：不确定性从射线（1D 档位分布）搬到像平面（2D 邻域分布），且预测方向反转——分布由 3D 侧的 query 给出，而非由图像特征给出。按"深度不确定性被安放在哪里"，全篇六家归为三族：<strong>族① 在线学的射线分布</strong>（LSS／UVTR／Qwen-Drive 推流——图像特征预测档位软权重，全部无深度监督）；<strong>族② 固定假设＋像面学的邻域分布</strong>（BEVFormer／TPVFormer／Qwen-Drive 拉流——标定定锚、query 学分布，无度量深度输出）；<strong>族③ 离线凝固的门控</strong>（VoxFormer——外部立体深度在训练前就烧成"谁有 query"的二值掩码，深度数值不进在线网络）。</p>
+
+      <svg id="depth-map" viewBox="0 0 1000 525" role="img" aria-label="深度谱系图（三族分组）：族① 射线软分布＝LSS 41 档、UVTR 64 档、Qwen-Drive 推流 118 档，像素格出发的深度档位点串带软权重，在线学·无监督；族② 像面邻域分布＝BEVFormer 4 z 锚、TPVFormer 正交轴锚点射线 4/32/32、Qwen-Drive 拉流 4 z 锚，固定 3D 假设标定投影到像面、落点邻域采样分布由 3D query 预测，无度量深度输出；族③ 离线凝固门控＝VoxFormer 立体深度→伪占用→QPN 修正→二值掩码，在线图外；图底给出谱系一句话与第三节 E 图交叉引用">
+        <g font-size="13" fill="#2b3440">
+          <text x="16" y="32" font-size="14" font-weight="600" fill="#37424d">A · 深度谱系图：六家的深度不确定性安放在哪里（三族）</text>
+
+          <!-- ===== 族① 射线软分布 ===== -->
+          <rect x="20" y="48" width="310" height="407" rx="6" fill="none" stroke="#c4ccd4" stroke-width="1" stroke-dasharray="5 4"></rect>
+          <text x="175" y="72" text-anchor="middle" font-size="12" font-weight="600">族① 射线软分布</text>
+          <text x="175" y="88" text-anchor="middle" font-size="10" fill="#5a6570">在线学 · 显式 · 无监督 · 由 2D 图像特征预测</text>
+
+          <rect x="40" y="104" width="30" height="20" rx="2" fill="#FBE3C8" stroke="#D55E00" stroke-width="1.5"></rect>
+          <text x="80" y="118" font-size="9" fill="#5a6570">像素格（图像特征·可学习）</text>
+          <line class="fixed" x1="70" y1="126" x2="300" y2="222"></line>
+          <circle cx="105" cy="141" r="2.5" fill="#F6C08A"></circle>
+          <circle cx="136" cy="154" r="3.5" fill="#F2A05A"></circle>
+          <circle cx="167" cy="168" r="4.5" fill="#EA8040"></circle>
+          <circle cx="198" cy="181" r="5" fill="#DB6430"></circle>
+          <circle cx="229" cy="195" r="4.5" fill="#C24A26"></circle>
+          <circle cx="260" cy="209" r="3.5" fill="#A23520"></circle>
+          <circle cx="291" cy="222" r="2.5" fill="#7E241C"></circle>
+          <text x="95" y="132" font-size="9" fill="#D55E00">沿射线的深度档：软权重（可学习）</text>
+          <rect x="258" y="212" width="9" height="9" fill="none" stroke="#0072B2" stroke-width="1" stroke-dasharray="3 2"></rect>
+          <rect x="268" y="212" width="9" height="9" fill="none" stroke="#0072B2" stroke-width="1" stroke-dasharray="3 2"></rect>
+          <rect x="258" y="222" width="9" height="9" fill="none" stroke="#0072B2" stroke-width="1" stroke-dasharray="3 2"></rect>
+          <rect x="268" y="222" width="9" height="9" fill="none" stroke="#0072B2" stroke-width="1" stroke-dasharray="3 2"></rect>
+          <text x="55" y="250" font-size="9" fill="#5a6570">落点＝固定网格：2D BEV 格（拍扁）或 3D 体素（码放）</text>
+
+          <rect x="40" y="265" width="270" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="175" y="285" text-anchor="middle" font-size="10.5" font-weight="600">LSS —— 41 档 @1.0 m（4.0–44.0 m）</text>
+          <text x="175" y="303" text-anchor="middle" font-size="9.5" fill="#5a6570">落点 2D BEV 格（拍扁）· α 无监督（src/models.py:157）</text>
+
+          <rect x="40" y="330" width="270" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="175" y="350" text-anchor="middle" font-size="10.5" font-weight="600">UVTR —— 64 档 @1.0 m（0–64 m）</text>
+          <text x="175" y="368" text-anchor="middle" font-size="9.5" fill="#5a6570">落点 3D 体素（码放·gather）· 无监督（uvtr_camera_base.py:62）</text>
+
+          <rect x="40" y="395" width="270" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="175" y="415" text-anchor="middle" font-size="10.5" font-weight="600">Qwen-Drive 推流 —— 118 档 @0.5 m（1.0–60 m）</text>
+          <text x="175" y="433" text-anchor="middle" font-size="9.5" fill="#5a6570">落点 3D 体素→压平加成（view_transform.py:123）</text>
+
+          <!-- ===== 族② 像面邻域分布 ===== -->
+          <rect x="345" y="48" width="310" height="407" rx="6" fill="none" stroke="#c4ccd4" stroke-width="1" stroke-dasharray="5 4"></rect>
+          <text x="500" y="72" text-anchor="middle" font-size="12" font-weight="600">族② 像面邻域分布</text>
+          <text x="500" y="88" text-anchor="middle" font-size="10" fill="#5a6570">固定 3D 假设 · 隐式 · 由 3D 侧 query 预测</text>
+
+          <rect x="360" y="196" width="9" height="9" fill="none" stroke="#0072B2" stroke-width="1" stroke-dasharray="3 2"></rect>
+          <rect x="370" y="196" width="9" height="9" fill="none" stroke="#0072B2" stroke-width="1" stroke-dasharray="3 2"></rect>
+          <rect x="380" y="196" width="9" height="9" fill="none" stroke="#0072B2" stroke-width="1" stroke-dasharray="3 2"></rect>
+          <line x1="378" y1="196" x2="378" y2="112" stroke="#0072B2" stroke-width="2"></line>
+          <circle cx="378" cy="116" r="4" fill="#0072B2"></circle>
+          <circle cx="378" cy="142" r="4" fill="#0072B2"></circle>
+          <circle cx="378" cy="168" r="4" fill="#0072B2"></circle>
+          <circle cx="378" cy="194" r="4" fill="#0072B2"></circle>
+          <text x="365" y="232" text-anchor="middle" font-size="9" fill="#5a6570">BEV 格 pillar＋4 z 锚（固定·标定）</text>
+
+          <line class="fixed" x1="386" y1="118" x2="562" y2="132"></line>
+          <line class="fixed" x1="386" y1="144" x2="588" y2="152"></line>
+          <line class="fixed" x1="386" y1="170" x2="572" y2="180"></line>
+          <line class="fixed" x1="386" y1="196" x2="612" y2="170"></line>
+          <text x="470" y="108" text-anchor="middle" font-size="9" fill="#0072B2">lidar2img 投影（3D→2D·固定）</text>
+
+          <rect x="545" y="112" width="95" height="112" rx="2" fill="#f3f5f7" stroke="#c4ccd4" stroke-width="1"></rect>
+          <text x="592" y="238" text-anchor="middle" font-size="9" fill="#5a6570">像面（图像特征）</text>
+          <circle cx="565" cy="132" r="3.5" fill="#0072B2"></circle>
+          <circle cx="558" cy="126" r="2" fill="#F2A05A"></circle>
+          <circle cx="572" cy="124" r="2.5" fill="#EA8040"></circle>
+          <circle cx="573" cy="138" r="2" fill="#DB6430"></circle>
+          <circle cx="559" cy="139" r="1.8" fill="#C24A26"></circle>
+          <circle cx="590" cy="152" r="3.5" fill="#0072B2"></circle>
+          <circle cx="583" cy="146" r="2" fill="#F2A05A"></circle>
+          <circle cx="597" cy="145" r="2.5" fill="#EA8040"></circle>
+          <circle cx="598" cy="158" r="2" fill="#DB6430"></circle>
+          <circle cx="584" cy="160" r="1.8" fill="#C24A26"></circle>
+          <circle cx="574" cy="182" r="3.5" fill="#0072B2"></circle>
+          <circle cx="567" cy="176" r="2" fill="#F2A05A"></circle>
+          <circle cx="581" cy="175" r="2.5" fill="#EA8040"></circle>
+          <circle cx="582" cy="188" r="2" fill="#DB6430"></circle>
+          <circle cx="568" cy="189" r="1.8" fill="#C24A26"></circle>
+          <circle cx="612" cy="170" r="3.5" fill="#0072B2"></circle>
+          <circle cx="605" cy="164" r="2" fill="#F2A05A"></circle>
+          <circle cx="619" cy="163" r="2.5" fill="#EA8040"></circle>
+          <circle cx="620" cy="176" r="2" fill="#DB6430"></circle>
+          <circle cx="606" cy="177" r="1.8" fill="#C24A26"></circle>
+          <text x="500" y="258" text-anchor="middle" font-size="9" fill="#D55E00">落点邻域的采样分布（可学习·无度量深度输出）</text>
+
+          <rect x="365" y="265" width="270" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="500" y="285" text-anchor="middle" font-size="10.5" font-weight="600">BEVFormer —— 每格 4 z 锚</text>
+          <text x="500" y="303" text-anchor="middle" font-size="9.5" fill="#5a6570">{−4.5,−2.167,0.167,2.5} m·采样 8×4×8（encoder.py:62-63）</text>
+
+          <rect x="365" y="330" width="270" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="500" y="350" text-anchor="middle" font-size="10.5" font-weight="600">TPVFormer —— 正交轴锚点射线 4／32／32</text>
+          <text x="500" y="368" text-anchor="middle" font-size="9.5" fill="#5a6570">hw 4 锚同 BEVFormer 值；zh／wz 32（tpv_lidarseg.py:27）</text>
+
+          <rect x="365" y="395" width="270" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="500" y="415" text-anchor="middle" font-size="10.5" font-weight="600">Qwen-Drive 拉流 —— 4 z 锚</text>
+          <text x="500" y="433" text-anchor="middle" font-size="9.5" fill="#5a6570">{−4.5,−1.37,1.77,4.9} m·SCA 8×4×8（bev_encoder.py:201,244-248）</text>
+
+          <!-- ===== 族③ 离线凝固门控 ===== -->
+          <rect x="670" y="48" width="310" height="407" rx="6" fill="none" stroke="#c4ccd4" stroke-width="1" stroke-dasharray="5 4"></rect>
+          <text x="825" y="72" text-anchor="middle" font-size="12" font-weight="600">族③ 离线凝固门控</text>
+          <text x="825" y="88" text-anchor="middle" font-size="10" fill="#5a6570">外部冻结 · 离线 · 进网络的只有二值掩码</text>
+
+          <rect x="725" y="100" width="200" height="28" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="825" y="118" text-anchor="middle" font-size="9.5">立体图像对 image_2/3（数据）</text>
+          <line class="flow" x1="825" y1="128" x2="825" y2="138"></line>
+          <rect class="fixed" x="725" y="140" width="200" height="28" rx="4"></rect>
+          <text x="825" y="158" text-anchor="middle" font-size="9.5">MSNet3D 深度图（外部冻结）</text>
+          <line class="flow" x1="825" y1="168" x2="825" y2="178"></line>
+          <rect x="725" y="180" width="200" height="28" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="825" y="198" text-anchor="middle" font-size="9.5">反投影伪点云＋光线投射（固定）</text>
+          <line class="flow" x1="825" y1="208" x2="825" y2="218"></line>
+          <rect x="725" y="220" width="200" height="32" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <rect x="748" y="230" width="12" height="12" fill="#5a6570"></rect>
+          <rect x="762" y="230" width="12" height="12" fill="#eef0f2" stroke="#c4ccd4" stroke-width="0.8"></rect>
+          <rect x="776" y="230" width="12" height="12" fill="#5a6570"></rect>
+          <rect x="790" y="230" width="12" height="12" fill="#5a6570"></rect>
+          <rect x="804" y="230" width="12" height="12" fill="#eef0f2" stroke="#c4ccd4" stroke-width="0.8"></rect>
+          <rect x="818" y="230" width="12" height="12" fill="#5a6570"></rect>
+          <rect x="832" y="230" width="12" height="12" fill="#5a6570"></rect>
+          <rect x="846" y="230" width="12" height="12" fill="#eef0f2" stroke="#c4ccd4" stroke-width="0.8"></rect>
+          <text x="868" y="240" font-size="9.5">伪占用（二值）</text>
+          <line class="flow" x1="825" y1="252" x2="825" y2="262"></line>
+          <rect class="learnable" x="725" y="264" width="200" height="28" rx="4"></rect>
+          <text x="825" y="282" text-anchor="middle" font-size="9.5">QPN 修正（可学习·离线 stage-1）</text>
+          <line class="flow" x1="825" y1="292" x2="825" y2="302"></line>
+          <rect x="725" y="304" width="200" height="28" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="825" y="322" text-anchor="middle" font-size="9.5">.query 二值掩码（bit-pack）</text>
+          <line x1="700" y1="348" x2="950" y2="348" stroke="#8a94a0" stroke-width="1" stroke-dasharray="4 3"></line>
+          <text x="825" y="344" text-anchor="middle" font-size="8.5" fill="#8a94a0">离线 ─ 在线 边界</text>
+          <rect x="725" y="358" width="200" height="28" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="825" y="376" text-anchor="middle" font-size="9.5">在线前向只读掩码（深度数值不进网络）</text>
+          <text x="825" y="408" text-anchor="middle" font-size="9" fill="#5a6570">（image2depth.sh:6-8；lmscnet.py:304-317）</text>
+          <text x="825" y="424" text-anchor="middle" font-size="9" fill="#5a6570">（semantic_kitti_dataset_stage2.py:332）</text>
+
+          <!-- 底部谱系句 -->
+          <text x="500" y="480" text-anchor="middle" font-size="10.5" fill="#4a5560">谱系一句话：深度不确定性的三种安放位置——在线学的射线分布（族①）／固定假设＋像面学的邻域分布（族②＝深度估计的另一种参数化，方向由 3D 侧给出）／离线凝固的二值门控（族③）</text>
+          <text x="500" y="500" text-anchor="middle" font-size="10.5" fill="#4a5560">LSS ↔ BEVFormer 两家的逐步对偶细看：第三节 E 图；六家机制与参数全表：第七节汇总</text>
+        </g>
+      </svg>
+
+      <h3>六家深度来源小结</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>模型</th><th>深度形态</th><th>来源</th><th>监督</th><th>预测方向</th><th>在线/离线</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>LSS</strong></td>
+            <td>显式：41 档射线分布<span class="cite">src/models.py:157</span></td>
+            <td>图像特征（depthnet）</td>
+            <td>无监督</td>
+            <td>2D→3D（图像侧预测）</td>
+            <td>在线</td>
+          </tr>
+          <tr>
+            <td><strong>UVTR</strong></td>
+            <td>显式：64 档射线分布<span class="cite">uvtr_camera_base.py:62</span></td>
+            <td>图像特征（DepthNet）</td>
+            <td>无监督</td>
+            <td>2D→3D（图像侧预测）</td>
+            <td>在线</td>
+          </tr>
+          <tr>
+            <td><strong>BEVFormer</strong></td>
+            <td>隐式：像面邻域采样分布</td>
+            <td>固定 z 锚标定投影<span class="cite">modules/encoder.py:62-63</span>＋query 预测</td>
+            <td>无（无深度输出）</td>
+            <td>3D→2D（query 侧预测）</td>
+            <td>在线</td>
+          </tr>
+          <tr>
+            <td><strong>TPVFormer</strong></td>
+            <td>隐式：像面邻域采样分布</td>
+            <td>固定锚点射线 4／32／32<span class="cite">tpv_lidarseg.py:27</span>＋query 预测</td>
+            <td>无（无深度输出）</td>
+            <td>3D→2D（query 侧预测）</td>
+            <td>在线</td>
+          </tr>
+          <tr>
+            <td><strong>VoxFormer</strong></td>
+            <td>门控：二值"谁有 query"</td>
+            <td>MSNet3D 立体深度（外部冻结）<span class="cite">preprocess/image2depth.sh:6-8</span>→QPN 修正<span class="cite">detectors/lmscnet.py:304-317</span></td>
+            <td>深度链自带（离线）</td>
+            <td>2D→3D（离线反投影）</td>
+            <td>离线</td>
+          </tr>
+          <tr>
+            <td><strong>Qwen-Drive</strong></td>
+            <td>双流：推显式 118 档＋拉隐式</td>
+            <td>推＝图像特征<span class="cite">view_transform.py:123</span>；拉＝标定＋query<span class="cite">bev_encoder.py:201</span></td>
+            <td>无监督（按发布仓内证据）</td>
+            <td>推 2D→3D／拉 3D→2D</td>
+            <td>在线</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>读表抓两点：其一，"无监督"覆盖了除 VoxFormer 外的全部在线深度——它们全靠下游任务梯度逼出；其二，族②两家的"深度"没有数值输出，它是固定假设在像面上的软分布——这正是"BEVFormer 本质也是一种深度估计"的精确含义：估计的不是度量深度，而是"这个固定 3D 假设该从图像哪里、以多大权重取证据"。</p>
     </section>
 
   </main>
