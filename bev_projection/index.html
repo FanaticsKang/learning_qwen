@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>五条 2D→3D 投影机制＋一条工程实现：可学习参数与固定几何的分工 · LSS / UVTR / BEVFormer / TPVFormer / VoxFormer / Qwen-Drive 实现</title>
+<title>模型中的主流 2D→3D 投影机制 · LSS / UVTR / BEVFormer / TPVFormer / VoxFormer / Qwen-Drive / PETR 实现</title>
 <style>
   :root {
     --c-learn-fill: #FBE3C8;   /* 可学习：浅橙填充 */
@@ -47,6 +47,8 @@
     margin-top: 8px;
   }
   .intro { margin: 20px 0 0; text-align: left; }
+  .intro-list { margin: 12px 0 0; padding-left: 1.7em; text-align: left; }
+  .intro-list li { margin: 4px 0; }
 
   /* ---- 统一图例条（全局，页首一条） ---- */
   .legend {
@@ -179,11 +181,23 @@
 <div class="page">
 
   <header>
-    <h1>五条 2D→3D 投影机制＋一条工程实现：可学习参数与固定几何的分工
-      <span class="subtitle">LSS · UVTR · BEVFormer · TPVFormer · VoxFormer · Qwen-Drive 实现</span>
+    <h1>模型中的主流 2D→3D 投影机制
+      <span class="subtitle">LSS · UVTR · BEVFormer · TPVFormer · VoxFormer · Qwen-Drive · PETR 实现</span>
     </h1>
 
-    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——LSS、UVTR、BEVFormer、TPVFormer、VoxFormer 五个机制条目给出五种机制答案，第六节 Qwen-Drive 则是对 UVTR 一脉的工程实现条目（以 Qwen-Drive-1.0 为口径展开）：五个机制条目＋一条工程实现＋第七节汇总对比＋第八节"深度从哪来"专题收束，共八节——第六节不是第六种机制，而是 UVTR 式推流与 BEVFormer 式拉流在工程上的合流落地。本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、参数在 2D 侧、投影桥上还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准（UVTR 一节同此口径，取 JIA-Lab-research/UVTR 仓；VoxFormer 例外：官方仓无 nuScenes 支持，取其原生 SemanticKITTI 口径，见第五节；第六节 Qwen-Drive 取其发布仓冻结配置——nuScenes 6 相机／OpenScene 与 nuPlan 8 相机双口径），仓库地址与 commit hash 见页脚。</p>
+    <p class="intro">多相机 3D 感知的第一步，是把 2D 图像特征"放进"3D 空间——本笔记讲解七篇工作中的 2D→3D 处理：六个机制条目给出六种机制答案（前五节 LSS／UVTR／BEVFormer／TPVFormer／VoxFormer＋第七节 PETR 开出的全新谱系），第六节则是对 UVTR 一脉的工程实现条目（以 Qwen-Drive-1.0 发布仓为口径展开）——第六节不是机制条目，而是 UVTR 式推流与 BEVFormer 式拉流在工程上的合流落地：</p>
+
+    <ol class="intro-list">
+      <li><strong>LSS</strong>——《Lift, Splat, Shoot: Encoding Images From Arbitrary Camera Rigidly by Projecting 3D Points into Multi-View Feature Maps》（ECCV 2020）；</li>
+      <li><strong>UVTR</strong>——《Unifying Voxel-based Representation with Transformer for 3D Object Detection》（NeurIPS 2022）；</li>
+      <li><strong>BEVFormer</strong>——《BEVFormer: Learning Bird's-Eye-View Representation from Multi-Camera Images via Spatiotemporal Transformers》（CVPR 2022）；</li>
+      <li><strong>TPVFormer</strong>——《Tri-Perspective View for Vision-Based 3D Semantic Occupancy Prediction》（CVPR 2023）；</li>
+      <li><strong>VoxFormer</strong>——《VoxFormer: Sparse Voxel Transformer for Camera-based 3D Semantic Scene Completion》（CVPR 2023）；</li>
+      <li><strong>Qwen-Drive</strong>——UVTR 一脉的工程实现条目（Qwen-Drive-1.0 发布仓，非论文）：UVTR 式推流与 BEVFormer 式拉流的工程合流地；</li>
+      <li><strong>PETR</strong>——《Position Embedding Transformation for Multi-View 3D Object Detection》（ECCV 2022）＋ PETRv2（ICCV 2023）——同一官方仓双快照（v1 历史提交／v2 main HEAD），同节展开。</li>
+    </ol>
+
+    <p class="intro">本笔记用一组统一的问题逐个拆解：每条路线里，哪些几何由相机标定与深度/空间离散化一次性固定、不参与训练；哪些参数可学习、参数在 2D 侧、投影桥上还是 3D 侧、以什么形态存在（深度分布、采样权重、query 嵌入、深度提议、mask token）。全文机制图共用一套视觉编码：橙色实线块表示可学习参数载体，蓝色虚线加斜纹块表示固定几何（见图例）；所有具体数字以各家开源代码的 nuScenes 配置为准，仓库地址与 commit hash 见页脚。</p>
 
     <div class="legend" id="legend">
       <strong class="legend-title">统一图例</strong>
@@ -210,8 +224,9 @@
         <li><a href="#sec-tpvformer">TPVFormer：三平面（TPV）压缩 query</a></li>
         <li><a href="#sec-voxformer">VoxFormer：深度门控的稀疏 voxel query</a></li>
         <li><a href="#sec-qwendrive">Qwen-Drive 的 UVTR：推拉合流的工程落地（UVTR 推＋BEVFormer 拉）</a></li>
+        <li><a href="#sec-petr">PETR：位置编码直连——没有投影桥的 2D↔3D（全新谱系·学习直连）</a></li>
         <li><a href="#sec-summary">汇总对比：可学习参数的位置与形态 × 投影方向</a></li>
-        <li><a href="#sec-depth">深度从哪来：六家的深度谱系（专题收束）</a></li>
+        <li><a href="#sec-depth">深度从哪来：七家的深度谱系（专题收束）</a></li>
       </ol>
     </nav>
   </header>
@@ -347,7 +362,7 @@
             <span class="f3d-state" id="frustum3d-state">当前：常规视锥——8×22 个像素 × 41 档深度＝7216 个候选点（全灰等大），几何全固定</span>
           </div>
           <canvas id="frustum3d-canvas" class="f3d-canvas" role="img" aria-label="3D 视锥演示：0–4 m 空档处的相平面（8×22）与 4.0 m 起的候选点云（8×22 像素 × 41 档）；拖拽旋转视角，滑杆缩放；点亮按钮后，图像中心射线按示意深度分布 α 由橙→红→深红着色，直方图可左右拖拽移动分布中心"></canvas>
-          <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——把 2D 图像特征变成 3D 视锥候选点，是 2D→3D 的核心一步（在图C 流程图中以"Lift＝2D→3D"徽标标出）。视锥线框、远端 8×22 网格与 41 个等距深度档（4.0–44.0 m，Δd=1.0 m）是固定几何<span class="cite">src/models.py:157</span>；每个像素×每档深度张成一个候选点——8×22 像素格<span class="cite">src/models.py:156</span>×41 档＝每相机 7216 点，这就是 LSS 的视锥。相平面（8×22）画在 0–4 m 的空档里——候选点从第一档 4.0 m 才开始，光心到 4 m 之间没有数据。点亮按钮后，深度网络给每档一个权重 α_d，图像中心像素那根光轴射线按 α_d 由橙→红→深红着色（大小不变）——外积 α_d·c 的加权剖面：几何定落点，α 定权重；相平面上的中心像素格即射线起点，直方图可左右拖拽移动 α 分布中心，与 3D 着色联动。α 曲线为示意 softmax（官方仓未发布 checkpoint，非真实网络输出）。拖拽画布可旋转视角，"缩放"滑杆可拉近拉远。</p>
+          <p class="f3d-note">小结：这一抬升就是 LSS 的 <strong>Lift</strong>——固定几何定落点（41 档 × 8×22 像素＝每相机 7216 候选点），可学习深度分布 α 定权重，2D 特征由此变成 3D 视锥候选点。</p>
           <script id="frustum3d-script">
 'use strict';
 // 公共库 F3D：透视投影 / 相机基 / 画家式深度排序的画布 / 拖拽旋转 / 缩放滑杆 / 两态按钮 /
@@ -1866,6 +1881,265 @@ var F3D = {
     mountNow();
   }
 })();
+
+// PETR B 面板（petr3d）：三态单按钮循环——熄灭（6 相机线框＋每相机中心射线上的 64 档 LID
+// bins 点云全灰·不落任何格·无 query）→3D PE（bins 变橙＝可学习编码语义·位置仍固定）→
+// 全局 attention（query 球画布内自由拖动·不锁任何栅格——与 bev3d「只能拖 BEV 格」形成
+// 操作层面对照；到各相机的 soft attention 线按确定性相似度点亮：query 与各射线 bins 的
+// 距离高斯衰减，线宽／透明度∝权重，query 靠近某射线则该射线 bins 权重升高）。F3D 公共库
+// 内置两态按钮由本面板追加注册的 click 监听接管为三态循环（后注册者后执行·最终 DOM 态
+// 与画面以本面板为准）。LID 非线性分箱：d_i＝1＋bin·i(i+1)（近密远疏·1 m→61.2 m）。
+(function () {
+  var N_BINS = 64, D_MIN = 1.0, D_MAX = 61.2;      // 64 档 LID 深度 bins：1 m→61.2 m
+  var BIN = (D_MAX - D_MIN) / (63 * 64);           // d_i＝1＋bin·i(i+1)·d_63＝61.2 m（非线性）
+  var CAM_ANGLES = [0, 55, 125, 180, 235, 305];    // 六相机环视方位角（nuScenes 布置·示意）
+  var CAM_NAMES = ['CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_FRONT_LEFT', 'CAM_BACK', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT'];
+  var CAM_R = 2.0, CAM_H = 1.55, PLANE_D = 0.9;    // 相机环半径／光心高／线框像平面距离（示意）
+  var TH_H = Math.tan(40 * Math.PI / 180);         // 半视场水平正切（示意）
+  var TH_V = Math.tan(26 * Math.PI / 180);         // 半视场垂直正切（示意）
+  var G_EXT = 30;                                  // 地面参照板半宽（m·无任何格线——PETR 不落格）
+  var SIGMA = 6.0;                                 // attention 示意相似度的距离高斯衰减尺度（m）
+  var Q_EXT = 30, Q_ZMIN = -3, Q_ZMAX = 8;         // query 自由拖动边界（m·仅界外钳制·不锁栅格）
+  var CENTER = [14, 0, 1];                         // 视角中心（世界坐标）
+  var stage = 'off';                               // 三态：off（熄灭）／pe（3D PE）／attn（全局 attention）
+  var qx = 10, qy = -7, qz = 1.2;                  // query 球 3D 坐标（attn 态可自由拖动）
+
+  function camGeom(k) {
+    var t = CAM_ANGLES[k] * Math.PI / 180;
+    return {
+      o: [Math.cos(t) * CAM_R, Math.sin(t) * CAM_R, CAM_H],
+      f: [Math.cos(t), Math.sin(t), 0],
+      r: [-Math.sin(t), Math.cos(t), 0],
+      u: [0, 0, 1]
+    };
+  }
+  function planeCorner(g, sx, sy) { // 线框像平面角点（示意视锥）
+    return [
+      g.o[0] + g.f[0] * PLANE_D + g.r[0] * sx * TH_H * PLANE_D + g.u[0] * sy * TH_V * PLANE_D,
+      g.o[1] + g.f[1] * PLANE_D + g.r[1] * sx * TH_H * PLANE_D + g.u[1] * sy * TH_V * PLANE_D,
+      g.o[2] + g.f[2] * PLANE_D + g.r[2] * sx * TH_H * PLANE_D + g.u[2] * sy * TH_V * PLANE_D
+    ];
+  }
+  function binPoint(g, i) { // 相机中心射线上的第 i 档 LID bin（位置全固定）
+    var d = D_MIN + BIN * i * (i + 1);
+    return [g.o[0] + g.f[0] * d, g.o[1] + g.f[1] * d, g.o[2] + g.f[2] * d];
+  }
+  function binW(p) { // 确定性示意相似度：query 到点的距离高斯衰减（纯确定性·无随机）
+    var dx = p[0] - qx, dy = p[1] - qy, dz = p[2] - qz;
+    return Math.exp(-(dx * dx + dy * dy + dz * dz) / (2 * SIGMA * SIGMA));
+  }
+
+  function drawScene(api) {
+    var ctx = api.ctx, W = api.W, H = api.H, project = api.project;
+
+    // 地面参照板（纯色板·无格线：PETR 无 BEV 格／体素格／pillar）
+    var gf = [project([-G_EXT, -G_EXT, 0]), project([G_EXT, -G_EXT, 0]), project([G_EXT, G_EXT, 0]), project([-G_EXT, G_EXT, 0])];
+    if (gf[0] && gf[1] && gf[2] && gf[3]) {
+      ctx.beginPath();
+      ctx.moveTo(gf[0].x, gf[0].y); ctx.lineTo(gf[1].x, gf[1].y); ctx.lineTo(gf[2].x, gf[2].y); ctx.lineTo(gf[3].x, gf[3].y);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(238,245,252,0.42)';
+      ctx.fill();
+    }
+
+    // attn 态先算各相机权重（＝该相机射线 64 个 bins 的高斯衰减之和·确定性）
+    var camW = [], camWMax = 0;
+    if (stage === 'attn') {
+      for (var wk = 0; wk < CAM_ANGLES.length; wk++) {
+        var gw = camGeom(wk), s = 0;
+        for (var wi = 0; wi < N_BINS; wi++) { s += binW(binPoint(gw, wi)); }
+        camW.push(s); if (s > camWMax) { camWMax = s; }
+      }
+    }
+
+    var prims = [];
+    function seg(p1, p2, s, wt) {
+      var a = project(p1), q = project(p2);
+      if (!a || !q) { return; }
+      prims.push({ z: (a.z + q.z) / 2, t: 'l', a: a, q: q, s: s, wt: wt || 0 });
+    }
+    function dot(p, r0, fill, stroke) {
+      var a = project(p);
+      if (!a) { return; }
+      prims.push({ z: a.z, t: 'p', a: a, r: r0, f: fill, st: stroke || null });
+    }
+
+    // 自车占位（灰线框）
+    seg([-2.25, -1.1, 0], [2.25, -1.1, 0], 'ego'); seg([2.25, -1.1, 0], [2.25, 1.1, 0], 'ego');
+    seg([2.25, 1.1, 0], [-2.25, 1.1, 0], 'ego'); seg([-2.25, 1.1, 0], [-2.25, -1.1, 0], 'ego');
+
+    // 六相机环视线框＋中心射线（虚线到 61.2 m）＋64 档 LID bins 点云
+    for (var ck = 0; ck < CAM_ANGLES.length; ck++) {
+      var g = camGeom(ck);
+      var cs = [planeCorner(g, -1, -1), planeCorner(g, 1, -1), planeCorner(g, 1, 1), planeCorner(g, -1, 1)];
+      for (var ci = 0; ci < 4; ci++) {
+        seg(cs[ci], cs[(ci + 1) % 4], 'cam');
+        seg(g.o, cs[ci], 'cam');
+      }
+      seg(g.o, [g.o[0] + g.f[0] * D_MAX, g.o[1] + g.f[1] * D_MAX, g.o[2] + g.f[2] * D_MAX], 'ray');
+      for (var bi = 0; bi < N_BINS; bi++) {
+        var bp = binPoint(g, bi);
+        var ba = project(bp);
+        if (!ba) { continue; }
+        var fill, br;
+        if (stage === 'pe') { // 3D PE：bins 变橙（可学习编码语义·位置仍固定·不落格）
+          fill = 'rgba(213,94,0,0.78)'; br = 2.1;
+        } else if (stage === 'attn') { // query 靠近→该 bin 权重升高（灰底＋橙高亮）
+          var tw = binW(bp);
+          fill = tw > 0.05 ? 'rgba(213,94,0,' + (0.3 + 0.6 * tw).toFixed(3) + ')' : 'rgba(150,160,172,0.38)';
+          br = tw > 0.05 ? 2.1 : 1.7;
+        } else { // 熄灭：全灰
+          fill = 'rgba(150,160,172,0.38)'; br = 1.7;
+        }
+        prims.push({ z: ba.z, t: 'p', a: ba, r: br, f: fill });
+      }
+      var kN = 0;
+      if (stage === 'attn') { kN = camWMax > 0 ? camW[ck] / camWMax : 0; }
+      // 相机光心点：attn 态按权重点亮（线只连 query↔相机——key 侧全体 token 的抽象）
+      dot(g.o, stage === 'attn' ? 1.5 + 2.5 * kN : 1.5,
+        stage === 'attn' ? 'rgba(213,94,0,' + (0.35 + 0.55 * kN).toFixed(3) + ')' : 'rgba(150,160,172,0.5)');
+      if (stage === 'attn') { seg([qx, qy, qz], g.o, 'att', kN); }
+    }
+
+    // attn 态：query 球（橙·白描边）＋到地面的投影参考线（灰虚线·仅为空间感）
+    if (stage === 'attn') {
+      dot([qx, qy, qz], 4.5, 'rgba(213,94,0,0.95)', '#ffffff');
+      seg([qx, qy, qz], [qx, qy, 0], 'drop');
+    }
+
+    // 深度排序绘制（线与点统一按视距）
+    prims.sort(function (m, n) { return n.z - m.z; });
+    for (var pk = 0; pk < prims.length; pk++) {
+      var pr = prims[pk];
+      if (pr.t === 'l') {
+        ctx.beginPath(); ctx.moveTo(pr.a.x, pr.a.y); ctx.lineTo(pr.q.x, pr.q.y);
+        if (pr.s === 'cam') {
+          ctx.strokeStyle = 'rgba(150,160,172,0.45)'; ctx.lineWidth = 1.1; ctx.setLineDash([3, 4]);
+        } else if (pr.s === 'ray') {
+          ctx.strokeStyle = 'rgba(0,114,178,0.5)'; ctx.lineWidth = 1.1; ctx.setLineDash([5, 4]);
+        } else if (pr.s === 'ego') {
+          ctx.strokeStyle = 'rgba(120,130,142,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([]);
+        } else if (pr.s === 'drop') {
+          ctx.strokeStyle = 'rgba(120,130,142,0.45)'; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+        } else { // att：soft attention 线（线宽／透明度∝权重）
+          ctx.strokeStyle = 'rgba(213,94,0,' + (0.2 + 0.65 * pr.wt).toFixed(3) + ')';
+          ctx.lineWidth = 0.7 + 3.3 * pr.wt; ctx.setLineDash([]);
+        }
+        ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.beginPath(); ctx.arc(pr.a.x, pr.a.y, pr.r, 0, Math.PI * 2);
+        ctx.fillStyle = pr.f; ctx.fill();
+        if (pr.st) { ctx.strokeStyle = pr.st; ctx.lineWidth = 1; ctx.stroke(); }
+      }
+    }
+
+    // 标注（世界锚定）＋图例（屏幕锚定）
+    function label(p, text, dx, dy, color, size, anchor) {
+      var a = project(p); if (!a) { return; }
+      ctx.font = (size || 11) + 'px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillStyle = color || '#5a6570'; ctx.textAlign = anchor || 'left';
+      ctx.fillText(text, a.x + (dx || 0), a.y + (dy || 0));
+      ctx.textAlign = 'left';
+    }
+    var g0 = camGeom(0);
+    label(binPoint(g0, 0), '1 m', 6, 10, '#5a6570', 10);
+    label(binPoint(g0, N_BINS - 1), '61.2 m', 8, 12, '#5a6570', 10);
+    label([0, 0, CAM_H + 2.6], '6 相机环视线框＋中心射线 64 档 LID bins（1 m→61.2 m·近密远疏·不落任何格）', 0, -12, '#5a6570', 10.5, 'middle');
+    label([2.6, 0, 0], '自车', 8, 4, '#5a6570', 10.5);
+    for (var lk = 0; lk < CAM_ANGLES.length; lk++) {
+      label(planeCorner(camGeom(lk), 0, 1), CAM_NAMES[lk], 0, -5, 'rgba(90,101,112,0.85)', 9, 'middle');
+    }
+    if (stage === 'pe') {
+      label(binPoint(g0, 42), '3D PE＝坐标→签名（MLP 192→1024→256·可学习·不做对应）', 12, -10, '#D55E00', 11);
+    }
+    if (stage === 'attn') {
+      label([qx, qy, qz], 'query（可自由拖动·不锁任何栅格）', 14, -10, '#D55E00', 11);
+    }
+    ctx.font = '10.5px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = '#5a6570';
+    if (stage === 'off') {
+      ctx.fillText('● 灰＝固定几何（相机线框／中心射线／64 档 LID bins——位置全固定）　● 无 BEV 格·无体素格·点不落任何格', 14, H - 30);
+      ctx.fillText('按钮三态循环：熄灭→3D PE→全局 attention；拖拽画布空白处＝旋转视角，滑杆＝缩放', 14, H - 14);
+    } else if (stage === 'pe') {
+      ctx.fillText('● 橙＝3D PE（可学习编码语义——位置固定·签名可学习·附着于像素 key）　● bins 不落任何格、不做任何几何对应', 14, H - 30);
+      ctx.fillText('再点按钮进入全局 attention：query 自由拖动＋到各相机的 soft attention 线', 14, H - 14);
+    } else {
+      ctx.fillText('● 橙线＝query→相机 soft attention（示意相似度·query 与各射线 bins 的距离高斯衰减·确定性）　线宽／透明度∝权重', 14, H - 30);
+      ctx.fillText('● 拖 query 球＝自由移动（不锁任何栅格）　query 靠近某射线→该射线 bins 权重升高（灰底橙高亮）', 14, H - 14);
+    }
+  }
+
+  function hitTest(x, y, api) { // 仅 attn 态命中 query 球（其余态画布空白处拖＝旋转视角）
+    if (stage !== 'attn') { return null; }
+    var a = api.project([qx, qy, qz]);
+    if (!a) { return null; }
+    var dx = x - a.x, dy = y - a.y;
+    return (dx * dx + dy * dy <= 34 * 34) ? 'query' : null;
+  }
+  function onCustomDrag(mode, x, y, api) { // 屏幕→过当前 query 且垂直于视线的平面（自由 3D 拖动·不锁栅格）
+    if (mode !== 'query') { return; }
+    var F = api.H * 1.32, CX2 = api.W * 0.54, CY2 = api.H * 0.48;
+    var cp = Math.cos(api.cam.pitch), sp = Math.sin(api.cam.pitch);
+    var cyw = Math.cos(api.cam.yaw), syw = Math.sin(api.cam.yaw);
+    var eye = [CENTER[0] - api.cam.radius * cp * cyw, CENTER[1] - api.cam.radius * cp * syw, CENTER[2] + api.cam.radius * sp];
+    var w = [cp * cyw, cp * syw, -sp], u = [syw, -cyw, 0];
+    var v = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    var xc = (x - CX2) / F, yc = (CY2 - y) / F;
+    var d = [u[0] * xc + v[0] * yc + w[0], u[1] * xc + v[1] * yc + w[1], u[2] * xc + v[2] * yc + w[2]];
+    // 平面过当前 query、法向＝视线 w；d·w＝1（u／v／w 正交归一）→ t＝(Q−eye)·w
+    var t = (qx - eye[0]) * w[0] + (qy - eye[1]) * w[1] + (qz - eye[2]) * w[2];
+    if (t <= 0) { return; }
+    qx = Math.max(-Q_EXT, Math.min(Q_EXT, eye[0] + t * d[0]));
+    qy = Math.max(-Q_EXT, Math.min(Q_EXT, eye[1] + t * d[1]));
+    qz = Math.max(Q_ZMIN, Math.min(Q_ZMAX, eye[2] + t * d[2]));
+  }
+
+  var STATE_TEXT = {
+    off: '当前：熄灭——6 相机线框（示意）＋每相机中心射线上的 64 档 LID 深度 bins（d＝1＋bin·i(i+1)·1 m→61.2 m·近密远疏）全灰：不落任何格、无 query',
+    pe: '已点亮：3D PE——bins 点变橙（可学习编码语义）：每像素的 192 维坐标列（3 坐标×64 档）经 MLP 192→1024→256 译成 256 维位置签名相加进 key——点不落任何格、不做任何对应',
+    attn: '已点亮：全局 attention——query 球（900 之一·示意）可在画布内自由拖动、不锁任何栅格；到各相机的橙线＝soft attention（示意相似度：query 与各射线 bins 的距离高斯衰减·确定性），线宽／透明度∝权重；query 靠近某射线则该射线 bins 权重升高'
+  };
+  var BTN_TEXT = { off: '点亮 3D PE', pe: '点亮全局 attention', attn: '熄灭' };
+
+  function mountNow() { // 本面板 DOM 位于 script 块之后，需等 DOM 就绪再挂载
+    var inst = F3D.mount({
+      canvasId: 'petr3d-canvas',
+      toggleId: 'petr3d-toggle',
+      zoomId: 'petr3d-zoom',
+      stateId: 'petr3d-state',
+      center: CENTER,
+      yawInit: -0.5,
+      pitchInit: 0.35,
+      radiusInit: 75,
+      radiusMin: 36,
+      radiusMax: 170,
+      drawScene: drawScene,
+      hitTest: hitTest,
+      onCustomDrag: onCustomDrag,
+      stateText: function () { return STATE_TEXT[stage]; }
+    });
+    if (!inst) { return; }
+    // 三态循环监听：后于 F3D 内置两态监听注册、后执行——按钮文案／样式／状态文案以本面板为准
+    var btn = document.getElementById('petr3d-toggle');
+    var stateEl = document.getElementById('petr3d-state');
+    btn.addEventListener('click', function () {
+      stage = stage === 'off' ? 'pe' : (stage === 'pe' ? 'attn' : 'off');
+      var lit = stage !== 'off';
+      btn.textContent = BTN_TEXT[stage];
+      btn.classList.toggle('on', lit);
+      btn.setAttribute('aria-pressed', lit ? 'true' : 'false');
+      stateEl.textContent = STATE_TEXT[stage];
+      inst.redraw();
+    });
+    inst.expose(function () { return { stage: stage, qx: qx, qy: qy, qz: qz }; });
+    window.__petr3dState = function () { return inst.state(); };
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountNow);
+  } else {
+    mountNow();
+  }
+})();
           </script>
         </div>
 
@@ -2119,7 +2393,7 @@ var F3D = {
             <span class="f3d-state" id="uvtr3d-state">当前：UVTR 码放——同一视锥射线的 64 档@1 m 候选点按 z 落入 128×128×5 体素格（Z 采样点 {-5,-3,-1,1,3} m），五层保高度；点色＝示意 softmax 深度权重</span>
           </div>
           <canvas id="uvtr3d-canvas" class="f3d-canvas" role="img" aria-label="3D 两态对照演示：相机光心沿图像中心方向发出一条视锥射线（64 档@1 m、0–64 m），候选点颜色＝示意 softmax 深度权重。「UVTR 码放」态：候选点按 z 落入 128×128×5 体素格（X/Y ±51.2 m、XY 名义 0.8 m、Z 采样点 {-5,-3,-1,1,3} m），五层保高度；「LSS 拍扁」态：同一批点全部落至地面 128×128@0.8 m BEV 格、pillar 求和（格子亮度＝求和），高度当场丢、3D 层格淡出；点按钮两态互切，拖拽画布旋转视角，滑杆缩放"></canvas>
-          <p class="f3d-note">小结：同一条图像中心视锥射线、同一批 64 档@1 m（0–64 m）候选点（颜色深浅＝示意 softmax 深度权重——深度分布无监督、由检测损失回传学出，非真实网络输出），两种落点就是推家族内部的分水岭。<strong>UVTR 码放</strong>：候选点按各自的 z 落入固定体素格 128×128×5（XY 名义 0.8 m；Z 采样点 {-5,-3,-1,1,3} m、含端点）<span class="cite">uvtr_camera_base.py:12,15-19</span><span class="cite">models/utils/uni3d_viewtrans.py:199-202</span>，特征与深度概率按 (u,v,d) 加权求和入格<span class="cite">models/utils/uni3d_viewtrans.py:215-226</span>——五层 Z 格原样保留，论文自述 "preserve the 3D voxel space without collapsing in Z axis"（§3.1 p.4）。<strong>LSS 拍扁</strong>：同一批点全部垂直落至地面 128×128@0.8 m 的 2D BEV 格、pillar 求和（格子亮度＝求和）——高度当场丢。两态共用同一批点与同一套权重，差异只在落点有无 z 维——这就是第一节 LSS 与本节 UVTR 的机制分水岭；点按钮两态互切，拖拽画布旋转视角，"缩放"滑杆拉近拉远。</p>
+          <p class="f3d-note">小结：同一条射线、同一批 64 档候选点、同一套权重，<strong>UVTR 码放</strong>按 z 落入固定体素格保住高度，<strong>LSS 拍扁</strong>垂直落至 2D BEV 格丢掉高度——落点有无 z 维就是推家族内部的机制分水岭。</p>
         </div>
 
         <svg viewBox="0 0 1000 540" role="img" aria-label="UVTR 端到端流水线：可学习全在两端（2D 侧 backbone／FPN／depth_net 与 3D 侧体素编码器／decoder），投影桥零参数——体素格点、lidar2img 投影、hit 掩码、grid_sample 采样与加权求和皆参数自由">
@@ -2446,7 +2720,7 @@ var F3D = {
             <span class="f3d-state" id="bev3d-state">当前：熄灭——仅固定几何：BEV 网格（抽样）、pillar 与 4 个 z 锚、lidar2img 投影线（示意）与相机线框；拖 pillar 脚下的格可移动 query</span>
           </div>
           <canvas id="bev3d-canvas" class="f3d-canvas" role="img" aria-label="3D 拉取演示：BEV 网格（200×200＝40000 格，图示取中心局部抽样）上，聚焦 query 格的 pillar 带 4 个固定 z 锚点（−4.5～2.5 m），六相机环视线框中投影入视野者点亮；锚点到命中相机的 lidar2img 投影线为示意；在 BEV 平面拖动 pillar 脚下的 query 格，投影线与命中相机实时变化；点亮按钮后，query 格与各参考点邻域的可学习采样簇（示意，每命中相机 256 采样位）显橙；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
-          <p class="f3d-note">小结：这一拉取就是 BEVFormer 的 <strong>SCA</strong>——3D 侧的可学习 BEV query（200×200＝40000 格的 <code>bev_embedding</code><span class="cite">dense_heads/bevformer_head.py:104-105</span>）把所在格抬成 pillar，取 4 个固定 z 锚<span class="cite">modules/encoder.py:62-63</span>（−4.5、−2.167、0.167、2.5 m），经 <code>lidar2img</code> 标定投影（示意）落到命中相机的特征图上，再在投影点邻域拉取特征。熄灭时只见固定几何：网格、pillar、z 锚、投影线（示意）与相机线框；点亮后橙色 query 格与围绕各参考点散布的采样簇显橙——采样簇＝可学习偏移（示意，每命中相机 256 采样位<span class="cite">modules/spatial_cross_attention.py:245-267</span>）。在 BEV 平面拖动 pillar 脚下的 query 格：pillar 与投影线随动，投影落入视野的相机点亮、其余保持灰影（<code>bev_mask</code> 掩码，命中＝任一 z 锚入视野，固定判定<span class="cite">modules/encoder.py:95-136</span>）。拖拽画布空白处旋转视角，"缩放"滑杆拉近拉远。</p>
+          <p class="f3d-note">小结：这一拉取就是 BEVFormer 的 <strong>SCA</strong>——3D 侧的可学习 BEV query 沿 4 个固定 z 锚经 <code>lidar2img</code> 投回图像，几何定锚点、可学习偏移与权重定采样，从命中相机拉取特征写回 query。</p>
         </div>
 
         <svg id="sca-flow" viewBox="0 0 1000 400" role="img" aria-label="SCA 五步流程图：①造 query（40000 条）→②立 4 个 z 锚点、投影关联命中相机（V_hit）→③每个关联相机 256 个采样位取回特征→④a 相机内 Linear 预测分数 softmax 加权求和、④b 跨相机求和除以命中相机数→⑤output_proj 残差写回 query">
@@ -3000,7 +3274,7 @@ var F3D = {
             <span class="f3d-state" id="tpv3d-state">当前：熄灭——稠密 voxel 体积 200×200×16＝640000 格（抽样示意）占满全部预算；拖动选中体素仅见其自身移动</span>
           </div>
           <canvas id="tpv3d-canvas" class="f3d-canvas" role="img" aria-label="3D 压缩演示：200×200×16＝640000 格的稠密 voxel 体积（中心局部抽样示意）；点亮后三张正交平面 query 表——hw 200×200、zh 16×200、wz 200×16 共 46400 条——亮橙，体素体积变淡，选中体素到三平面的双线性采样连线与等权求和（零参数）标注出现；在体积内拖动选中体素，三个平面上的采样点实时跟随；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
-          <p class="f3d-note">小结：这一压缩就是 TPVFormer 的立身之本——覆盖同一范围需要稠密 voxel 200×200×16＝640000 个格槽，而三平面只要三张可学习 query 表：hw 200×200、zh 16×200、wz 200×16，合计 (40000,128)＋(3200,128)＋(3200,128)＝46400 条<span class="cite">tpvformer10/tpv_head.py:53-55</span>，仅为稠密体素的 7.25%。熄灭时全灰的体积（抽样示意）给出 640000 的代价感；点亮后三张平面表亮橙、体素退为淡影，任意格位的特征＝沿三根正交轴投影到三平面做双线性采样，再等权求和（零参数<span class="cite">tpvformer10/tpv_aggregator.py:69-84</span>，Eq.5；平面间的可学习混合在 CVHA 门控，不在聚合处）。在体积内拖动选中的体素，三个平面上的采样点实时跟随（投影与抽样密度均为示意）。拖拽画布空白处旋转视角，"缩放"滑杆拉近拉远。</p>
+          <p class="f3d-note">小结：这一压缩就是 TPVFormer 的立身之本——用三张正交平面的可学习 query 表（46400 条<span class="cite">tpvformer10/tpv_head.py:53-55</span>）替代稠密 voxel 的 640000 槽覆盖同一 3D 空间，开销仅为 7.25%。</p>
         </div>
 
         <svg viewBox="0 0 1000 444" role="img" aria-label="TPVFormer 端到端流水线（重绘自论文 Fig.4）：可学习＝三张 query 表＋采样偏移/权重＋CVHA 门控；固定＝锚点射线/投影/聚合">
@@ -3354,7 +3628,7 @@ var F3D = {
             <span class="f3d-state" id="vox3d-state">当前：熄灭——query 体网格 128×128×16 @0.4 m 全 262144 槽淡灰（抽样示意）、无激活；点亮后「激活比例」滑杆生效</span>
           </div>
           <canvas id="vox3d-canvas" class="f3d-canvas" role="img" aria-label="3D 门控演示：128×128×16 @0.4 m 的 query 体网格（全 262144 槽，抽样示意）上，离线 QPN 掩码决定谁有 query——激活集合沿可见结构不规则分布（学习得出、逐帧数据相关，非距离带）；点亮后激活的 N_p 条亮橙并带少量拉取线（示意），其余全部槽位淡橙＝可学习 mask token 广播补全（N_p→262144）；「激活比例」滑杆增减占比（示意），淡橙集恒为其补集；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
-          <p class="f3d-note">小结：这一门控就是 VoxFormer 的立身之本——全网格 128×128×16 @0.4 m 共 262144 个槽位都挂在可学习 query 表 <code>bev_embed</code> 上（(262144,128)，名片参数），但每帧只激活 N_p 条。<strong>谁被激活由一条离线链给出</strong>：外部冻结的立体深度模型 MSNet3D 对 image_2/3 立体对出深度图（off-the-shelf<span class="cite">preprocess/image2depth.sh:6-8</span>）→ 反投影伪点云、10-sweep 光线投射伪占用 → QPN（LMSCNet 改造，stage-1 单独训练）修正为 128×128×16 二值 proposal 掩码，bit-pack 存 .query 文件<span class="cite">detectors/lmscnet.py:304-317</span>；<strong>在线前向不跑深度模型也不跑 QPN，只读这份掩码</strong><span class="cite">datasets/semantic_kitti_dataset_stage2.py:332</span>——深度数值不进网络，进网络的只有"哪些 voxel 有 query"的二值判决。因此激活集合是学习出来的、逐帧数据相关的不规则掩码（沿可见表面/物体分布），<strong>不是距离带</strong>：近处空档不亮、远处建筑会亮。演示中亮橙散点与簇即其示意，「激活比例」滑杆对应论文 Table 4 的固定占比消融口径（occupancy 44.0 IoU／14.6 G vs dense 34.6／18.5 G；实际 N_p 逐帧定、无固定比例）。熄灭时全 262144 槽淡灰（抽样示意）——无激活的代价感；点亮后激活体素到相机的蓝虚线为拉取线示意（格心 <code>lidar2img</code> 投影，固定几何）；<strong>其余全部槽位淡橙——stage-2 由可学习 mask token 广播补齐（MAE 式 sparse-to-dense，N_p→262144），并非留空</strong>，淡橙集恒为激活集的补集。拖拽画布空白处旋转视角，「缩放」滑杆拉近拉远。</p>
+          <p class="f3d-note">小结：这一门控就是 VoxFormer 的立身之本——离线深度链（MSNet3D→伪占用→QPN 掩码<span class="cite">detectors/lmscnet.py:304-317</span>）决定 262144 个槽位中每帧哪些成为 voxel query，深度数值不进网络、只做二值判决。</p>
         </div>
 
         <svg viewBox="0 0 1000 470" role="img" aria-label="VoxFormer Stage-2 在线拉取与 MAE 式补全（重绘自论文 Fig.2 下排）：voxel query 表、mask token、DCA/DSA 采样偏移与两侧主干可学习，格心锚点、lidar2img 投影与上采样为固定几何">
@@ -3719,7 +3993,7 @@ var F3D = {
             <span class="f3d-state" id="qd3d-state">当前：熄灭——固定几何层：体素槽位 [16,200,200]（XY 0.512 m·Z 16 层@0.65 m，中心局部抽样示意）淡灰、相机环视线框（双口径 6/8 相机·示意）、地面 BEV 网格淡线；拖地面格可移动聚焦 query</span>
           </div>
           <canvas id="qd3d-canvas" class="f3d-canvas" role="img" aria-label="3D 合流演示：UVTR 体素 [16,200,200]（XY 0.512 m、Z 16 层@0.65 m，中心局部抽样示意）点阵淡灰、六相机环视线框（双口径 6/8 相机·示意）与地面 BEV 网格（200×200＝40000 格，抽样示意）淡线；点亮后体素点阵亮橙（UVTR 推流），地面 BEV query 格显橙（体素列经 uvtr_query_proj 压平成 40000×256 加到 bev_embedding——推拉在此合流），聚焦 query 格的 pillar 带 4 个固定 z 锚（-4.5、-1.37、1.77、4.9 m），到命中相机的蓝虚线拉取线（SCA·格心投影·固定）并点亮命中相机；在地面拖动 query 格，pillar、拉取线与命中相机随动；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
-          <p class="f3d-note">小结：这一合流就是 Qwen-Drive 的推拉并联——UVTR 支路推流：ViT 特征×118 档无监督深度（按发布仓内证据）经 voxel_pool_depth kernel 查表散射入 [16,200,200] 体素（XY 0.512 m、Z 16 层@0.65 m、X/Y ±51.2 m、Z −5.0~5.4 m）<span class="cite">view_transform.py:241-248</span><span class="cite">modeling_perception.py:67-73</span>，点亮后体素点阵亮橙；体素列经 uvtr_query_proj（Conv2d 4096→256）压平成 (40000,256) <strong>加到</strong> bev_embedding（地面 query 格显橙）<span class="cite">heads.py:244-245</span><span class="cite">modeling_perception.py:82,117-122</span>——体素不直接出框，未压平体素另喂占用支路（200×200×16·10 类）<span class="cite">perception_transformer.py:191-193</span>；检测主桥仍是 BEVFormer 式拉流：聚焦格 pillar 取 4 个固定 z 锚 {-4.5,-1.37,1.77,4.9} m<span class="cite">bev_encoder.py:201,244-248</span>，格心到命中相机的蓝虚线即 SCA 拉取线（6 层 encoder、8 头×4 层×8 点）<span class="cite">attention.py:220</span><span class="cite">bev_encoder.py:303-316</span>，命中相机点亮（任一 z 锚入视野）。相机环视取 6 画（双口径 6/8 相机：nuScenes 6、nuPlan 8）、输入固定 896×512<span class="cite">docs/perception.md:110-112</span><span class="cite">dataset.py:85</span>；环视布置与格心投影线均为示意。在地面拖动 query 格：pillar、拉取线与命中相机实时随动；拖拽画布空白处旋转视角，「缩放」滑杆拉近拉远。</p>
+          <p class="f3d-note">小结：这一合流就是 Qwen-Drive 的推拉并联——UVTR 支路把 ViT 特征×118 档深度散射入 [16,200,200] 体素、压平后<strong>加到</strong> bev_embedding<span class="cite">heads.py:244-245</span>，检测主桥仍是 BEVFormer 式 SCA 拉流，两桥仅在加成点汇合。</p>
         </div>
 
         <svg viewBox="0 0 1000 900" role="img" aria-label="Qwen-Drive 感知头端到端流水线：环视输入 896×512 经 VLM 双流抽头——LLM 主流 adaptor 出四尺度特征供拉流、ViT 流 vit_neck 与 depth_net 出 118 档深度（无监督，按发布仓内证据）；投影桥零参数（视锥格点 56×32×118、inv(lidar2img) 反投影回 ego 系、voxel_pool_depth 查表散射 kernel）；sweep 求和加 3×Conv3d 成体素后两路消费——压平 40000×256 加成 bev_embedding、未压平体素进占用支路；BEVFormer 式六层 encoder 与 900 query decoder 出检测、占用、地图三输出">
@@ -3966,7 +4240,7 @@ var F3D = {
         <li><strong>推/拉方向：推拉合流——UVTR 支路推、检测主桥拉，双桥并联。</strong>体素支路与 LSS 同族同实现范式：2D 侧枚举视锥格点（56×32×118）、显式深度分布作乘性权重、按 (b,x,y,z) rank 区间经 CUDA kernel 散射落格<span class="cite">view_transform.py:241-248</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span>；检测主桥则是 BEVFormer 式拉流——每格 query 抬 4 个固定 z 锚（{−4.5,−1.37,1.77,4.9} m）经 lidar2img 标定投影<strong>回图像</strong>（3D→2D 定锚，固定），在投影点邻域以可学习偏移/权重采样（8×4×8）、除以命中相机数后<strong>残差写回</strong>该 query，×6 层<span class="cite">bev_encoder.py:91-103</span><span class="cite">attention.py:220</span>。两桥只在一点汇合：体素压平成 (40000,256) 后<strong>加成</strong>进 bev_embedding<span class="cite">heads.py:244-245</span>，未压平体素另喂占用支路<span class="cite">perception_transformer.py:191-193</span>。与原版 UVTR 的关键差异在消费端——原版体素是 900 query 的直接采样对象（参考点 grid_sample<span class="cite">models/utils/uni3d_detr.py:270-320</span>），Qwen-Drive 的体素降格为 BEV query 的注入项，检测不再从体素拉取。</li>
         <li><strong>深度：显式分布、无监督（按发布仓内证据）。</strong>vit_neck 特征经重深度头出 118 档 softmax（0.5 m/档、1.0–60 m）<span class="cite">view_transform.py:79-100</span>；仓内无损失代码、无深度 GT<span class="cite">docs/perception.md:14</span><span class="cite">dataset.py:66-80</span>，深度仅作 kernel 内乘性权重、由下游任务梯度端到端回传——与原版 UVTR（64 档无监督<span class="cite">uvtr_camera_base.py:62</span>）同构，BEVDepth 式 LiDAR 深度监督在 Qwen-Drive-1.0 中不存在。<strong>两流核心对照：推流核心＝图像像素的深度分布（无监督）；拉流核心＝标定投影＋学习采样，无深度</strong>——合流点上体素先验定"哪里大概有什么"，拉流定"采什么、怎么加权"。</li>
         <li><strong>几何与学习的分工：桥零参数——"学习给内容与概率、几何给格点与定址"。</strong>固定几何决定"落点骨架"（视锥 arange 网格 56×32×118<span class="cite">view_transform.py:146-156</span>、inv(lidar2img)×lidar2ego 反投影回 ego 系<span class="cite">view_transform.py:200-239</span>、[16,200,200) 索引与范围掩码、rank 散射）；学习决定"特征与深度概率"（vit_neck＋重深度头）与"落格后如何混合、如何被消费"（3×Conv3d＋两路压缩＋BEV／占用／地图头）。与 LSS、原版 UVTR 同构，与 BEVFormer（桥上有 offsets/weights 学习量）相对——本节因拉流支路存在，"桥上有学习量"只对检测支路成立，推流支路的桥仍然零参数。</li>
-        <li><strong>query 有无及形态：体素支路无 query；BEV 侧 (40000,256) 网格嵌入表被 UVTR 加成，另有 900 object query（桥外）。</strong>体素格点是被动容器（与原版 UVTR 相同），差异全在消费端。全篇对比中 Qwen-Drive＝五个机制条目之外的工程合流组合：<strong>LSS 式推流（实现层）＋BEVFormer 式拉流（检测层）并联</strong>，显式深度只服务推流支路。</li>
+        <li><strong>query 有无及形态：体素支路无 query；BEV 侧 (40000,256) 网格嵌入表被 UVTR 加成，另有 900 object query（桥外）。</strong>体素格点是被动容器（与原版 UVTR 相同），差异全在消费端。全篇对比中 Qwen-Drive＝六个机制条目之外的工程合流组合：<strong>LSS 式推流（实现层）＋BEVFormer 式拉流（检测层）并联</strong>，显式深度只服务推流支路。</li>
       </ul>
 
       <h3>④ 原版 UVTR vs Qwen-Drive 五轴对比</h3>
@@ -4015,13 +4289,297 @@ var F3D = {
 
     </section>
 
-    <!-- ======================= 七、汇总 ======================= -->
+    <!-- ======================= 七、PETR ======================= -->
+    <section id="sec-petr">
+      <h2>七、PETR：位置编码直连——没有投影桥的 2D↔3D<span class="tag">谱系定位：全新谱系·学习直连——不推不拉，对应关系由 attention 自己学</span></h2>
+
+      <p>前六节的两条主路各有定义性动作：LSS／UVTR 在 2D 侧预测深度分布、沿固定视锥或体素格枚举落点（推）；BEVFormer／TPVFormer 在 3D 侧抬锚点、经标定投影回图像邻域采样（拉）。PETR（ECCV 2022）给出第三个答案——两者都不做：投影桥整体消失，换成 3D position embedding 的"软桥"。固定几何只把每个像素的候选 3D 坐标发出去，一个 MLP 把坐标译成位置签名，object query 携自己的可学习 3D 锚点签名与全部相机的全部像素签名做一次全局 cross attention，"谁对应谁"由学出的相似度决定。</p>
+
+      <div class="code-check">
+        <p><strong>口径说明（本节必读）：</strong>PETR 与 PETRv2 同出官方仓 megvii-research/PETR（README 自述 "official implementation of PETR and PETRv2"）。仓内<strong>并无 petr 分支</strong>（GitHub API 实测仅 main／flash 两分支）：v1 代码取 main 历史 commit <code>3617936</code>（PETRv2 代码于 2022-06-16 合入 main，其父链上最后一个纯 v1 提交），v2 取 main HEAD <code>f7525f9</code>——本节正文 path:line 相对 <code>code/PETR-v1/projects/</code> 书写（模型文件在 mmdet3d_plugin/ 下、配置在 configs/petr/ 下），PETRv2 小节同理相对 <code>code/PETR/projects/</code>。数字按 v1 的 nuScenes 主口径（<code>configs/petr/petr_r50dcn_gridmask_p4.py</code>：R50-DCN＋P4、512×1408）列写；query 数以代码为准——v1 全部 4 个配置 <code>num_query=900</code>（论文正文 "simply use 1500" 与代码不一致，本节引 900），v2 主配置 1500。</p>
+      </div>
+
+      <h3>① 机制总览</h3>
+      <div class="panel">
+        <svg viewBox="0 0 1000 460" role="img" aria-label="PETR 位置编码直连总览（重绘自论文 Fig.1(c) 与 Fig.2 与 Fig.3）：图像 token 网格与视锥 64 档 LID 射线为固定几何（蓝虚线），position_encoder MLP 把每像素 192 维坐标列译成 3D PE（橙·桥上唯一可学习量·不做几何对应），6 相机全部 token 拼成 16,896 个 key（特征＋3D PE 相加·PE 只进 K 不进 V），900 个 object query 携可学习连续 3D 锚点以一条粗 attention 线横扫全部 key——全图无 3D→2D 投影线、无采样簇">
+          <!-- ===== A · 位置编码直连（重绘自论文 Fig.1(c)＋Fig.2＋Fig.3）===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="24" font-size="14" font-weight="600" fill="#37424d">A · 位置编码直连（重绘自论文 Fig.1(c)＋Fig.2＋Fig.3）：几何只发坐标、MLP 只译签名、attention 学对应</text>
+
+            <text x="185" y="56" text-anchor="middle" font-size="11.5" font-weight="600" fill="#37424d">① 每像素：视锥 3D 锚点 → 3D PE</text>
+            <text x="535" y="56" text-anchor="middle" font-size="11.5" font-weight="600" fill="#37424d">② key＝特征＋3D PE（6 相机拼接）</text>
+            <text x="840" y="56" text-anchor="middle" font-size="11.5" font-weight="600" fill="#37424d">③ object query → 全局 attention</text>
+
+            <rect x="30" y="70" width="120" height="110" rx="3" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <line x1="54" y1="70" x2="54" y2="180" stroke="#dfe3e8" stroke-width="1"></line>
+            <line x1="78" y1="70" x2="78" y2="180" stroke="#dfe3e8" stroke-width="1"></line>
+            <line x1="102" y1="70" x2="102" y2="180" stroke="#dfe3e8" stroke-width="1"></line>
+            <line x1="126" y1="70" x2="126" y2="180" stroke="#dfe3e8" stroke-width="1"></line>
+            <line x1="30" y1="94" x2="150" y2="94" stroke="#dfe3e8" stroke-width="1"></line>
+            <line x1="30" y1="118" x2="150" y2="118" stroke="#dfe3e8" stroke-width="1"></line>
+            <line x1="30" y1="142" x2="150" y2="142" stroke="#dfe3e8" stroke-width="1"></line>
+            <line x1="30" y1="166" x2="150" y2="166" stroke="#dfe3e8" stroke-width="1"></line>
+            <rect x="102" y="118" width="24" height="24" fill="#eef0f2" stroke="#4a5560" stroke-width="1.5"></rect>
+            <text x="90" y="196" text-anchor="middle" font-size="9.5" fill="#5a6570">图像 token（P4 /16·数据）</text>
+            <text x="90" y="210" text-anchor="middle" font-size="9.5" fill="#5a6570">每相机 32×88＝2816</text>
+
+            <path class="flow" d="M 150 112 C 250 84, 360 80, 450 84"></path>
+            <text x="300" y="74" text-anchor="middle" font-size="9.5" fill="#5a6570">2D 特征（256 维·作 value）</text>
+
+            <line class="fixed" x1="114" y1="130" x2="345" y2="232"></line>
+            <circle cx="132.5" cy="138.2" r="3.5" fill="#0072B2"></circle>
+            <circle cx="148.7" cy="145.3" r="3.5" fill="#0072B2"></circle>
+            <circle cx="164.8" cy="152.4" r="3.5" fill="#0072B2"></circle>
+            <circle cx="185.6" cy="161.6" r="3.5" fill="#0072B2"></circle>
+            <circle cx="208.7" cy="171.8" r="3.5" fill="#0072B2"></circle>
+            <circle cx="236.4" cy="183.1" r="3.5" fill="#0072B2"></circle>
+            <circle cx="266.5" cy="195.3" r="3.5" fill="#0072B2"></circle>
+            <circle cx="298.8" cy="208.6" r="3.5" fill="#0072B2"></circle>
+            <circle cx="333.5" cy="222.9" r="3.5" fill="#0072B2"></circle>
+            <path class="flow" d="M 345 232 C 340 236, 330 238, 318 240"></path>
+
+            <line class="flow" x1="90" y1="216" x2="90" y2="236"></line>
+            <rect class="learnable" x="30" y="240" width="300" height="74" rx="4" style="stroke-width:2.5"></rect>
+            <text x="180" y="258" text-anchor="middle" font-size="11" font-weight="bold" fill="#37424d">position_encoder＝MLP（可学习·桥上唯一）</text>
+            <text x="180" y="274" text-anchor="middle" font-size="9.5">Conv1×1(192→1024)＋ReLU＋Conv1×1(1024→256)</text>
+            <text x="180" y="290" text-anchor="middle" font-size="9.5">输入＝每像素 192 维坐标列（3 坐标×64 深度档）</text>
+            <text x="180" y="306" text-anchor="middle" font-size="9.5">只学"坐标→签名"：不做几何对应、不采样</text>
+
+            <text x="185" y="336" text-anchor="middle" font-size="9.5" fill="#0072B2">视锥 64 档 LID·1–61.2 m（近密远疏·图示抽稀）【固定几何】</text>
+            <text x="185" y="352" text-anchor="middle" font-size="9.5" fill="#5a6570">齐次化→inv(lidar2img) 反投影→RoI ±61.2/±10 归一（零参数）</text>
+
+            <path class="flow" d="M 330 277 C 368 272, 402 252, 436 230"></path>
+            <text x="383" y="296" text-anchor="middle" font-size="9.5" fill="#D55E00">3D PE 相加进 K</text>
+
+            <rect x="440" y="80" width="190" height="270" rx="3" fill="#f3f5f7" stroke="#D55E00" stroke-width="2"></rect>
+            <line x1="440" y1="107" x2="630" y2="107" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="134" x2="630" y2="134" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="161" x2="630" y2="161" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="188" x2="630" y2="188" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="215" x2="630" y2="215" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="242" x2="630" y2="242" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="269" x2="630" y2="269" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="296" x2="630" y2="296" stroke="#E3C8A5" stroke-width="1"></line>
+            <line x1="440" y1="323" x2="630" y2="323" stroke="#E3C8A5" stroke-width="1"></line>
+            <text x="535" y="72" text-anchor="middle" font-size="9.5" fill="#5a6570">6 相机×2816＝16,896 keys</text>
+            <text x="535" y="100" text-anchor="middle" font-size="9">特征＋3D PE</text>
+            <text x="535" y="127" text-anchor="middle" font-size="9">特征＋3D PE</text>
+            <text x="535" y="180" text-anchor="middle" font-size="10">…</text>
+            <text x="535" y="341" text-anchor="middle" font-size="9">（共 16,896）</text>
+            <text x="535" y="370" text-anchor="middle" font-size="9.5" fill="#5a6570">key＝特征＋PE 相加（PE 只进 K、不进 V）</text>
+            <text x="535" y="386" text-anchor="middle" font-size="9.5" fill="#5a6570">拼接无逐相机分组·key_padding_mask 屏蔽 pad 与超 RoI</text>
+
+            <rect class="learnable" x="700" y="80" width="260" height="78" rx="4"></rect>
+            <text x="830" y="100" text-anchor="middle" font-size="11" font-weight="bold">900 object query（可学习·3D 侧）</text>
+            <text x="830" y="117" text-anchor="middle" font-size="9.5">锚点＝nn.Embedding(900,3)</text>
+            <text x="830" y="133" text-anchor="middle" font-size="9.5">连续 3D 坐标·不锁 BEV／体素栅格</text>
+            <text x="830" y="149" text-anchor="middle" font-size="9.5">锚点→正弦编码→MLP 出 query_pos</text>
+
+            <line x1="700" y1="130" x2="432" y2="308" stroke="#D55E00" stroke-width="5" stroke-opacity="0.45" stroke-linecap="round"></line>
+            <text x="560" y="286" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#D55E00">Q·K 相似度＝隐式对应</text>
+            <text x="706" y="176" font-size="9.5" fill="#D55E00">一条粗 attention 线横扫全部 key</text>
+            <text x="706" y="192" font-size="9.5" fill="#D55E00">谁对应谁由 Q·K 相似度学出</text>
+
+            <line class="flow" x1="920" y1="158" x2="920" y2="246"></line>
+            <rect class="learnable" x="700" y="250" width="260" height="64" rx="4"></rect>
+            <text x="830" y="270" text-anchor="middle" font-size="11">6 层 decoder（可学习·3D 侧）</text>
+            <text x="830" y="287" text-anchor="middle" font-size="9.5">self MHA＋全局 cross MHA（各 8 头）</text>
+            <text x="830" y="303" text-anchor="middle" font-size="9.5">＋FFN 256→2048→256</text>
+
+            <line class="flow" x1="830" y1="314" x2="830" y2="338"></line>
+            <rect x="700" y="340" width="260" height="54" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="830" y="360" text-anchor="middle" font-size="10.5">cls/reg 相对锚点回归（数据）</text>
+            <text x="830" y="377" text-anchor="middle" font-size="9.5">NMSFreeCoder 取 300 框（±61.2 m）</text>
+
+            <text x="500" y="420" text-anchor="middle" font-size="10.5" fill="#4a5560">与前六节 A 图的最大视觉差异：全图没有一条 3D→2D 投影线、没有一个采样簇、没有深度分布柱——投影桥消失，3D PE 软桥接管</text>
+            <text x="500" y="440" text-anchor="middle" font-size="10.5" fill="#5a6570">注记：D＝64@LID（1–61.2 m）；MLP 192→1024→256；P4 /16（每相机 32×88）；900 query；PE 相加进 K、不进 V</text>
+          </g>
+        </svg>
+
+        <div id="petr3d" class="f3d-panel">
+          <p class="f3d-title">B · 3D 视锥：像素射线的 64 档 LID bins——熄灭→3D PE→全局 attention（三态单按钮·可拖拽旋转）</p>
+          <div class="f3d-controls">
+            <button id="petr3d-toggle" class="f3d-toggle" type="button" aria-pressed="false">点亮 3D PE</button>
+            <label class="f3d-zoom"><span>缩放</span><input type="range" id="petr3d-zoom" class="f3d-zoom-input" min="36" max="170" value="75" step="1" aria-label="场景缩放"></label>
+            <span class="f3d-state" id="petr3d-state">当前：熄灭——6 相机线框（示意）＋每相机中心射线上的 64 档 LID 深度 bins（d＝1＋bin·i(i+1)·1 m→61.2 m·近密远疏）全灰：不落任何格、无 query</span>
+          </div>
+          <canvas id="petr3d-canvas" class="f3d-canvas" role="img" aria-label="3D 三态演示：六相机环视线框（示意），每相机中心射线上 64 档 LID 深度 bins（1 m→61.2 m·近密远疏），点不落任何格。按钮三态循环：熄灭＝bins 全灰；3D PE 态＝bins 变橙（可学习编码语义）；全局 attention 态＝出现可自由拖动的 query 球（不锁任何栅格），到各相机的 soft attention 线按距离高斯衰减点亮（线宽与透明度随权重），query 靠近某射线则该射线 bins 权重升高；拖拽画布空白处旋转视角，滑杆缩放"></canvas>
+          <p class="f3d-note">小结：PETR 的 2D→3D＝给每个像素的射线 bins 发 3D 位置编码（64 档 LID 固定 bins＋可学习 MLP 192→1024→256），900 个 query 与全像素全局 attention 学出对应——没有投影桥，bins 不落任何格。</p>
+        </div>
+
+        <svg id="petr-flow" viewBox="0 0 1000 480" role="img" aria-label="PETR 七步流程：①标定 lidar2img（固定几何）→②ResNet-50 与 CPFPN 出 P4 特征（可学习·2D 侧）→③视锥 64 档 LID meshgrid 与 img2lidar 反投影加 RoI 归一（固定几何）→④position_encoder MLP 192 到 1024 到 256 出 3D PE（可学习·桥上·全篇唯一不做对应的桥上学习量）→⑤加多相机 2D PE 相加并拼接 6 相机全部 token 成 16,896 个 key（固定拼接）→⑥900 query 携可学习 3D 锚点做 6 层全局 cross attention（可学习·3D 侧·attention 即隐式对应）→⑦cls/reg 相对锚点回归出 3D 框（可学习·3D 下游）">
+          <!-- ===== C · 七步流程 ===== -->
+          <g font-size="13" fill="#2b3440">
+            <text x="16" y="34" font-size="14" font-weight="600" fill="#37424d">C · 七步流程：标定→P4 特征→视锥反投影→PE 软桥→key 拼接→全局 attention→出框</text>
+
+            <rect class="fixed" x="20" y="66" width="205" height="118" rx="4"></rect>
+            <text x="122" y="88" text-anchor="middle" font-size="11" font-weight="600">① 标定 lidar2img【固定几何】</text>
+            <text x="122" y="106" text-anchor="middle" font-size="9.5">每相机 4×4＝内参@lidar2cam</text>
+            <text x="122" y="122" text-anchor="middle" font-size="9.5">3D 增广逆矩阵右乘折入 lidar2img</text>
+            <text x="122" y="138" text-anchor="middle" font-size="9.5">图像增广左乘折入内参</text>
+            <text x="122" y="156" text-anchor="middle" font-size="9" fill="#5a6570">（进模型前已折入·桥上无撤销）</text>
+
+            <line class="flow" x1="227" y1="125" x2="261" y2="125"></line>
+
+            <rect class="learnable" x="265" y="66" width="205" height="118" rx="4"></rect>
+            <text x="367" y="88" text-anchor="middle" font-size="11" font-weight="600">② Backbone＋FPN【可学习·2D】</text>
+            <text x="367" y="106" text-anchor="middle" font-size="9.5">ResNet-50＋DCNv2（stage3/4）</text>
+            <text x="367" y="122" text-anchor="middle" font-size="9.5">CPFPN→P4 256ch@/16</text>
+            <text x="367" y="138" text-anchor="middle" font-size="9.5">＋input_proj 1×1（256→256）</text>
+            <text x="367" y="156" text-anchor="middle" font-size="9" fill="#5a6570">→(B,6,256,32,88)</text>
+
+            <line class="flow" x1="472" y1="125" x2="506" y2="125"></line>
+
+            <rect class="fixed" x="510" y="66" width="205" height="118" rx="4"></rect>
+            <text x="612" y="88" text-anchor="middle" font-size="11" font-weight="600">③ 视锥反投影【固定几何】</text>
+            <text x="612" y="106" text-anchor="middle" font-size="9.5">meshgrid 88×32×64·LID 档</text>
+            <text x="612" y="122" text-anchor="middle" font-size="9.5">d_i＝1＋bin·i(i+1)·1–61.2 m</text>
+            <text x="612" y="138" text-anchor="middle" font-size="9.5">齐次化→inv(lidar2img)</text>
+            <text x="612" y="156" text-anchor="middle" font-size="9" fill="#5a6570">RoI ±61.2/±10 归一＋超界掩码</text>
+
+            <line class="flow" x1="717" y1="125" x2="751" y2="125"></line>
+
+            <rect class="learnable" x="755" y="66" width="205" height="118" rx="4" style="stroke-width:2.5"></rect>
+            <text x="857" y="88" text-anchor="middle" font-size="11" font-weight="bold">④ 3D PE 生成【可学习·桥上】</text>
+            <text x="857" y="106" text-anchor="middle" font-size="9.5">position_encoder MLP</text>
+            <text x="857" y="122" text-anchor="middle" font-size="9.5">192→1024→256（ReLU）</text>
+            <text x="857" y="138" text-anchor="middle" font-size="9" fill="#D55E00">全篇唯一：桥上可学习</text>
+            <text x="857" y="156" text-anchor="middle" font-size="9" fill="#D55E00">且不做采样／投影对应</text>
+
+            <path class="flow" d="M 857 184 C 857 220, 460 205, 163 246"></path>
+
+            <rect class="fixed" x="20" y="250" width="280" height="118" rx="4"></rect>
+            <text x="160" y="272" text-anchor="middle" font-size="11" font-weight="600">⑤ key 拼接【固定拼接】</text>
+            <text x="160" y="290" text-anchor="middle" font-size="9.5">＋多相机 2D PE 相加（adapt_pos3d·2D 侧可学习）</text>
+            <text x="160" y="306" text-anchor="middle" font-size="9.5">6 相机全部 P4 token 拼成单一 key 序列</text>
+            <text x="160" y="322" text-anchor="middle" font-size="9.5">＝16,896 keys·PE 只进 K、不进 V</text>
+            <text x="160" y="340" text-anchor="middle" font-size="9" fill="#5a6570">key_padding_mask 屏蔽 pad 与超 RoI</text>
+
+            <line class="flow" x1="302" y1="309" x2="346" y2="309"></line>
+
+            <rect class="learnable" x="350" y="250" width="280" height="118" rx="4"></rect>
+            <text x="490" y="272" text-anchor="middle" font-size="11" font-weight="600">⑥ 全局 cross attention【可学习·3D】</text>
+            <text x="490" y="290" text-anchor="middle" font-size="9.5">900 query＝可学习 3D 锚点 (900,3)</text>
+            <text x="490" y="306" text-anchor="middle" font-size="9.5">×6 层：self＋cross（各 8 头）＋FFN</text>
+            <text x="490" y="322" text-anchor="middle" font-size="9.5">attention 权重＝隐式对应</text>
+            <text x="490" y="340" text-anchor="middle" font-size="9" fill="#5a6570">（无投影、无采样、无 deformable）</text>
+
+            <line class="flow" x1="632" y1="309" x2="676" y2="309"></line>
+
+            <rect class="learnable" x="680" y="250" width="280" height="118" rx="4"></rect>
+            <text x="820" y="272" text-anchor="middle" font-size="11" font-weight="600">⑦ 出框【可学习·3D 下游】</text>
+            <text x="820" y="290" text-anchor="middle" font-size="9.5">cls/reg（v1：6 层共享同一实例）</text>
+            <text x="820" y="306" text-anchor="middle" font-size="9.5">xy、z 相对 3D 锚点回归</text>
+            <text x="820" y="322" text-anchor="middle" font-size="9.5">NMSFreeCoder 取 300 框</text>
+            <text x="820" y="340" text-anchor="middle" font-size="9" fill="#5a6570">监督：Focal(2.0)＋L1(0.25)·无深度损失</text>
+
+            <rect class="fixed" x="20" y="392" width="40" height="18" rx="2"></rect>
+            <text x="68" y="405" font-size="9.5">固定几何：①③（零参数）＋⑤ 的拼接</text>
+            <rect class="learnable" x="500" y="392" width="40" height="18" rx="2"></rect>
+            <text x="548" y="405" font-size="9.5">可学习：②（2D 侧）·④（桥上·全篇唯一）·⑥⑦（3D 侧）</text>
+
+            <text x="500" y="436" text-anchor="middle" font-size="10.5" fill="#4a5560">形状流：(B,6,3,512,1408)→(B,6,256,32,88)→key (6·2816,B,256)＝16,896 条×(900,B,256) query→6 层 decoder→(6,B,900,10)</text>
+            <text x="500" y="458" text-anchor="middle" font-size="10.5" fill="#5a6570">对照：LSS／UVTR 桥零参数、BEVFormer 桥上学习量做投影采样——PETR 的 ④ 桥上可学习但不做对应，为全篇唯一</text>
+          </g>
+        </svg>
+        <p>软桥直连：视锥 64 档 LID 网格、img2lidar 反投影与 RoI 归一是纯固定几何——零参数、零采样输出，只把每像素 64 个候选 3D 坐标（归一后 192 维坐标列）交出去<span class="cite">dense_heads/petr_head.py:282-322</span>；桥上唯一的可学习量是 position_encoder（Conv1×1 192→1024＋ReLU＋Conv1×1 1024→256）<span class="cite">dense_heads/petr_head.py:258-263</span>，它不采样、不投影，只把坐标译成 256 维位置签名，与图像特征相加进 key（PE 只进 K、不进 V<span class="cite">utils/petr_transformer.py:341-344</span>）；6 相机全部 P4 token 拼成 16,896 个 key<span class="cite">utils/petr_transformer.py:70-110</span>，900 个 object query 携可学习 3D 锚点与全部 key 做 6 层全局 cross attention——投影桥整体消失，"谁对应谁"由 Q·K 内积学出。监督只有 Focal(2.0)＋L1(0.25)，无任何深度损失<span class="cite">configs/petr/petr_r50dcn_gridmask_p4.py:94-101</span>。</p>
+      </div>
+
+      <h3>② 可学习参数清单</h3>
+      <table class="param-table">
+        <thead>
+          <tr><th>参数名</th><th>张量形状（nuScenes v1 口径）</th><th>挂载侧</th><th>代码出处</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>img_backbone</code>（ResNet-50＋DCNv2 stage3/4，BN 冻结 norm_eval）</td>
+            <td>消费 /16、/32 两 stage（1024/2048 ch）</td>
+            <td>2D 侧</td>
+            <td><span class="cite">configs/petr/petr_r50dcn_gridmask_p4.py:29-42</span></td>
+          </tr>
+          <tr>
+            <td><code>img_neck</code>（CPFPN）</td>
+            <td>2×lateral 1×1（1024→256、2048→256）＋level0 3×3 conv；出 /16、/32 各 256ch（/32 层未被 head 消费）</td>
+            <td>2D 侧</td>
+            <td><span class="cite">necks/cp_fpn.py:111-134</span> <span class="cite">dense_heads/petr_head.py:374</span></td>
+          </tr>
+          <tr>
+            <td><code>input_proj</code>（1×1 Conv2d）</td>
+            <td>Conv2d(256,256,1×1)</td>
+            <td>2D 侧（桥前接口）</td>
+            <td><span class="cite">dense_heads/petr_head.py:216-220</span></td>
+          </tr>
+          <tr>
+            <td><strong><code>position_encoder</code>（3D PE 生成 MLP——本模型的机制名片：桥上唯一可学习量）</strong></td>
+            <td>Conv1×1(<strong>192</strong>→1024)＋ReLU＋Conv1×1(1024→<strong>256</strong>)（192＝3 坐标×64 深度档）</td>
+            <td><strong>桥上</strong>（不做几何对应、不采样——只学"坐标→签名"）</td>
+            <td><span class="cite">dense_heads/petr_head.py:258-263</span></td>
+          </tr>
+          <tr>
+            <td><code>adapt_pos3d</code>（多相机 2D PE 适配）</td>
+            <td>Conv1×1(384→1024)＋ReLU＋Conv1×1(1024→256)（384＝SinePositionalEncoding3D 3×128）</td>
+            <td>2D 侧（相机区分先验，可选组件）</td>
+            <td><span class="cite">dense_heads/petr_head.py:245-250</span></td>
+          </tr>
+          <tr>
+            <td><code>reference_points</code>（<strong>3D 锚点表，可学习</strong>）</td>
+            <td><code>nn.Embedding(900, 3)</code>（uniform(0,1) 初始化；v2 主口径 1500×3）</td>
+            <td>3D 侧（query 锚点·框回归的偏移基准）</td>
+            <td><span class="cite">dense_heads/petr_head.py:265,276</span></td>
+          </tr>
+          <tr>
+            <td><code>query_embedding</code>（锚点→query_pos 编码）</td>
+            <td>Linear(384,256)＋ReLU＋Linear(256,256)（384＝pos2posemb3d 3×128；query 内容恒为零，输入即 query_pos）</td>
+            <td>3D 侧</td>
+            <td><span class="cite">dense_heads/petr_head.py:266-270</span></td>
+          </tr>
+          <tr>
+            <td>decoder 每层 self MHA＋cross MHA＋FFN ×6 层</td>
+            <td>MHA 256ch/8 头（cross＝普通全局 nn.MultiheadAttention，无 sampling_offsets／attention_weights）；FFN 256→2048→256；LN ×3</td>
+            <td>3D 侧（attention＝隐式对应）</td>
+            <td><span class="cite">utils/petr_transformer.py:271-272</span> <span class="cite">configs/petr/petr_r50dcn_gridmask_p4.py:59-83</span></td>
+          </tr>
+          <tr>
+            <td>cls/reg 分支（<strong>v1：6 层共享同一实例</strong>）</td>
+            <td>cls 2×(Linear256＋LN＋ReLU)＋Linear(256→10)；reg 2×(Linear256＋ReLU)＋Linear(256→10)</td>
+            <td>3D 侧（桥外下游）</td>
+            <td><span class="cite">dense_heads/petr_head.py:222-243</span></td>
+          </tr>
+          <tr>
+            <td><strong>无项（专列）</strong></td>
+            <td><strong>无</strong>深度头、<strong>无</strong> bev_embedding、<strong>无</strong>体素格参数、<strong>无</strong> deformable 偏移／权重表（grep 实证：bev_embedding 全仓 0 命中；voxel 仅基类未构建形参；deformable 类为 detr3d 遗留死代码，4 个 v1 配置零引用）</td>
+            <td>—</td>
+            <td><span class="cite">detectors/petr3d.py:31-32</span> <span class="cite">utils/detr.py:34</span> <span class="cite">utils/detr3d_transformer.py:17</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>张量形状按 v1 快照的 nuScenes 主口径（512×1408、900 query）列写，PETRv2 的增补参数（FPE 门控、解耦回归头、BEV 分割 query）见节末小节。要点：<strong>投影桥本身——视锥 LID 网格、img2lidar 反投影、RoI 归一——零参数</strong>，与 LSS／UVTR 同为"几何零参数"；差异在 PETR 在桥上挂了一个可学习 MLP（position_encoder），但它不建立对应关系（无采样、无投影输出），只把几何坐标译成签名——这是全篇笔记<strong>唯一"桥上有可学习量且不做任何采样／投影对应"</strong>的条目（对比：BEVFormer 桥上 offsets／weights 做投影采样、LSS／UVTR 桥零参数）。论文未给总参数量，本表不引。</p>
+
+      <h3>③ 2D-3D 关系</h3>
+      <p>PETR 对"2D 特征如何进入 3D"的回答可归纳为四点：</p>
+      <ul>
+        <li><strong>推/拉方向：都不算（新谱系＝学习直连）。</strong>无特征流"过桥"：不预测深度分布（推家族定义性特征缺席）、不做 3D→2D 投影采样（拉家族定义性特征缺席）。2D↔3D 对应关系<strong>隐式成立于 Q·K 内积</strong>——固定几何只把每像素的 64 个候选 3D 坐标译成位置签名（3D PE），object query 用自己的可学习 3D 锚点签名与全部相机的全部像素签名做全局 attention，"谁对应谁"由学出的相似度决定<span class="cite">utils/petr_transformer.py:70-110</span>。投影桥整体消失，换成"PE 软桥"。</li>
+        <li><strong>深度：不预测数值、不监督。</strong>视锥 64 LID bins 仍然存在，但只是 3D PE 的原料（每像素 192 维坐标列），既无 softmax 深度分布（对比 LSS／UVTR 的显式分布、BEVDepth 的深度监督），也无深度回归或深度损失——损失只有 Focal＋L1，全仓 grep 于 v1 模型目录仅命中 depth_num 等超参<span class="cite">configs/petr/petr_r50dcn_gridmask_p4.py:94-101</span><span class="cite">dense_heads/petr_head.py:687-711</span>。深度不确定性由全局 attention 权重隐式分配：一个 query 的锚点签名与"远 bin 坐标签名""近 bin 坐标签名"的相似度差，就是隐式的深度选择——PETR 是全篇唯一"视锥 bins 存在但既不推特征也不监督深度"的条目（深度谱系收束见第九节）。</li>
+        <li><strong>几何与学习的分工：边界移位。</strong>固定几何退到"只发坐标"——lidar2img 求逆、LID 视锥网格、RoI 归一、超界掩码，全部零参数、零采样输出<span class="cite">dense_heads/petr_head.py:282-322</span>；可学习量第一次出现在<strong>桥上</strong>（position_encoder MLP，v2 再加 FPE 门控）——但桥上学习量不做几何对应，与 BEVFormer"桥上学习量做投影采样"形成精确对照。两端（2D backbone／FPN、3D 锚点／decoder／输出头）如常可学习。</li>
+        <li><strong>query 有无及形态：900 个稀疏、自由 3D 坐标、无网格绑定（代码口径）。</strong>锚点是 <code>nn.Embedding(900,3)</code> 的连续可学习 3D 坐标——不落任何 BEV 格／体素格（论文 Tab.5(c)：Fix-BEV 39×39 与 Fix-3D 16×16×6 均差于 Learned-3D）；decoder 全局 attention 无逐 query 投影<span class="cite">dense_heads/petr_head.py:265,276</span>。与 BEVFormer 的 bev_embedding（40000 BEV 格 query）、UVTR 的体素格（被填充物）均成对照；论文正文"1500 锚点"与代码 900 不一致，本节以代码为准。</li>
+      </ul>
+
+      <h3>④ PETRv2 补充：数据层时序、特征门控与 BEV 回流</h3>
+      <p>PETRv2（ICCV 2023）与 v1 同仓同源（v2＝main HEAD 快照）：decoder 主路径与 v1 逐字节一致（两快照 diff 实证），差异集中在输入与 3D PE 生成。以下按 v2 主口径（V2-99、640×1600、1500 query、CBGS）展开<span class="cite">configs/petrv2/petrv2_vovnet_gridmask_p4_1600x640_trainval_cbgs.py:45</span>。</p>
+      <p><strong>时序：数据层历史 sweep 对齐＋12 图全局 key（query 不传播）。</strong>pipeline 追加 1 个历史 sweep（训练随机取 0.25–2.25 s 前、推理取约 1.25 s 前）→ 每样本 12 张图（当前 6＋历史 6），各带自己的 lidar2img；<strong>对齐在数据层完成</strong>——sweep 的 lidar2img 已在当前帧 lidar 系、直接 append（模型与管线内无显式 pose 矩阵乘法，论文 Eq.(2)(3) 的坐标变换在 pkl 生成时烘焙进 sweep 外参，README 原句 "transformation matrix is aligned with the current frame"）<span class="cite">datasets/pipelines/loading.py:28-138</span><span class="cite">configs/petrv2/petrv2_vovnet_gridmask_p4_1600x640_trainval_cbgs.py:160-161</span>。于是历史帧像素的 3D PE 与当前帧同坐标系：同一 3D 锚点（当前帧坐标）在两帧的 key 中获得相近签名，attention 跨帧一致；<strong>query 不做历史传播</strong>（区别于 StreamPETR 的 query 队列），with_time 仅把速度回归除以历史帧与当前帧时间戳差的均值<span class="cite">dense_heads/petrv2_head.py:489-495</span>。12 图共 48,000 个 key 参与同一次全局 attention。</p>
+      <p><strong>feature-guided position encoder（FPE）：桥上第二个可学习量。</strong>3D PE 从纯几何变为"几何×特征"联合生成：SELayer（conv_reduce 1×1 256→256＋ReLU＋conv_expand 1×1 256→256＋Sigmoid）对图像特征算门控 g(F)，3D PE ← PE·g(F)（论文 Eq.(5)"data-dependent"）<span class="cite">dense_heads/petrv2_head.py:45-57</span>——图像特征第一次直接参与桥上的签名生成，但仍然不采样、不做投影对应。另有解耦回归（with_multi）：RegLayer 共享两层 Linear＋5 个任务头（xy2、z1、size3、rot2、velo2），cls/reg 改为 6 层 deepcopy 独立（v1 为共享别名）<span class="cite">dense_heads/petrv2_head.py:59-90</span>。</p>
+      <p><strong>BEV 分割 query：v2 向 BEV 方向的回流。</strong>BEVseg 配置加 625 条分割 query＝25×25 固定 BEV 格心锚点（(i+0.5)/25 的普通张量、非 nn.Embedding）＋query MLP 编码，与检测 query 共用同一批全局 key；decoder 6 层输出 reshape (25,25) 后经三个 Decoder（blocks [256,256,128]，每块上采样 ×2：25→50→100→200）出 200×200×3 地图（drivable／lane-divider／vehicle），FocalLoss 逐类监督<span class="cite">dense_heads/petr_head_seg.py:373-383</span>——稀疏自由锚点之外，v2 也示范了"锁 BEV 栅格"的用法，与第一节 LSS 的固定网格落点遥相呼应。</p>
+      <p><strong>谱系延伸：一句话点名。</strong>沿"位置编码直连"这条谱系，后续 StreamPETR（时序 query 传播）、CMT 等继续演化——均不属本笔记范围，不展开。</p>
+
+    </section>
+
+    <!-- ======================= 八、汇总 ======================= -->
     <section id="sec-summary">
-      <h2>七、汇总对比<span class="tag">谱系：无 query → 推·3D 体素码放 → 稠密 query → 三平面压缩 query → 深度门控稀疏 query → 推拉合流</span></h2>
+      <h2>八、汇总对比<span class="tag">谱系：无 query → 推·3D 体素码放 → 稠密 query → 三平面压缩 query → 深度门控稀疏 query → 推拉合流 → 位置编码直连</span></h2>
 
-      <p>前六节逐家拆完了"哪些几何固定、哪些参数可学习"；本节把各家放到同一张表与同一张坐标图上。大表的每个单元格均可回溯到对应分册底稿的具体行（出处以 <span class="cite">…</span> 标注）；谱系图的坐标轴取本笔记的两条主轴——<strong>可学习参数所在侧</strong>（纵轴：2D 侧／桥两端／3D 侧 query 主导）与<strong>投影方向</strong>（横轴：推 push／拉 pull），六家在图上的落位即"query 从无到稠密到压缩到稀疏门控、再到推拉合流"的演化叙事。</p>
+      <p>前七节逐家拆完了"哪些几何固定、哪些参数可学习"；本节把各家放到同一张表与同一张坐标图上。大表的每个单元格均可回溯到对应分册底稿的具体行（出处以 <span class="cite">…</span> 标注）；谱系图的坐标轴取本笔记的两条主轴——<strong>可学习参数所在侧</strong>（纵轴：2D 侧／桥两端／3D 侧 query 主导）与<strong>投影方向</strong>（横轴：推 push／拉 pull），七家在图上的落位即"query 从无到稠密到压缩到稀疏门控、推拉合流、再到位置编码直连"的演化叙事。</p>
 
-      <h3>① 六家对比大表（含口径脚注）</h3>
+      <h3>① 七家对比大表（含口径脚注）</h3>
       <style>
         /* 节内 scoped 变体：汇总对比大表（基于全局 .param-table，仅加首列维度列样式与紧凑字号） */
         #sec-summary .cmp-table { table-layout: fixed; }
@@ -4033,7 +4591,7 @@ var F3D = {
       </style>
       <table class="param-table cmp-table">
         <thead>
-          <tr><th>维度</th><th>LSS</th><th>UVTR</th><th>BEVFormer</th><th>TPVFormer</th><th>VoxFormer†</th><th>Qwen-Drive†</th></tr>
+          <tr><th>维度</th><th>LSS</th><th>UVTR</th><th>BEVFormer</th><th>TPVFormer</th><th>VoxFormer†</th><th>Qwen-Drive†</th><th>PETR†</th></tr>
         </thead>
         <tbody>
           <tr>
@@ -4044,6 +4602,7 @@ var F3D = {
             <td><strong>有，三张平面嵌入表</strong>——hw(40000,128)＋zh(3200,128)＋wz(3200,128)＝46400 条（5.94M），query 与平面同物异名<span class="cite">tpvformer10/tpv_head.py:53-55</span></td>
             <td><strong>有，全网格表＋逐帧稀疏激活</strong>——bev_embed (262144,128)＝33.55M＋mask token (1,128)；每帧仅 N_p 行激活（QPN proposal 决定，数据相关、无固定比例）<span class="cite">dense_heads/voxformer_head.py:53</span><span class="cite">dense_heads/voxformer_head.py:89-91</span></td>
             <td><strong>体素支路无 query；BEV 侧网格嵌入表被 UVTR 加成</strong>——bev_embedding (40000,256) 上叠压平体素 [40000,256]（Conv2d 4096→256 后加成）；另有 900 object query（桥外）<span class="cite">heads.py:222</span><span class="cite">heads.py:244-245</span><span class="cite">modeling_perception.py:82</span></td>
+            <td><strong>有，900 个稀疏自由 3D 坐标锚点（v1 代码口径）</strong>——nn.Embedding(900,3) 的连续可学习 3D 坐标、无网格绑定（无 BEV 格／体素格，bev_embedding 全仓 0 命中）；query 内容恒为零、query_pos 即输入<span class="cite">dense_heads/petr_head.py:265,276</span><span class="cite">dense_heads/petr_head.py:416-419</span></td>
           </tr>
           <tr>
             <td>可学习参数位置与形态</td>
@@ -4053,6 +4612,7 @@ var F3D = {
             <td><strong>3D 侧三表＋桥上采样＋3D 侧自注意力学习量</strong>——三平面表＋逐层 pos；桥上 ICA offsets/weights/value_proj（×3 层，桥上）＋CVHA offsets／含 3-way 平面门控的 weights（×5 层，3D 侧自注意力）＋cams/level embeds；2D 侧 ResNet-101-DCN＋FPN<span class="cite">tpvformer10/modules/image_cross_attention.py:247-254</span><span class="cite">tpvformer10/modules/cross_view_hybrid_attention.py:123-127</span></td>
             <td><strong>3D 侧全表＋稀疏化本身可学习</strong>——bev_embed＋mask token；桥上 DCA offsets/weights/value_proj（3 层，桥上）＋DSA offsets/weights/value_proj（2 层，3D 侧自注意力）；2D 侧 ResNet50＋FPN；QPN 门控（离线训练后冻结）与外部冻结 MSNet3D 共同决定 N_p<span class="cite">modules/deformable_cross_attention.py:249-253</span><span class="cite">detectors/lmscnet.py:67-140</span></td>
             <td><strong>两端学习＋拉桥有学习量</strong>——2D 侧 vit_neck＋重深度头（BasicBlock×3＋ASPP→118）；3D 侧 3×Conv3d＋uvtr_query_proj（Conv2d 4096→256）＋占用融合；拉桥 SCA offsets／weights ×6 层（BEVFormer 式）<span class="cite">view_transform.py:82-100</span><span class="cite">modeling_perception.py:82</span><span class="cite">attention.py:161-163</span></td>
+            <td><strong>2D 侧＋3D 侧＋桥上（PE 的 MLP）</strong>——2D 侧 ResNet-50-DCN＋CPFPN（P4）；3D 侧 900 锚点＋6 层 decoder＋cls/reg（v1 六层共享同一实例）；桥上 position_encoder＝Conv1×1(192→1024)＋ReLU＋Conv1×1(1024→256)——全篇唯一"桥上可学习且不做采样／投影对应"<span class="cite">dense_heads/petr_head.py:258-263</span></td>
           </tr>
           <tr>
             <td>投影方向（推·拉）</td>
@@ -4062,6 +4622,7 @@ var F3D = {
             <td><strong>拉（pull）</strong>——同 BEVFormer 骨架；差异在锚点射线不在同一根 Z 轴上，而分散到三根正交轴（hw 沿 Z 4 锚、zh/wz 沿水平轴 32 锚）<span class="cite">tpvformer10/modules/encoder.py:36-47</span></td>
             <td><strong>拉为主、推在门口</strong>——在线主体为 DCA 拉取（BEVFormer 式 MSDA 血统）；进在线模型之前，深度→伪占用→QPN 掩码的一次"推"决定哪些 voxel 有 query<span class="cite">modules/deformable_cross_attention.py:140-176</span><span class="cite">projects/configs/voxformer/qpn.py:41-44</span></td>
             <td><strong>推拉合流</strong>——UVTR 支路＝LSS／BEVDet 式视锥 scatter（rank 区间 CUDA kernel）落 3D 体素；检测主桥＝BEVFormer 式拉（4 z 锚 deformable 从 LLM 四尺度特征拉取）——推入体素＋拉取 BEV 双桥并联<span class="cite">view_transform.py:241-248</span><span class="cite">bev_encoder.py:303-316</span></td>
+            <td><strong>都不算（学习直连）</strong>——不预测深度分布（推家族定义性特征缺席）、不做 3D→2D 投影采样（拉家族定义性特征缺席）；投影桥整体消失，换"3D PE 软桥"：几何只发坐标、MLP 译签名<span class="cite">dense_heads/petr_head.py:282-325</span></td>
           </tr>
           <tr>
             <td>深度显式·隐式</td>
@@ -4071,6 +4632,7 @@ var F3D = {
             <td><strong>隐式、无深度分布</strong>——无深度头；锚点射线离散枚举（hw 沿 Z 4 档、zh/wz 沿水平轴 32 档、间距 3.27 m），attention 权重隐式加权<span class="cite">tpvformer10/modules/encoder.py:36-47</span><span class="cite">tpvformer10/modules/encoder.py:139-144</span></td>
             <td><strong>显式、离线、无分箱</strong>——MSNet3D 立体深度（外部冻结）给连续值→离散占据；在线每 voxel 仅 1 个参考点（0.4 m 格心），深度不确定性前置到 QPN 掩码里消化<span class="cite">preprocess/image2depth.sh:6-8</span><span class="cite">dense_heads/voxformer_head.py:208-214</span></td>
             <td><strong>显式分布、无监督（按发布仓内证据）</strong>——118 档 softmax（0.5 m/档、1.0–60 m）；inference-only 仓无损失代码与深度 GT（训练期不可考），深度仅作 kernel 内乘性权重回传<span class="cite">view_transform.py:79-100</span><span class="cite">docs/perception.md:14</span></td>
+            <td><strong>不预测数值、无监督</strong>——视锥 64 档 LID bins（1–61.2 m）只作 3D PE 的原料（每像素 3×64＝192 维坐标列），既无 softmax 深度分布也无深度损失（损失仅 Focal＋L1）——全篇唯一"bins 存在但既不推特征也不监督深度"<span class="cite">dense_heads/petr_head.py:106,289-293</span><span class="cite">configs/petr/petr_r50dcn_gridmask_p4.py:94-101</span></td>
           </tr>
           <tr>
             <td>2D-3D 对应的建立方式</td>
@@ -4080,6 +4642,7 @@ var F3D = {
             <td>正交轴锚点射线→lidar2img→hit→偏移采样（每 query 每命中相机 hw 256、zh/wz 2048 采样位）→÷|V_hit|；三平面→体＝沿正交轴广播＋双线性＋<strong>等权求和</strong>（零参数重建，任意分辨率可查）<span class="cite">tpvformer10/modules/encoder.py:167-220</span><span class="cite">tpvformer10/tpv_aggregator.py:69-84</span></td>
             <td>voxel 格心→lidar2img→hit→偏移采样（每 query 每命中相机 64 采样位）→÷|V_t|；空格由 mask token 补齐（MAE 式）→DSA 稠密化→×2 三线性上采样（零参数）<span class="cite">modules/encoder.py:94-149</span><span class="cite">dense_heads/voxformer_head.py:110-113</span><span class="cite">modules/deformable_cross_attention.py:169-176</span></td>
             <td>视锥格点 56×32×118→uv×d→inv(lidar2img)×lidar2ego（ego 系）→体素索引掩码→rank 区间散射 kernel 单遍融合（深度×特征在 kernel 内、跨相机区间和合并）<span class="cite">view_transform.py:200-239</span><span class="cite">ops/voxel_pool/src/voxel_pool_cuda.cu:92-135</span></td>
+            <td>全局 attention Q·K 相似度隐式建立——6 相机全部 P4 token 拼成 16,896 个 key（key＝特征＋3D PE 相加、value＝纯特征），900 query 携锚点签名与全部 key 做 6 层全局 cross attention——"谁对应谁"由学出的相似度决定（无投影、无采样、无 deformable）<span class="cite">utils/petr_transformer.py:70-110</span><span class="cite">utils/petr_transformer.py:341-344</span></td>
           </tr>
           <tr>
             <td>3D 表征尺寸†</td>
@@ -4089,14 +4652,15 @@ var F3D = {
             <td>三平面 200×200＋16×200＋200×16（hw 0.512 m／z 0.5 m 格）→体张量 (B,128,200,200,16)<span class="cite">tpv_lidarseg.py:20-22</span><span class="cite">tpvformer10/tpv_aggregator.py:42-44</span></td>
             <td>query 体 128×128×16 @0.4 m（N_q＝262,144，输出体 1/8 降采样）；输出体 256×256×32 @0.2 m<span class="cite">voxformer-S.py:21</span><span class="cite">voxformer-S.py:51-53</span><span class="cite">dense_heads/voxformer_head.py:201</span></td>
             <td>UVTR 体素 [16,200,200]（Z×Y×X）@XY 0.512 m、Z 0.65 m（X/Y ±51.2 m、Z −5.0～5.4 m）→压平 [40000,256] 加成 BEV query 200×200<span class="cite">modeling_perception.py:67-73</span><span class="cite">heads.py:244-245</span></td>
+            <td>无网格 3D 表征——900 个自由 3D 锚点（RoI X/Y ±61.2 m、Z −10～10 m 归一坐标）；key 侧 16,896 token（6 相机×P4 /16 每相机 2816）<span class="cite">configs/petr/petr_r50dcn_gridmask_p4.py:52,56</span><span class="cite">dense_heads/petr_head.py:265</span></td>
           </tr>
         </tbody>
       </table>
-      <p class="cmp-foot"><strong>† 口径脚注（随表必读）：</strong>LSS、UVTR、BEVFormer、TPVFormer 四列均为各家官方仓的 nuScenes 配置口径；VoxFormer 官方仓无 nuScenes 支持（README 数据集勾选框未实现<span class="cite">README.md:56-58</span>、论文全文 0 次提及），该列按其原生 SemanticKITTI 单目口径（voxformer-S.py）列写；Qwen-Drive 列为双数据集口径——训练 nuScenes 6 相机＋OpenScene／nuPlan 8 相机、固定 896×512<span class="cite">docs/perception.md:110-112</span>，其 cite 路径相对感知包 src/qwen_drive_perception/（表中简写文件名）。"3D 表征尺寸"一行各列口径不同（nuScenes 环视 ±50／±51.2 m vs SemanticKITTI 车前 51.2 m 单目），不可直接横比；其余五行为结构性维度（query 形态、参数位置、推拉方向、深度显隐、对应建立方式），不受数据集口径影响。</p>
+      <p class="cmp-foot"><strong>† 口径脚注（随表必读）：</strong>LSS、UVTR、BEVFormer、TPVFormer 四列均为各家官方仓的 nuScenes 配置口径；VoxFormer 官方仓无 nuScenes 支持（README 数据集勾选框未实现<span class="cite">README.md:56-58</span>、论文全文 0 次提及），该列按其原生 SemanticKITTI 单目口径（voxformer-S.py）列写；Qwen-Drive 列为双数据集口径——训练 nuScenes 6 相机＋OpenScene／nuPlan 8 相机、固定 896×512<span class="cite">docs/perception.md:110-112</span>，其 cite 路径相对感知包 src/qwen_drive_perception/（表中简写文件名）；PETR 列取 megvii-research/PETR 仓的 nuScenes 配置口径——仓内无 petr 分支，v1 侧为 main 历史 commit 快照（<code>3617936</code>）、v2 侧为 main HEAD 快照（<code>f7525f9</code>），表中数字与 cite 均按 v1 主口径（512×1408、900 query）列写，其 cite 路径相对 code/PETR-v1/projects/（表中简写文件名，见第七节）。"3D 表征尺寸"一行各列口径不同（nuScenes 环视 ±50／±51.2 m vs SemanticKITTI 车前 51.2 m 单目），不可直接横比；其余五行为结构性维度（query 形态、参数位置、推拉方向、深度显隐、对应建立方式），不受数据集口径影响。</p>
 
       <h3>② 谱系总览图（可学习参数所在侧 × 投影方向）</h3>
       <div class="panel">
-        <svg viewBox="0 0 1000 742" role="img" aria-label="谱系总览图：纵轴为可学习参数所在侧（2D 侧、桥两端、3D 侧 query 主导），横轴为投影方向（推到拉）；LSS 与 UVTR 并列推侧桥两端（推家族两落点：LSS 视锥 scatter 拍扁 pillar、UVTR 体素格 gather 码放保高度），BEVFormer、TPVFormer、VoxFormer 位于拉侧 3D 侧，Qwen-Drive 在右下汇合两支（UVTR 推支＋BEVFormer 拉支）；橙色虚线箭头串起 query 从无到稠密 40000 到三平面压缩 46400 到深度门控稀疏 262144 的演化，VoxFormer 门口标注离线深度推力">
+        <svg viewBox="0 0 1250 742" role="img" aria-label="谱系总览图：纵轴为可学习参数所在侧（2D 侧、桥两端、3D 侧 query 主导），横轴为投影方向（推到拉）；LSS 与 UVTR 并列推侧桥两端（推家族两落点：LSS 视锥 scatter 拍扁 pillar、UVTR 体素格 gather 码放保高度），BEVFormer、TPVFormer、VoxFormer 位于拉侧 3D 侧，Qwen-Drive 在右下汇合两支（UVTR 推支＋BEVFormer 拉支）；PETR 在拉侧右端的推拉轴之外独立成支（位置编码直连——不推不拉，桥上 MLP 译坐标为签名、全局 attention 学对应）；橙色虚线箭头串起 query 从无到稠密 40000 到三平面压缩 46400 到深度门控稀疏 262144 的演化，VoxFormer 门口标注离线深度推力">
           <defs>
             <marker id="arrow-evol" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 1 L 9 5 L 0 9 z" fill="#D55E00"></path>
@@ -4215,6 +4779,22 @@ var F3D = {
             <text x="771" y="517" font-size="9" text-anchor="middle">SCA ×6 层＋bev 40000 加成（拉支·学的）</text>
             <text x="771" y="541" font-size="9" fill="#5a6570" text-anchor="middle">体素 [16,200,200]·压平加成 40000｜896×512</text>
 
+            <!-- ⑦ PETR：推拉轴之外独立成支（位置编码直连——不推不拉） -->
+            <line x1="1000" y1="130" x2="1000" y2="600" stroke="#c4ccd4" stroke-width="1" stroke-dasharray="4 3"></line>
+            <text x="1008" y="122" font-size="9" fill="#8a94a0">推拉轴之外（新谱系）</text>
+            <rect x="1020" y="340" width="200" height="170" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.5"></rect>
+            <text x="1030" y="362" font-size="12.5" font-weight="600">PETR · ECCV 2022</text>
+            <text x="1210" y="362" font-size="12" fill="#D55E00" text-anchor="end">⑦</text>
+            <text x="1030" y="382" font-size="10" fill="#37424d">推拉之外·3D PE＋全局 attention</text>
+            <rect class="learnable" x="1030" y="390" width="180" height="20" rx="2"></rect>
+            <text x="1120" y="404" font-size="9" text-anchor="middle">ResNet-50＋CPFPN｜2D 侧（学的）</text>
+            <rect class="learnable" x="1030" y="414" width="180" height="20" rx="2"></rect>
+            <text x="1120" y="428" font-size="9" text-anchor="middle">PE 的 MLP｜桥上（学的·唯一）</text>
+            <rect class="learnable" x="1030" y="438" width="180" height="20" rx="2"></rect>
+            <text x="1120" y="452" font-size="9" text-anchor="middle">900 锚＋6 层 decoder｜3D（学的）</text>
+            <text x="1120" y="474" font-size="9" fill="#5a6570" text-anchor="middle">深度：不预测数值（64 bins 只作 PE 原料）</text>
+            <text x="1120" y="492" font-size="9" fill="#5a6570" text-anchor="middle">900 自由 3D 锚点·无网格（nuScenes）</text>
+
             <!-- 推家族分化：LSS（拍扁）→ UVTR（3D 落点），同带并列 -->
             <line x1="372" y1="435" x2="382" y2="435" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></line>
 
@@ -4228,25 +4808,25 @@ var F3D = {
             <path d="M 270 340 C 270 250, 312 240, 366 240" fill="none" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></path>
             <line x1="574" y1="344" x2="584" y2="344" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></line>
             <line x1="790" y1="344" x2="800" y2="344" stroke="#D55E00" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-evol)"></line>
-            <text x="545" y="575" font-size="10.5" fill="#D55E00" text-anchor="middle">query 演化主线（橙虚线）：无（LSS）→ 稠密 40000 全激活（BEVFormer）→ 三平面压缩 46400＝7.25%（TPVFormer）</text>
-            <text x="545" y="595" font-size="10.5" fill="#D55E00" text-anchor="middle">→ 深度门控稀疏：全表 262,144·每帧仅 N_p 激活（VoxFormer，N_p 数据相关）</text>
-            <text x="700" y="615" font-size="10.5" fill="#D55E00" text-anchor="middle">主线之外：UVTR（②）桥上无 query——与 LSS 同为推家族两落点；Qwen-Drive（⑥）推拉合流收束两支</text>
+            <text x="675" y="575" font-size="10.5" fill="#D55E00" text-anchor="middle">query 演化主线（橙虚线）：无（LSS）→ 稠密 40000 全激活（BEVFormer）→ 三平面压缩 46400＝7.25%（TPVFormer）</text>
+            <text x="675" y="595" font-size="10.5" fill="#D55E00" text-anchor="middle">→ 深度门控稀疏：全表 262,144·每帧仅 N_p 激活（VoxFormer，N_p 数据相关）</text>
+            <text x="675" y="615" font-size="10.5" fill="#D55E00" text-anchor="middle">主线之外：UVTR（②）桥上无 query——与 LSS 同为推家族两落点；Qwen-Drive（⑥）推拉合流收束两支；PETR（⑦）推拉轴之外独立成支——位置编码直连</text>
 
-            <text x="500" y="726" font-size="10" fill="#5a6570" text-anchor="middle">† 口径：LSS／UVTR／BEVFormer／TPVFormer 为 nuScenes；VoxFormer 为 SemanticKITTI 单目；Qwen-Drive 为双数据集 6／8 相机（896×512）——"3D 表征尺寸"不可直接横比，详见大表脚注</text>
+            <text x="625" y="726" font-size="10" fill="#5a6570" text-anchor="middle">† 口径：LSS／UVTR／BEVFormer／TPVFormer 为 nuScenes；VoxFormer 为 SemanticKITTI 单目；Qwen-Drive 为双数据集 6／8 相机（896×512）；PETR 为 nuScenes（v1 历史 commit 快照·900 query 主口径）——"3D 表征尺寸"不可直接横比，详见大表脚注</text>
           </g>
         </svg>
-        <p>读图：横轴是特征过桥的方向——LSS 与 UVTR 并列推侧（同一"显式深度分布×特征"语义的两种落点：LSS 在 2D 侧枚举视锥 scatter 拍扁 pillar<span class="cite">src/models.py:200-242</span>，UVTR 在 3D 侧放固定体素格、投影定址后 gather 码放保高度<span class="cite">models/utils/uni3d_viewtrans.py:279-359</span>）；BEVFormer／TPVFormer／VoxFormer 共享"3D 定锚＋deformable 拉取"的 BEVFormer 式骨架（MSDA 血统<span class="cite">modules/deformable_cross_attention.py:159-168</span>）；Qwen-Drive 在右下收束两支——UVTR 推流体素压平后作 BEV query 的体素先验加成，检测内容由 BEVFormer 式拉取完成。纵轴是可学习参数的重心——LSS／UVTR 横跨桥两端且桥上零参数，拉侧三家把主动方移到 3D 侧 query 表、学习量转移到桥上的采样偏移与权重。橙虚线是 query 形态的演化主线：无 query → 稠密 40000<span class="cite">dense_heads/bevformer_head.py:104-105</span> → 三平面压缩 46400（同范围稠密 voxel 640000 格的 7.25%<span class="cite">tpvformer10/tpv_head.py:53-55</span>）→ 深度门控稀疏（全表 262,144、每帧仅 N_p 激活<span class="cite">dense_heads/voxformer_head.py:53</span><span class="cite">dense_heads/voxformer_head.py:89-91</span>）——UVTR 不在主线上（桥上无 query，体素为被动容器），Qwen-Drive 也不在（复用 BEV 式 40000 query）；VoxFormer 门口的蓝字"推"是六家中唯一由深度显式决定 query 集合的机制（离线 QPN 门控）。</p>
-        <p><strong>一句话综合：</strong>六家对"2D 特征如何进入 3D"的回答可压成一组对偶——LSS／UVTR 让<strong>几何</strong>当搬运工（固定视锥／体素格＋显式深度加权，学习只决定"搬什么、放多深"，差别在落点：拍扁 pillar 对体素保高度），拉侧三家让<strong>学习</strong>当搬运工（query 主动拉取，几何只提供锚点与投影），Qwen-Drive 把两支并联（UVTR 推流体素作 BEV query 的体素先验加成，检测走 BEVFormer 式拉取）；深度则从 LSS／UVTR 的显式无监督分布（α·41 维／D=64@1 m）、经 BEVFormer／TPVFormer 的锚点隐式枚举（4／4-32-32 档）、走到 VoxFormer 的离线显式门控、再于 Qwen-Drive 回归显式（118 档，仅服务推支）——<strong>深度显隐与 query 稀密，正是这条谱系的两条演化主线</strong>。</p>
+        <p>读图：横轴是特征过桥的方向——LSS 与 UVTR 并列推侧（同一"显式深度分布×特征"语义的两种落点：LSS 在 2D 侧枚举视锥 scatter 拍扁 pillar<span class="cite">src/models.py:200-242</span>，UVTR 在 3D 侧放固定体素格、投影定址后 gather 码放保高度<span class="cite">models/utils/uni3d_viewtrans.py:279-359</span>）；BEVFormer／TPVFormer／VoxFormer 共享"3D 定锚＋deformable 拉取"的 BEVFormer 式骨架（MSDA 血统<span class="cite">modules/deformable_cross_attention.py:159-168</span>）；Qwen-Drive 在右下收束两支——UVTR 推流体素压平后作 BEV query 的体素先验加成，检测内容由 BEVFormer 式拉取完成；PETR 则在推拉轴之外独立成支——投影桥消失、3D PE 软桥直连：视锥坐标经桥上 MLP 译成位置签名、900 query 与全部 key 做全局 attention 学对应<span class="cite">dense_heads/petr_head.py:258-263</span>。纵轴是可学习参数的重心——LSS／UVTR 横跨桥两端且桥上零参数，拉侧三家把主动方移到 3D 侧 query 表、学习量转移到桥上的采样偏移与权重，PETR 同样横跨桥两端、却在桥上挂了全篇唯一不做采样／投影对应的可学习 MLP。橙虚线是 query 形态的演化主线：无 query → 稠密 40000<span class="cite">dense_heads/bevformer_head.py:104-105</span> → 三平面压缩 46400（同范围稠密 voxel 640000 格的 7.25%<span class="cite">tpvformer10/tpv_head.py:53-55</span>）→ 深度门控稀疏（全表 262,144、每帧仅 N_p 激活<span class="cite">dense_heads/voxformer_head.py:53</span><span class="cite">dense_heads/voxformer_head.py:89-91</span>）——UVTR 不在主线上（桥上无 query，体素为被动容器），Qwen-Drive 也不在（复用 BEV 式 40000 query），PETR 亦不在（900 自由 3D 锚点——稀疏但不落网格、不走门控）；VoxFormer 门口的蓝字"推"是七家中唯一由深度显式决定 query 集合的机制（离线 QPN 门控）。</p>
+        <p><strong>一句话综合：</strong>七家对"2D 特征如何进入 3D"的回答可压成一组对偶——LSS／UVTR 让<strong>几何</strong>当搬运工（固定视锥／体素格＋显式深度加权，学习只决定"搬什么、放多深"，差别在落点：拍扁 pillar 对体素保高度），拉侧三家让<strong>学习</strong>当搬运工（query 主动拉取，几何只提供锚点与投影），Qwen-Drive 把两支并联（UVTR 推流体素作 BEV query 的体素先验加成，检测走 BEVFormer 式拉取），PETR 则绕开两支——几何只发坐标、MLP 译签名、全局 attention 自己学对应（位置编码直连）；深度则从 LSS／UVTR 的显式无监督分布（α·41 维／D=64@1 m）、经 BEVFormer／TPVFormer 的锚点隐式枚举（4／4-32-32 档）、走到 VoxFormer 的离线显式门控、再于 Qwen-Drive 回归显式（118 档，仅服务推支），PETR 干脆不预测数值（视锥 64 bins 只作 3D PE 原料）——<strong>深度显隐与 query 稀密，正是这条谱系的两条演化主线</strong>。</p>
       </div>
     </section>
 
     <section id="sec-depth">
-      <h2>八、深度从哪来：六家的深度谱系<span class="tag">专题收束：深度不确定性安放的三种位置</span></h2>
-      <p>六节机制走完，回到最关心的一条轴：深度从哪来。<strong>BEVFormer 一族并没有"绕开"深度——先假设固定 3D 点（z 锚），再学这些点投影邻域里的采样分布，本质上是深度估计的另一种参数化</strong>：不确定性从射线（1D 档位分布）搬到像平面（2D 邻域分布），且预测方向反转——分布由 3D 侧的 query 给出，而非由图像特征给出。按"深度不确定性被安放在哪里"，全篇六家归为三族：<strong>族① 在线学的射线分布</strong>（LSS／UVTR／Qwen-Drive 推流——图像特征预测档位软权重，全部无深度监督）；<strong>族② 固定假设＋像面学的邻域分布</strong>（BEVFormer／TPVFormer／Qwen-Drive 拉流——标定定锚、query 学分布，无度量深度输出）；<strong>族③ 离线凝固的门控</strong>（VoxFormer——外部立体深度在训练前就烧成"谁有 query"的二值掩码，深度数值不进在线网络）。</p>
+      <h2>九、深度从哪来：七家的深度谱系<span class="tag">专题收束：深度不确定性安放的四种位置</span></h2>
+      <p>七节机制走完，回到最关心的一条轴：深度从哪来。<strong>BEVFormer 一族并没有"绕开"深度——先假设固定 3D 点（z 锚），再学这些点投影邻域里的采样分布，本质上是深度估计的另一种参数化</strong>：不确定性从射线（1D 档位分布）搬到像平面（2D 邻域分布），且预测方向反转——分布由 3D 侧的 query 给出，而非由图像特征给出。按"深度不确定性被安放在哪里"，全篇七家归为四族：<strong>族① 在线学的射线分布</strong>（LSS／UVTR／Qwen-Drive 推流——图像特征预测档位软权重，全部无深度监督）；<strong>族② 固定假设＋像面学的邻域分布</strong>（BEVFormer／TPVFormer／Qwen-Drive 拉流——标定定锚、query 学分布，无度量深度输出）；<strong>族③ 离线凝固的门控</strong>（VoxFormer——外部立体深度在训练前就烧成"谁有 query"的二值掩码，深度数值不进在线网络）；<strong>族④ 无假设·隐式全局分配</strong>（PETR——不预测数值深度、不设固定 z 锚/pillar，视锥 bins 只作 3D PE 原料，深度不确定性弥散在全局 attention 权重里）。</p>
 
-      <svg id="depth-map" viewBox="0 0 1000 525" role="img" aria-label="深度谱系图（三族分组）：族① 射线软分布＝LSS 41 档、UVTR 64 档、Qwen-Drive 推流 118 档，像素格出发的深度档位点串带软权重，在线学·无监督；族② 像面邻域分布＝BEVFormer 4 z 锚、TPVFormer 正交轴锚点射线 4/32/32、Qwen-Drive 拉流 4 z 锚，固定 3D 假设标定投影到像面、落点邻域采样分布由 3D query 预测，无度量深度输出；族③ 离线凝固门控＝VoxFormer 立体深度→伪占用→QPN 修正→二值掩码，在线图外；图底给出谱系一句话与第三节 E 图交叉引用">
+      <svg id="depth-map" viewBox="0 0 1310 525" role="img" aria-label="深度谱系图（四族分组）：族① 射线软分布＝LSS 41 档、UVTR 64 档、Qwen-Drive 推流 118 档，像素格出发的深度档位点串带软权重，在线学·无监督；族② 像面邻域分布＝BEVFormer 4 z 锚、TPVFormer 正交轴锚点射线 4/32/32、Qwen-Drive 拉流 4 z 锚，固定 3D 假设标定投影到像面、落点邻域采样分布由 3D query 预测，无度量深度输出；族③ 离线凝固门控＝VoxFormer 立体深度→伪占用→QPN 修正→二值掩码，在线图外；族④ 隐式全局分配＝PETR 视锥 64 LID bins 只作 3D PE 原料、无数值深度输出，query 可学习 3D 锚点到全部像素 key 的全局 attention 线宽隐式分配深度权重，在线；图底给出谱系一句话与第三节 E 图交叉引用">
         <g font-size="13" fill="#2b3440">
-          <text x="16" y="32" font-size="14" font-weight="600" fill="#37424d">A · 深度谱系图：六家的深度不确定性安放在哪里（三族）</text>
+          <text x="16" y="32" font-size="14" font-weight="600" fill="#37424d">A · 深度谱系图：七家的深度不确定性安放在哪里（四族）</text>
 
           <!-- ===== 族① 射线软分布 ===== -->
           <rect x="20" y="48" width="310" height="407" rx="6" fill="none" stroke="#c4ccd4" stroke-width="1" stroke-dasharray="5 4"></rect>
@@ -4376,13 +4956,52 @@ var F3D = {
           <text x="825" y="408" text-anchor="middle" font-size="9" fill="#5a6570">（image2depth.sh:6-8；lmscnet.py:304-317）</text>
           <text x="825" y="424" text-anchor="middle" font-size="9" fill="#5a6570">（semantic_kitti_dataset_stage2.py:332）</text>
 
+          <!-- ===== 族④ 隐式全局分配 ===== -->
+          <rect x="995" y="48" width="310" height="407" rx="6" fill="none" stroke="#c4ccd4" stroke-width="1" stroke-dasharray="5 4"></rect>
+          <text x="1150" y="72" text-anchor="middle" font-size="12" font-weight="600">族④ 隐式全局分配</text>
+          <text x="1150" y="88" text-anchor="middle" font-size="10" fill="#5a6570">在线 · 无数值深度 · attention 权重隐式</text>
+
+          <rect x="1015" y="104" width="30" height="20" rx="2" fill="#FBE3C8" stroke="#D55E00" stroke-width="1.5"></rect>
+          <text x="1055" y="118" font-size="9" fill="#5a6570">像素格（特征＋3D PE 相加进 key）</text>
+          <text x="1298" y="130" text-anchor="end" font-size="9" fill="#8a94a0">视锥 64 LID bins：3D PE 原料（固定）</text>
+          <line class="fixed" x1="1085" y1="126" x2="1275" y2="330"></line>
+          <circle cx="1094" cy="136" r="3" fill="#8a94a0"></circle>
+          <circle cx="1104" cy="146" r="3" fill="#8a94a0"></circle>
+          <circle cx="1115" cy="159" r="3" fill="#8a94a0"></circle>
+          <circle cx="1129" cy="173" r="3" fill="#8a94a0"></circle>
+          <circle cx="1144" cy="189" r="3" fill="#8a94a0"></circle>
+          <circle cx="1161" cy="208" r="3" fill="#8a94a0"></circle>
+          <circle cx="1180" cy="228" r="3" fill="#8a94a0"></circle>
+          <circle cx="1201" cy="250" r="3" fill="#8a94a0"></circle>
+          <circle cx="1226" cy="277" r="3" fill="#8a94a0"></circle>
+          <circle cx="1252" cy="306" r="3" fill="#8a94a0"></circle>
+          <circle cx="1275" cy="330" r="3" fill="#8a94a0"></circle>
+          <line x1="1058" y1="272" x2="1094" y2="136" stroke="#D55E00" stroke-width="0.7"></line>
+          <line x1="1058" y1="272" x2="1115" y2="159" stroke="#D55E00" stroke-width="1.1"></line>
+          <line x1="1058" y1="272" x2="1129" y2="173" stroke="#D55E00" stroke-width="2.4"></line>
+          <line x1="1058" y1="272" x2="1144" y2="189" stroke="#D55E00" stroke-width="1.5"></line>
+          <line x1="1058" y1="272" x2="1161" y2="208" stroke="#D55E00" stroke-width="3.2"></line>
+          <line x1="1058" y1="272" x2="1180" y2="228" stroke="#D55E00" stroke-width="1.8"></line>
+          <line x1="1058" y1="272" x2="1201" y2="250" stroke="#D55E00" stroke-width="2.6"></line>
+          <line x1="1058" y1="272" x2="1226" y2="277" stroke="#D55E00" stroke-width="0.9"></line>
+          <line x1="1058" y1="272" x2="1252" y2="306" stroke="#D55E00" stroke-width="1.3"></line>
+          <line x1="1058" y1="272" x2="1275" y2="330" stroke="#D55E00" stroke-width="2.1"></line>
+          <circle cx="1058" cy="272" r="8" fill="#D55E00"></circle>
+          <text x="1058" y="296" text-anchor="middle" font-size="9" fill="#D55E00">query（可学习 3D 锚点）</text>
+          <text x="1150" y="342" text-anchor="middle" font-size="9" fill="#8a94a0">LID 近密远疏（1–61.2 m）·不进任何 loss</text>
+          <text x="1150" y="360" text-anchor="middle" font-size="9" fill="#D55E00">attention 线宽＝隐式深度权重（可学习）</text>
+
+          <rect x="1015" y="395" width="270" height="56" rx="4" fill="#ffffff" stroke="#8a94a0" stroke-width="1.2"></rect>
+          <text x="1150" y="415" text-anchor="middle" font-size="10.5" font-weight="600">PETR —— 无深度头</text>
+          <text x="1150" y="433" text-anchor="middle" font-size="9.5" fill="#5a6570">视锥 64 LID bins 只作 3D PE 原料（petr_head.py:106）</text>
+
           <!-- 底部谱系句 -->
-          <text x="500" y="480" text-anchor="middle" font-size="10.5" fill="#4a5560">谱系一句话：深度不确定性的三种安放位置——在线学的射线分布（族①）／固定假设＋像面学的邻域分布（族②＝深度估计的另一种参数化，方向由 3D 侧给出）／离线凝固的二值门控（族③）</text>
-          <text x="500" y="500" text-anchor="middle" font-size="10.5" fill="#4a5560">LSS ↔ BEVFormer 两家的逐步对偶细看：第三节 E 图；六家机制与参数全表：第七节汇总</text>
+          <text x="663" y="480" text-anchor="middle" font-size="10.5" fill="#4a5560">谱系一句话：深度不确定性的四种安放位置——在线学的射线分布（族①）／固定假设＋像面学的邻域分布（族②＝深度估计的另一种参数化，方向由 3D 侧给出）／离线凝固的二值门控（族③）／无假设·attention 隐式分配（族④）</text>
+          <text x="663" y="500" text-anchor="middle" font-size="10.5" fill="#4a5560">LSS ↔ BEVFormer 两家的逐步对偶细看：第三节 E 图；七家机制与参数全表：第八节汇总</text>
         </g>
       </svg>
 
-      <h3>六家深度来源小结</h3>
+      <h3>七家深度来源小结</h3>
       <table class="param-table">
         <thead>
           <tr><th>模型</th><th>深度形态</th><th>来源</th><th>监督</th><th>预测方向</th><th>在线/离线</th></tr>
@@ -4436,9 +5055,17 @@ var F3D = {
             <td>推 2D→3D／拉 3D→2D</td>
             <td>在线</td>
           </tr>
+          <tr>
+            <td><strong>PETR</strong></td>
+            <td>无：无数值深度输出</td>
+            <td>视锥 64 LID bins 只作 3D PE 原料<span class="cite">petr_head.py:106</span></td>
+            <td>无监督<span class="cite">petr_r50dcn_gridmask_p4.py:94-101</span></td>
+            <td>无特征流过桥（attention 隐式）</td>
+            <td>在线</td>
+          </tr>
         </tbody>
       </table>
-      <p>读表抓两点：其一，"无监督"覆盖了除 VoxFormer 外的全部在线深度——它们全靠下游任务梯度逼出；其二，族②两家的"深度"没有数值输出，它是固定假设在像面上的软分布——这正是"BEVFormer 本质也是一种深度估计"的精确含义：估计的不是度量深度，而是"这个固定 3D 假设该从图像哪里、以多大权重取证据"。</p>
+      <p>读表抓三点：其一，"无监督"覆盖了除 VoxFormer 外的全部在线深度——它们全靠下游任务梯度逼出；其二，族②两家的"深度"没有数值输出，它是固定假设在像面上的软分布——这正是"BEVFormer 本质也是一种深度估计"的精确含义：估计的不是度量深度，而是"这个固定 3D 假设该从图像哪里、以多大权重取证据"；其三，PETR 证明"深度可以完全不预测"这条路线成立——不确定性不在射线（族①）不在像面（族②）不在掩码（族③），而在全局 attention 权重里。</p>
     </section>
 
   </main>
@@ -4492,9 +5119,23 @@ var F3D = {
           <td><code>28091c1532e869bc7aee91fc0aef6b3e6fd0b2e0</code></td>
           <td>2026-10-28</td>
         </tr>
+        <tr>
+          <td>PETR</td>
+          <td>arXiv:2203.05625</td>
+          <td>github.com/megvii-research/PETR</td>
+          <td><code>3617936cd5f6320eb046738acf8f9847b3c8101f</code></td>
+          <td>2026-10-29</td>
+        </tr>
+        <tr>
+          <td>PETRv2</td>
+          <td>arXiv:2206.01256</td>
+          <td>github.com/megvii-research/PETR</td>
+          <td><code>f7525f93467a33707ef401c587a52d5e7b34de74</code></td>
+          <td>2026-10-29</td>
+        </tr>
       </tbody>
     </table>
-    <p class="footer-note">上表六仓中，前四仓（LSS／BEVFormer／TPVFormer／VoxFormer）为 2026-10-26、UVTR 为 2026-10-28，均以 <code>--depth 1</code> 浅克隆的默认分支；Qwen-Drive-1.0 为 2026-10-28 完整克隆（inference-only 发布仓，位于项目根、不在 <code>bev_projection/code/</code>）。文中具体数字若无特别说明，均取自上表 commit 下的 nuScenes 配置口径（VoxFormer 例外：原生 SemanticKITTI，见第五节；Qwen-Drive 例外：nuScenes 6 相机／OpenScene·nuPlan 8 相机双口径、固定 896×512，见第六节），代码中找不到的标注"论文值，代码未见"。</p>
+    <p class="footer-note">上表八仓中，前四仓（LSS／BEVFormer／TPVFormer／VoxFormer）为 2026-10-26、UVTR 为 2026-10-28，均以 <code>--depth 1</code> 浅克隆的默认分支；Qwen-Drive-1.0 为 2026-10-28 完整克隆（inference-only 发布仓，位于项目根、不在 <code>bev_projection/code/</code>）；PETR 与 PETRv2 两行为 2026-10-29 以 <code>--depth 1</code> 浅克隆的同仓双快照——PETR 行取 main 历史 commit（纯 v1 提交）、PETRv2 行取 main HEAD（仓内无 petr 分支，见第七节）。文中具体数字若无特别说明，均取自上表 commit 下的 nuScenes 配置口径（VoxFormer 例外：原生 SemanticKITTI，见第五节；Qwen-Drive 例外：nuScenes 6 相机／OpenScene·nuPlan 8 相机双口径、固定 896×512，见第六节；PETR 数字取 v1 快照的 nuScenes 主口径、query 数以代码 900 为准，见第七节），代码中找不到的标注"论文值，代码未见"。</p>
   </footer>
 
 </div>
